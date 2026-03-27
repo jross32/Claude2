@@ -1,0 +1,703 @@
+/* =====================================================
+   WebScraper Pro — Frontend Application
+   ===================================================== */
+
+let ws = null;
+let currentSessionId = null;
+let scrapedData = null;
+
+// ---- WebSocket ----
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.sessionId !== currentSessionId) return;
+      handleWSMessage(msg);
+    } catch {}
+  };
+
+  ws.onclose = () => setTimeout(connectWS, 2000);
+  ws.onerror = () => ws.close();
+}
+
+function handleWSMessage(msg) {
+  switch (msg.type) {
+    case 'log':
+      appendLog(msg.message, msg.level);
+      break;
+    case 'progress':
+      updateProgress(msg.step, msg.percent);
+      break;
+    case 'siteInfo':
+      updateSitePreview(msg.data);
+      // Auto-toggle auth if login form detected
+      if (msg.data.hasLoginForm) {
+        appendLog('Login form detected on site', 'warn');
+      }
+      break;
+    case 'needVerification':
+      showVerificationPrompt();
+      break;
+    case 'complete':
+      onScrapeComplete(msg.data);
+      break;
+    case 'error':
+      onScrapeError(msg.message);
+      break;
+  }
+}
+
+// ---- Navigation ----
+document.querySelectorAll('.nav-item').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+    btn.classList.add('active');
+    const panelId = `panel-${btn.dataset.panel}`;
+    document.getElementById(panelId)?.classList.add('active');
+  });
+});
+
+// ---- Auth toggle ----
+const toggleAuth = document.getElementById('toggle-auth');
+const authFields = document.getElementById('auth-fields');
+toggleAuth.addEventListener('change', () => {
+  authFields.style.display = toggleAuth.checked ? 'flex' : 'none';
+});
+
+// ---- Password visibility ----
+document.getElementById('btn-eye').addEventListener('click', () => {
+  const pw = document.getElementById('password');
+  pw.type = pw.type === 'password' ? 'text' : 'password';
+});
+
+// ---- Verification type toggle ----
+document.getElementById('verification-type').addEventListener('change', function () {
+  document.getElementById('code-field').style.display =
+    ['totp', 'email', 'sms'].includes(this.value) ? 'flex' : 'none';
+});
+
+// ---- Depth slider ----
+document.getElementById('scrape-depth').addEventListener('input', function () {
+  document.getElementById('depth-value').textContent = this.value;
+});
+
+// ---- Detect site ----
+document.getElementById('btn-detect').addEventListener('click', async () => {
+  const url = document.getElementById('url').value.trim();
+  if (!url) return;
+  appendLog(`Detecting site info for ${url}...`);
+  try {
+    const res = await fetch('/api/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, scrapeDepth: 1, captureGraphQL: false, captureREST: false }),
+    });
+    const { sessionId } = await res.json();
+    currentSessionId = sessionId;
+    showProgress();
+  } catch (err) {
+    appendLog(`Detection failed: ${err.message}`, 'error');
+  }
+});
+
+// ---- Start scrape ----
+document.getElementById('btn-scrape').addEventListener('click', async () => {
+  const url = document.getElementById('url').value.trim();
+  if (!url) {
+    alert('Please enter a URL to scrape.');
+    return;
+  }
+
+  const payload = {
+    url,
+    hasAuth: toggleAuth.checked,
+    username: document.getElementById('username').value.trim(),
+    password: document.getElementById('password').value,
+    verificationType: document.getElementById('verification-type').value,
+    verificationCode: document.getElementById('verification-code').value.trim(),
+    scrapeDepth: parseInt(document.getElementById('scrape-depth').value, 10),
+    captureGraphQL: document.getElementById('capture-graphql').checked,
+    captureREST: document.getElementById('capture-rest').checked,
+    captureAssets: document.getElementById('capture-assets').checked,
+  };
+
+  try {
+    clearLog();
+    showProgress();
+    document.getElementById('btn-scrape').style.display = 'none';
+    document.getElementById('btn-stop').style.display = 'inline-flex';
+
+    const res = await fetch('/api/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const { sessionId } = await res.json();
+    currentSessionId = sessionId;
+    appendLog(`Session started: ${sessionId}`, 'info');
+  } catch (err) {
+    onScrapeError(err.message);
+  }
+});
+
+// ---- Stop ----
+document.getElementById('btn-stop').addEventListener('click', async () => {
+  if (!currentSessionId) return;
+  await fetch(`/api/scrape/${currentSessionId}/stop`, { method: 'POST' }).catch(() => {});
+  appendLog('Scrape stopped by user.', 'warn');
+  resetScrapeUI();
+});
+
+// ---- Verification submit ----
+document.getElementById('btn-submit-code').addEventListener('click', async () => {
+  const code = document.getElementById('live-code').value.trim();
+  if (!code || !currentSessionId) return;
+  await fetch(`/api/scrape/${currentSessionId}/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  document.getElementById('verification-prompt').style.display = 'none';
+  appendLog('Verification code submitted.', 'info');
+});
+
+// ---- Progress helpers ----
+function showProgress() {
+  document.getElementById('progress-card').style.display = 'flex';
+  document.getElementById('progress-card').classList.add('scraping');
+}
+
+function updateProgress(step, percent) {
+  document.getElementById('progress-step').textContent = step;
+  document.getElementById('progress-pct').textContent = `${percent}%`;
+  document.getElementById('progress-bar').style.width = `${percent}%`;
+}
+
+function showVerificationPrompt() {
+  document.getElementById('verification-prompt').style.display = 'block';
+  document.getElementById('live-code').focus();
+}
+
+function appendLog(message, level = 'info') {
+  const box = document.getElementById('log-box');
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const line = document.createElement('div');
+  line.className = 'log-entry';
+  line.innerHTML = `<span class="log-time">${time}</span><span class="log-msg ${level}">${escapeHTML(message)}</span>`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('log-box').innerHTML = '';
+}
+
+function resetScrapeUI() {
+  document.getElementById('btn-scrape').style.display = 'inline-flex';
+  document.getElementById('btn-stop').style.display = 'none';
+  document.getElementById('progress-card').classList.remove('scraping');
+  document.getElementById('verification-prompt').style.display = 'none';
+  currentSessionId = null;
+}
+
+// ---- Site preview ----
+function updateSitePreview(info) {
+  const preview = document.getElementById('site-preview');
+  document.getElementById('site-favicon').src = info.favicon || info.logoUrl || '';
+  document.getElementById('site-title-preview').textContent = info.title || info.origin;
+  document.getElementById('site-url-preview').textContent = info.origin;
+
+  const badges = document.getElementById('site-badges');
+  badges.innerHTML = '';
+  if (info.hasLoginForm) badges.innerHTML += `<span class="site-badge login">Login Required</span>`;
+  if (info.has2FA) badges.innerHTML += `<span class="site-badge fa">2FA</span>`;
+  if (info.hasCaptcha) badges.innerHTML += `<span class="site-badge captcha">CAPTCHA</span>`;
+
+  preview.style.display = 'flex';
+}
+
+// ---- Scrape complete ----
+function onScrapeComplete(data) {
+  scrapedData = data;
+  resetScrapeUI();
+  updateProgress('Complete', 100);
+  appendLog('Scraping complete!', 'success');
+
+  renderResults(data);
+  renderAPICalls(data.apiCalls);
+  renderAssets(data.assets);
+  enableRefactor(data);
+
+  // Update badges
+  const totalAPIs = (data.apiCalls?.graphql?.length || 0) + (data.apiCalls?.rest?.length || 0);
+  if (totalAPIs > 0) {
+    const badge = document.getElementById('api-badge');
+    badge.textContent = totalAPIs;
+    badge.style.display = 'inline-block';
+  }
+
+  const resultsBadge = document.getElementById('results-badge');
+  resultsBadge.textContent = data.pages?.length || 1;
+  resultsBadge.style.display = 'inline-block';
+
+  // Auto-switch to results
+  document.querySelector('[data-panel="results"]').click();
+}
+
+function onScrapeError(message) {
+  appendLog(`Error: ${message}`, 'error');
+  resetScrapeUI();
+  updateProgress('Error', 0);
+}
+
+// ---- Results rendering ----
+function renderResults(data) {
+  document.getElementById('results-empty').style.display = 'none';
+  document.getElementById('results-content').style.display = 'block';
+
+  // Summary cards
+  const grid = document.getElementById('summary-grid');
+  const firstPage = data.pages?.[0];
+  grid.innerHTML = '';
+
+  const cards = [
+    { label: 'Pages Scraped', value: data.pages?.length || 0, sub: '' },
+    { label: 'GraphQL Calls', value: data.apiCalls?.graphql?.length || 0, sub: '' },
+    { label: 'REST Calls', value: data.apiCalls?.rest?.length || 0, sub: '' },
+    { label: 'Images', value: firstPage?.images?.length || 0, sub: 'on first page' },
+    { label: 'Links', value: firstPage?.links?.length || 0, sub: 'on first page' },
+    { label: 'Forms', value: firstPage?.forms?.length || 0, sub: 'detected' },
+    { label: 'Assets', value: data.assets?.length || 0, sub: 'captured' },
+    { label: 'Errors', value: data.errors?.length || 0, sub: '' },
+  ];
+
+  cards.forEach((c) => {
+    const card = document.createElement('div');
+    card.className = 'summary-card';
+    card.innerHTML = `<span class="s-label">${c.label}</span><span class="s-value">${c.value}</span>${c.sub ? `<span class="s-sub">${c.sub}</span>` : ''}`;
+    grid.appendChild(card);
+  });
+
+  // Screenshot
+  if (firstPage?.screenshot) {
+    document.getElementById('screenshot-wrap').style.display = 'block';
+    document.getElementById('page-screenshot').src = firstPage.screenshot;
+  }
+
+  // JSON viewer (exclude screenshot from display for readability)
+  const displayData = JSON.parse(JSON.stringify(data));
+  if (displayData.pages) {
+    displayData.pages.forEach((p) => { delete p.screenshot; });
+  }
+
+  const viewer = document.getElementById('json-viewer');
+  viewer.innerHTML = '';
+  viewer.appendChild(renderJSONNode(displayData));
+}
+
+// ---- JSON Tree Viewer ----
+function renderJSONNode(value, key = null, isLast = true) {
+  const frag = document.createDocumentFragment();
+
+  if (value === null) {
+    frag.appendChild(makeLine(key, `<span class="json-null">null</span>`, isLast));
+  } else if (typeof value === 'boolean') {
+    frag.appendChild(makeLine(key, `<span class="json-bool">${value}</span>`, isLast));
+  } else if (typeof value === 'number') {
+    frag.appendChild(makeLine(key, `<span class="json-number">${value}</span>`, isLast));
+  } else if (typeof value === 'string') {
+    const display = value.length > 300 ? escapeHTML(value.substring(0, 300)) + '...' : escapeHTML(value);
+    frag.appendChild(makeLine(key, `<span class="json-string">"${display}"</span>`, isLast));
+  } else if (Array.isArray(value)) {
+    const container = document.createElement('div');
+    const header = document.createElement('div');
+    header.className = 'json-line json-node';
+    const toggle = document.createElement('span');
+    toggle.className = 'json-toggle';
+    toggle.textContent = '▾';
+    header.appendChild(toggle);
+    if (key !== null) {
+      const k = document.createElement('span');
+      k.className = 'json-key';
+      k.textContent = `"${key}"`;
+      header.appendChild(k);
+      header.appendChild(text(': '));
+    }
+    header.appendChild(text(`[  `));
+    const countSpan = document.createElement('span');
+    countSpan.className = 'json-null';
+    countSpan.textContent = `${value.length} items`;
+    header.appendChild(countSpan);
+    header.appendChild(text(' ]' + (isLast ? '' : ',')));
+
+    const children = document.createElement('div');
+    children.className = 'json-children';
+
+    value.forEach((item, i) => {
+      children.appendChild(renderJSONNode(item, null, i === value.length - 1));
+    });
+
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const collapsed = children.classList.toggle('collapsed');
+      toggle.textContent = collapsed ? '▸' : '▾';
+    });
+    header.addEventListener('click', () => toggle.click());
+
+    container.appendChild(header);
+    container.appendChild(children);
+    frag.appendChild(container);
+  } else if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    const container = document.createElement('div');
+    const header = document.createElement('div');
+    header.className = 'json-line json-node';
+    const toggle = document.createElement('span');
+    toggle.className = 'json-toggle';
+    toggle.textContent = '▾';
+    header.appendChild(toggle);
+    if (key !== null) {
+      const k = document.createElement('span');
+      k.className = 'json-key';
+      k.textContent = `"${key}"`;
+      header.appendChild(k);
+      header.appendChild(text(': '));
+    }
+    header.appendChild(text(`{  `));
+    const countSpan = document.createElement('span');
+    countSpan.className = 'json-null';
+    countSpan.textContent = `${keys.length} keys`;
+    header.appendChild(countSpan);
+    header.appendChild(text(' }' + (isLast ? '' : ',')));
+
+    const children = document.createElement('div');
+    children.className = 'json-children';
+
+    keys.forEach((k, i) => {
+      children.appendChild(renderJSONNode(value[k], k, i === keys.length - 1));
+    });
+
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const collapsed = children.classList.toggle('collapsed');
+      toggle.textContent = collapsed ? '▸' : '▾';
+    });
+    header.addEventListener('click', () => toggle.click());
+
+    container.appendChild(header);
+    container.appendChild(children);
+    frag.appendChild(container);
+  }
+
+  return frag;
+}
+
+function makeLine(key, valueHTML, isLast) {
+  const line = document.createElement('div');
+  line.className = 'json-line';
+  const toggle = document.createElement('span');
+  toggle.className = 'json-toggle';
+  toggle.textContent = ' ';
+  line.appendChild(toggle);
+  if (key !== null) {
+    const k = document.createElement('span');
+    k.className = 'json-key';
+    k.textContent = `"${key}"`;
+    line.appendChild(k);
+    line.appendChild(text(': '));
+  }
+  const val = document.createElement('span');
+  val.innerHTML = valueHTML + (isLast ? '' : ',');
+  line.appendChild(val);
+  return line;
+}
+
+function text(str) {
+  return document.createTextNode(str);
+}
+
+// ---- Expand / Collapse All ----
+document.getElementById('btn-expand-all').addEventListener('click', () => {
+  document.querySelectorAll('.json-children').forEach((c) => c.classList.remove('collapsed'));
+  document.querySelectorAll('.json-toggle').forEach((t) => { if (t.textContent.trim() === '▸') t.textContent = '▾'; });
+});
+document.getElementById('btn-collapse-all').addEventListener('click', () => {
+  document.querySelectorAll('.json-children').forEach((c) => c.classList.add('collapsed'));
+  document.querySelectorAll('.json-toggle').forEach((t) => { if (t.textContent.trim() === '▾') t.textContent = '▸'; });
+});
+
+// ---- Download / Copy JSON ----
+document.getElementById('btn-download-json').addEventListener('click', () => {
+  if (!scrapedData) return;
+  downloadJSON(scrapedData, 'scraped-data.json');
+});
+
+document.getElementById('btn-copy-json').addEventListener('click', () => {
+  if (!scrapedData) return;
+  navigator.clipboard.writeText(JSON.stringify(scrapedData, null, 2));
+  showToast('JSON copied to clipboard!');
+});
+
+// ---- API Calls rendering ----
+function renderAPICalls(apiCalls) {
+  if (!apiCalls) return;
+
+  const hasData = (apiCalls.graphql?.length || 0) + (apiCalls.rest?.length || 0) > 0;
+  document.getElementById('api-empty').style.display = hasData ? 'none' : 'flex';
+  document.getElementById('api-content').style.display = hasData ? 'block' : 'none';
+
+  document.getElementById('gql-count').textContent = apiCalls.graphql?.length || 0;
+  document.getElementById('rest-count').textContent = apiCalls.rest?.length || 0;
+
+  renderCallList(document.getElementById('graphql-list'), apiCalls.graphql || [], true);
+  renderCallList(document.getElementById('rest-list'), apiCalls.rest || [], false);
+}
+
+function renderCallList(container, calls, isGraphQL) {
+  container.innerHTML = '';
+  calls.forEach((call, i) => {
+    const card = document.createElement('div');
+    card.className = 'call-card';
+
+    const status = call.response?.status;
+    const statusClass = status && status < 400 ? 'status-ok' : 'status-err';
+    const methodClass = `method-${call.method || 'GET'}`;
+
+    card.innerHTML = `
+      <div class="call-header" data-i="${i}">
+        <span class="call-method ${methodClass}">${call.method || 'GET'}</span>
+        ${isGraphQL ? `<span class="call-graphql-badge">GraphQL</span>` : ''}
+        <span class="call-url">${escapeHTML(call.url)}</span>
+        ${status ? `<span class="call-status ${statusClass}">${status}</span>` : ''}
+        <span class="call-time">${formatTime(call.timestamp)}</span>
+        <span>&#9660;</span>
+      </div>
+      <div class="call-body" style="display:none">
+        ${call.body ? `<div class="call-section-label">Request Body</div><pre class="call-json">${escapeHTML(JSON.stringify(call.body, null, 2))}</pre>` : ''}
+        ${call.response?.body ? `<div class="call-section-label" style="margin-top:10px">Response</div><pre class="call-json">${escapeHTML(JSON.stringify(call.response.body, null, 2)).substring(0, 3000)}</pre>` : ''}
+      </div>`;
+
+    card.querySelector('.call-header').addEventListener('click', function () {
+      const body = this.nextElementSibling;
+      const expanded = body.style.display !== 'none';
+      body.style.display = expanded ? 'none' : 'block';
+      this.classList.toggle('open', !expanded);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+// API tab switching
+document.querySelectorAll('.api-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.api-tab').forEach((t) => t.classList.remove('active'));
+    document.querySelectorAll('.api-tab-panel').forEach((p) => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+  });
+});
+
+document.getElementById('btn-copy-api').addEventListener('click', () => {
+  if (!scrapedData?.apiCalls) return;
+  navigator.clipboard.writeText(JSON.stringify(scrapedData.apiCalls, null, 2));
+  showToast('API calls copied!');
+});
+
+document.getElementById('btn-download-api').addEventListener('click', () => {
+  if (!scrapedData?.apiCalls) return;
+  downloadJSON(scrapedData.apiCalls, 'api-calls.json');
+});
+
+// ---- Assets rendering ----
+function renderAssets(assets) {
+  if (!assets || assets.length === 0) return;
+
+  document.getElementById('assets-empty').style.display = 'none';
+  document.getElementById('assets-content').style.display = 'block';
+
+  renderAssetGrid(assets);
+
+  document.getElementById('asset-type-filter').addEventListener('change', () => filterAssets(assets));
+  document.getElementById('asset-search').addEventListener('input', () => filterAssets(assets));
+}
+
+function filterAssets(assets) {
+  const type = document.getElementById('asset-type-filter').value;
+  const search = document.getElementById('asset-search').value.toLowerCase();
+  const filtered = assets.filter((a) =>
+    (type === 'all' || a.type === type) &&
+    (!search || a.url.toLowerCase().includes(search))
+  );
+  renderAssetGrid(filtered);
+}
+
+function renderAssetGrid(assets) {
+  const grid = document.getElementById('asset-grid');
+  grid.innerHTML = '';
+  assets.slice(0, 200).forEach((asset) => {
+    const card = document.createElement('div');
+    card.className = 'asset-card';
+    const isImg = asset.type === 'image';
+    card.innerHTML = `
+      <span class="asset-type-badge">${asset.type}</span>
+      <span class="asset-url">${escapeHTML(asset.url)}</span>
+      ${isImg ? `<img class="asset-preview" src="${escapeHTML(asset.url)}" alt="" loading="lazy" onerror="this.style.display='none'" />` : ''}`;
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById('btn-download-assets').addEventListener('click', () => {
+  if (!scrapedData?.assets) return;
+  downloadJSON(scrapedData.assets, 'assets.json');
+});
+
+// ---- Refactor / Scaffold ----
+function enableRefactor(data) {
+  document.getElementById('refactor-empty').style.display = 'none';
+  document.getElementById('refactor-content').style.display = 'block';
+}
+
+document.getElementById('btn-generate').addEventListener('click', () => {
+  if (!scrapedData) return;
+  const html = generateScaffold(scrapedData);
+  document.getElementById('scaffold-editor').value = html;
+});
+
+document.getElementById('btn-download-scaffold').addEventListener('click', () => {
+  const html = document.getElementById('scaffold-editor').value;
+  if (!html) return;
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'scaffold.html';
+  a.click();
+});
+
+function generateScaffold(data) {
+  const page = data.pages?.[0];
+  if (!page) return '<!-- No page data -->';
+
+  const meta = page.meta || {};
+  const includeMeta = document.getElementById('include-meta').checked;
+  const includeCSSVars = document.getElementById('include-css-vars').checked;
+  const includeImages = document.getElementById('include-images').checked;
+  const includeScripts = document.getElementById('include-scripts').checked;
+
+  const cssVarBlock = includeCSSVars && Object.keys(page.cssVariables || {}).length > 0
+    ? `\n  :root {\n${Object.entries(page.cssVariables).map(([k, v]) => `    ${k}: ${v};`).join('\n')}\n  }`
+    : '';
+
+  const stylesheets = (page.stylesheets || [])
+    .map((s) => `  <link rel="stylesheet" href="${escapeAttr(s.href)}"${s.media ? ` media="${escapeAttr(s.media)}"` : ''}>`)
+    .join('\n');
+
+  const scripts = includeScripts
+    ? (page.scripts || [])
+        .map((s) => `<script src="${escapeAttr(s.src)}"${s.async ? ' async' : ''}${s.defer ? ' defer' : ''}><\/script>`)
+        .join('\n')
+    : '';
+
+  const navHTML = (page.navigation || [])
+    .map((nav) => `<nav>\n  <ul>\n${nav.items.map((i) => `    <li><a href="${escapeAttr(i.href)}">${escapeHTML(i.text)}</a></li>`).join('\n')}\n  </ul>\n</nav>`)
+    .join('\n');
+
+  const headingsHTML = Object.entries(page.headings || {})
+    .flatMap(([tag, items]) => items.map((h) => `<${tag}>${escapeHTML(h.text)}</${tag}>`))
+    .slice(0, 30)
+    .join('\n');
+
+  const imagesHTML = includeImages
+    ? (page.images || [])
+        .filter((img) => img.src)
+        .slice(0, 20)
+        .map((img) => `<img src="${escapeAttr(img.src)}"${img.alt ? ` alt="${escapeAttr(img.alt)}"` : ''}>`)
+        .join('\n')
+    : '';
+
+  const linksHTML = (page.links || [])
+    .filter((l) => l.isInternal && l.text)
+    .slice(0, 20)
+    .map((l) => `<a href="${escapeAttr(l.href)}">${escapeHTML(l.text)}</a>`)
+    .join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="${meta.lang || 'en'}">
+<head>
+  <meta charset="${meta.charset || 'UTF-8'}">
+  <meta name="viewport" content="${meta.viewport || 'width=device-width, initial-scale=1.0'}">
+  <title>${escapeHTML(meta.title || '')}</title>
+${includeMeta ? `  <meta name="description" content="${escapeAttr(meta.description || '')}">
+  <meta name="keywords" content="${escapeAttr(meta.keywords || '')}">
+  <meta name="author" content="${escapeAttr(meta.author || '')}">` : ''}
+${stylesheets}
+${cssVarBlock ? `  <style>${cssVarBlock}\n  </style>` : ''}
+</head>
+<body>
+
+<!-- Navigation -->
+${navHTML}
+
+<!-- Headings -->
+${headingsHTML}
+
+<!-- Images -->
+${imagesHTML}
+
+<!-- Links -->
+${linksHTML}
+
+<!-- Scripts -->
+${scripts}
+
+</body>
+</html>`;
+}
+
+// ---- Utilities ----
+function downloadJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function escapeHTML(str) {
+  if (typeof str !== 'string') return String(str ?? '');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escapeAttr(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleTimeString();
+  } catch { return iso; }
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = `
+    position:fixed;bottom:24px;right:24px;background:#4f8ef7;color:#fff;
+    padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;
+    z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);
+    animation:fadeIn 0.2s ease;
+  `;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ---- Init ----
+connectWS();
