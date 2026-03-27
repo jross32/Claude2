@@ -104,7 +104,12 @@ app.post('/api/scrape/:sessionId/verify', (req, res) => {
   }
 });
 
+// Life RPG API
+const rpgRoutes = require('./rpg/routes');
+app.use('/api/rpg', rpgRoutes);
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
+  console.log(`Life RPG at http://localhost:${PORT}/rpg`);
 });
