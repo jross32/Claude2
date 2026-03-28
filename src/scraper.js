@@ -180,56 +180,65 @@ class ScraperSession {
     }
   }
 
-  async _dismissPopups(page) {
-    // Partial-match — catches "No Thanks", "No, Thanks", "No thanks", etc.
-    const dismissRe = /no.?thanks|not now|maybe later|skip|dismiss|close/i;
+  async _dismissPopups(page, waitMs = 8000) {
+    // Matches "No Thanks", "No, Thanks", "No thank you", "Not Now", etc.
+    const dismissRe = /no[\s,]*thanks?|not\s+now|maybe\s+later|skip|dismiss|close|don.t\s+(ask|show|notify)/i;
     const tryDismiss = async () => {
       try {
-        const els = await page.$$('button, a[role="button"]');
-        for (const el of els) {
-          try {
-            if (!await el.isVisible()) continue;
-            const text = ((await el.textContent()) || '').trim();
-            if (dismissRe.test(text)) {
-              this.log(`Dismissed popup: "${text}"`);
-              await el.click().catch(() => {});
-              return true;
-            }
-          } catch {}
-        }
+        const clicked = await page.evaluate((reStr) => {
+          const re = new RegExp(reStr, 'i');
+          const els = [...document.querySelectorAll('button, a[role="button"], [role="button"]')];
+          for (const el of els) {
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) continue;
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+            const text = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
+            if (re.test(text)) { el.click(); return text; }
+          }
+          return null;
+        }, dismissRe.source);
+        if (clicked) { this.log(`Dismissed popup: "${clicked}"`); return true; }
       } catch {}
       return false;
     };
-    // Try immediately, then again after 1s and 2.5s in case modal renders late
+
+    // Try immediately
     if (await tryDismiss()) return;
-    await page.waitForTimeout(1000);
-    if (await tryDismiss()) return;
-    await page.waitForTimeout(1500);
-    await tryDismiss();
+
+    // Then poll every 800ms until waitMs expires — covers delayed JS modals
+    const start = Date.now();
+    while (Date.now() - start < waitMs) {
+      await page.waitForTimeout(800);
+      if (this.stopped) return;
+      if (await tryDismiss()) return;
+    }
   }
 
   // Register a persistent popup watcher for the whole page lifetime
   _registerPopupWatcher(page) {
-    const dismissRe = /no.?thanks|not now|maybe later|skip|dismiss/i;
+    const reStr = 'no[\\s,]*thanks?|not\\s+now|maybe\\s+later|skip|dismiss|close|don.t\\s+(ask|show|notify)';
     page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
-    // Poll every 2s for any dismiss-able popup button
+    // Poll every 1.5s for any dismiss-able popup button
     const interval = setInterval(async () => {
       if (this.stopped) { clearInterval(interval); return; }
       try {
-        const els = await page.$$('button');
-        for (const el of els) {
-          try {
-            if (!await el.isVisible()) continue;
-            const text = ((await el.textContent()) || '').trim();
-            if (dismissRe.test(text)) {
-              await el.click().catch(() => {});
-              this.log(`Auto-dismissed popup: "${text}"`);
-              break;
-            }
-          } catch {}
-        }
+        const clicked = await page.evaluate((rs) => {
+          const re = new RegExp(rs, 'i');
+          const els = [...document.querySelectorAll('button, a[role="button"], [role="button"]')];
+          for (const el of els) {
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) continue;
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+            const text = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
+            if (re.test(text)) { el.click(); return text; }
+          }
+          return null;
+        }, reStr);
+        if (clicked) this.log(`Auto-dismissed popup: "${clicked}"`);
       } catch {}
-    }, 2000);
+    }, 1500);
     return interval;
   }
 
