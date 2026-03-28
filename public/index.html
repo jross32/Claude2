@@ -99,13 +99,6 @@
               </label>
               <input type="number" id="max-pages" value="100" min="1" max="9999" style="width:120px" />
             </div>
-            <!-- Depth — optional, collapsed by default -->
-            <div class="field" id="depth-field">
-              <label for="scrape-depth">Scrape Depth
-                <span class="hint">(how many link-levels deep to follow — 1 = entry page only, 2 follows every link on that page, 3+ goes deeper)</span>
-              </label>
-              <input type="number" id="scrape-depth" min="1" max="99" value="1" style="width:90px" />
-            </div>
           </div>
 
           <!-- Capture Options -->
@@ -141,6 +134,16 @@
               <label class="checkbox-label" id="full-crawl-label" title="Follows every internal link on the site, ordered by path depth. Ignores the depth slider.">
                 <input type="checkbox" id="full-crawl" />
                 <span>&#127760; Full site crawl (every internal link)</span>
+              </label>
+              <label class="checkbox-label" id="limit-depth-label" title="By default scrape depth is unlimited. Check this to cap how many link-levels deep the scraper follows.">
+                <input type="checkbox" id="limit-depth" />
+                <span>Limit scrape depth
+                  <span id="depth-inline-wrap" style="display:none;margin-left:8px">
+                    — <input type="number" id="scrape-depth" min="1" max="99" value="3" style="width:60px;display:inline-block;padding:2px 6px"
+                      title="How many link-levels deep to follow" />
+                    <span class="hint">levels deep</span>
+                  </span>
+                </span>
               </label>
             </div>
           </div>

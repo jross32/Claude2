@@ -406,6 +406,16 @@ document.getElementById('live-view-btn').addEventListener('click', function () {
 // ---- Depth slider ----
 // scrape-depth is now a number input — no slider listener needed
 
+// ---- Limit depth toggle ----
+document.getElementById('limit-depth').addEventListener('change', function () {
+  document.getElementById('depth-inline-wrap').style.display = this.checked ? 'inline' : 'none';
+  if (this.checked) document.getElementById('scrape-depth').focus();
+});
+
+// Stop the depth number input click from toggling the checkbox
+document.getElementById('scrape-depth').addEventListener('click', e => e.stopPropagation());
+document.getElementById('scrape-depth').addEventListener('mousedown', e => e.stopPropagation());
+
 // ---- Detect site ----
 document.getElementById('btn-detect').addEventListener('click', async () => {
   const url = document.getElementById('url').value.trim();
@@ -436,7 +446,7 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
 
   const payload = {
     url,
-    scrapeDepth: parseInt(document.getElementById('scrape-depth').value, 10),
+    scrapeDepth: document.getElementById('limit-depth').checked ? parseInt(document.getElementById('scrape-depth').value, 10) : 99,
     captureGraphQL: document.getElementById('capture-graphql').checked,
     captureREST: document.getElementById('capture-rest').checked,
     captureAssets: document.getElementById('capture-assets').checked,
