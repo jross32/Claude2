@@ -22,13 +22,6 @@ async function handleAuth(page, options) {
     }, sel, value);
   }
 
-  // Helper: is a selector visible right now (no waiting)
-  async function isVisible(sel) {
-    try {
-      return await page.isVisible(sel);
-    } catch { return false; }
-  }
-
   // Helper: click the submit button, avoiding "Forgot Password" / destructive links
   async function clickSubmit() {
     const candidates = [
@@ -86,7 +79,7 @@ async function handleAuth(page, options) {
     'input[id*="password" i]',
   ];
 
-  // ── Step 1: fill username ──────────────────────────────────────────────────
+  // ── Step 1: fill username ─────────────────────────────────────────────────
   if (username) {
     let filled = false;
     for (const sel of usernameSelectors) {
@@ -98,7 +91,6 @@ async function handleAuth(page, options) {
       } catch {}
     }
     if (!filled) {
-      // DOM fallback: first visible text/email input
       try {
         const found = await page.evaluate((val) => {
           const inputs = [...document.querySelectorAll('input[type="text"],input[type="email"],input:not([type])')];
@@ -113,47 +105,16 @@ async function handleAuth(page, options) {
         if (found) { log('Filled username via DOM fallback', 'warn'); filled = true; }
       } catch {}
     }
-    if (!filled) { log('Could not find username field', 'warn'); }
+    if (!filled) log('Could not find username field', 'warn');
   }
 
   await delay(400);
 
-  // ── Check if password field is already visible (single-step form) ──────────
-  let passwordVisible = false;
-  for (const sel of passwordSelectors) {
-    if (await isVisible(sel)) { passwordVisible = true; break; }
-  }
-
-  // ── If password not visible, this is a multi-step form — submit email first ─
-  if (!passwordVisible) {
-    log('Password field not visible — submitting email step first...');
-    await clickSubmit();
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await delay(800);
-
-    // Handle any "Continue to …" page that appears
-    await clickContinueIfPresent(page, log);
-
-    // Wait for password field to appear
-    for (const sel of passwordSelectors) {
-      try {
-        await page.waitForSelector(sel, { timeout: 8000, state: 'visible' });
-        passwordVisible = true;
-        log('Password field appeared after email step');
-        break;
-      } catch {}
-    }
-  }
-
-  // ── Step 2: fill password ──────────────────────────────────────────────────
-  if (!passwordVisible) {
-    log('Could not find password field after email step', 'warn');
-    return;
-  }
-
+  // ── Step 2: fill password (wait up to 8s for it to appear) ────────────────
   let filledPassword = false;
   for (const sel of passwordSelectors) {
     try {
+      await page.waitForSelector(sel, { timeout: 8000, state: 'visible' });
       await fillField(sel, password);
       log(`Filled password: ${sel}`);
       filledPassword = true;
@@ -162,18 +123,18 @@ async function handleAuth(page, options) {
   }
 
   if (!filledPassword) {
-    log('Could not fill password field', 'warn');
+    log('Could not find password field', 'warn');
     return;
   }
 
   await delay(400);
 
-  // ── Step 3: submit password ────────────────────────────────────────────────
+  // ── Step 3: click Login (avoid Forgot Password / Cancel buttons) ──────────
   await clickSubmit();
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
   await delay(800);
 
-  // Handle any "Continue to …" confirmation page
+  // ── Step 4: handle "Continue to …" confirmation page ─────────────────────
   await clickContinueIfPresent(page, log);
 
   // ── Auto-detect and handle 2FA / verification ──────────────────────────────
