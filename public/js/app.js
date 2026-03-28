@@ -566,6 +566,7 @@ async function startScrapeSession(name, faviconUrl) {
     imageLimit: parseInt(document.getElementById('image-limit').value, 10) || 0,
     autoScroll: document.getElementById('auto-scroll').checked,
     captureDropdowns: document.getElementById('capture-dropdowns').checked,
+    captureSpeed: parseInt(document.getElementById('capture-speed').value, 10) || 1,
     showBrowser: false,
     liveView,
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
@@ -1930,6 +1931,11 @@ function renderBySection(pages) {
 
 document.getElementById('slow-motion').addEventListener('input', function () {
   document.getElementById('slowmo-value').textContent = `${this.value}ms`;
+});
+
+const _captureSpeedLabels = { 1: 'Default', 2: 'Fast', 3: 'Faster', 4: 'Turbo', 5: 'Max' };
+document.getElementById('capture-speed').addEventListener('input', function () {
+  document.getElementById('capture-speed-badge').textContent = `${this.value} — ${_captureSpeedLabels[this.value] || this.value}`;
 });
 
 // ---- Crawl sort tabs ----
