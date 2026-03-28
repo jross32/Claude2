@@ -183,53 +183,63 @@ class ScraperSession {
   }
 
   async _dismissPopups(page, waitMs = 8000) {
-    // Matches "No Thanks", "No, Thanks", "Not Now", "Maybe Later", etc.
-    const dismissRe = /no[\s,]*thanks?|not\s+now|maybe\s+later|skip|dismiss|don.t\s+(ask|show|notify)/i;
+    // Specific dismiss phrases ordered by preference
+    const DISMISS_TEXTS = ['No Thanks', 'No, Thanks', 'Not Now', 'Maybe Later', 'Skip', 'Dismiss'];
+    const dismissRe = /no[\s,]*thanks?|not\s+now|maybe\s+later|\bskip\b|^dismiss$|don.t\s+(ask|show|notify)/i;
 
-    const tryDismissEval = async () => {
+    const tryDismiss = async () => {
+      // ── Strategy 1: Playwright native getByRole (most React-compatible) ──
+      for (const text of DISMISS_TEXTS) {
+        try {
+          const btn = page.getByRole('button', { name: text, exact: false });
+          if (await btn.first().count().catch(() => 0) > 0) {
+            await btn.first().click({ timeout: 1500, force: true });
+            this.log(`Dismissed popup: "${text}"`);
+            return true;
+          }
+        } catch {}
+      }
+
+      // ── Strategy 2: CSS :has-text selector with force ──
+      for (const text of DISMISS_TEXTS) {
+        try {
+          await page.click(`button:has-text("${text}")`, { timeout: 400, force: true });
+          this.log(`Dismissed popup (css): "${text}"`);
+          return true;
+        } catch {}
+      }
+
+      // ── Strategy 3: evaluate with full pointer+mouse event sequence (React 17+) ──
       try {
         const clicked = await page.evaluate((reStr) => {
           const re = new RegExp(reStr, 'i');
-          const els = [...document.querySelectorAll('button, a[role="button"], [role="button"], [role="dialog"] button')];
+          const els = [...document.querySelectorAll('button, [role="button"], [role="dialog"] button')];
           for (const el of els) {
             const rect = el.getBoundingClientRect();
             if (rect.width === 0 && rect.height === 0) continue;
-            const style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
-            const text = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
-            if (re.test(text)) {
-              // Dispatch bubbled event so React/Vue synthetic handlers fire
-              el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-              el.click();
-              return text;
-            }
+            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+            if (!re.test(text)) continue;
+            const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+            const opts = { bubbles: true, cancelable: true, clientX: cx, clientY: cy };
+            el.dispatchEvent(new PointerEvent('pointerover', opts));
+            el.dispatchEvent(new PointerEvent('pointerdown', opts));
+            el.dispatchEvent(new PointerEvent('pointerup', opts));
+            el.dispatchEvent(new MouseEvent('click', opts));
+            el.click();
+            return text;
           }
           return null;
         }, dismissRe.source);
-        if (clicked) { this.log(`Dismissed popup: "${clicked}"`); return true; }
+        if (clicked) { this.log(`Dismissed popup (eval): "${clicked}"`); return true; }
       } catch {}
+
       return false;
     };
-
-    // Playwright-native click fallback — handles overlays and synthetic event frameworks
-    const tryDismissNative = async () => {
-      try {
-        const btn = page.locator('button, [role="button"]').filter({ hasText: dismissRe });
-        if (await btn.first().isVisible({ timeout: 300 })) {
-          await btn.first().click({ timeout: 1500, force: false });
-          this.log('Dismissed popup (native click)');
-          return true;
-        }
-      } catch {}
-      return false;
-    };
-
-    const tryDismiss = async () => (await tryDismissEval()) || (await tryDismissNative());
 
     // Try immediately
     if (await tryDismiss()) return;
 
-    // Then poll every 600ms until waitMs expires — covers delayed JS modals
+    // Poll every 600ms until waitMs expires
     const start = Date.now();
     while (Date.now() - start < waitMs) {
       await page.waitForTimeout(600);
@@ -240,42 +250,57 @@ class ScraperSession {
 
   // Register a persistent popup watcher for the whole page lifetime
   _registerPopupWatcher(page) {
-    const reStr = 'no[\\s,]*thanks?|not\\s+now|maybe\\s+later|skip|dismiss|don.t\\s+(ask|show|notify)';
+    const DISMISS_TEXTS = ['No Thanks', 'No, Thanks', 'Not Now', 'Maybe Later', 'Skip', 'Dismiss'];
+    const dismissRe = /no[\s,]*thanks?|not\s+now|maybe\s+later|\bskip\b|^dismiss$|don.t\s+(ask|show|notify)/i;
     page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
-    // Poll every 1.2s for any dismiss-able popup button
+
     const interval = setInterval(async () => {
       if (this.stopped) { clearInterval(interval); return; }
+
+      // Strategy 1: getByRole with force (most reliable for React)
+      for (const text of DISMISS_TEXTS) {
+        try {
+          const btn = page.getByRole('button', { name: text, exact: false });
+          if (await btn.first().count().catch(() => 0) > 0) {
+            await btn.first().click({ timeout: 800, force: true });
+            this.log(`Auto-dismissed popup: "${text}"`);
+            return;
+          }
+        } catch {}
+      }
+
+      // Strategy 2: CSS has-text
+      for (const text of DISMISS_TEXTS) {
+        try {
+          await page.click(`button:has-text("${text}")`, { timeout: 300, force: true });
+          this.log(`Auto-dismissed popup (css): "${text}"`);
+          return;
+        } catch {}
+      }
+
+      // Strategy 3: evaluate + full pointer event sequence
       try {
-        // 1. evaluate-based (fast)
-        const clicked = await page.evaluate((rs) => {
-          const re = new RegExp(rs, 'i');
-          const els = [...document.querySelectorAll('button, a[role="button"], [role="button"], [role="dialog"] button')];
+        const clicked = await page.evaluate((reStr) => {
+          const re = new RegExp(reStr, 'i');
+          const els = [...document.querySelectorAll('button, [role="button"], [role="dialog"] button')];
           for (const el of els) {
             const rect = el.getBoundingClientRect();
             if (rect.width === 0 && rect.height === 0) continue;
-            const style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
-            const text = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
-            if (re.test(text)) {
-              el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-              el.click();
-              return text;
-            }
+            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+            if (!re.test(text)) continue;
+            const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+            const opts = { bubbles: true, cancelable: true, clientX: cx, clientY: cy };
+            el.dispatchEvent(new PointerEvent('pointerdown', opts));
+            el.dispatchEvent(new PointerEvent('pointerup', opts));
+            el.dispatchEvent(new MouseEvent('click', opts));
+            el.click();
+            return text;
           }
           return null;
-        }, reStr);
-        if (clicked) { this.log(`Auto-dismissed popup: "${clicked}"`); return; }
+        }, dismissRe.source);
+        if (clicked) this.log(`Auto-dismissed popup (eval): "${clicked}"`);
       } catch {}
-      // 2. Playwright-native fallback
-      try {
-        const re = new RegExp(reStr, 'i');
-        const btn = page.locator('button, [role="button"]').filter({ hasText: re });
-        if (await btn.first().isVisible({ timeout: 200 }).catch(() => false)) {
-          await btn.first().click({ timeout: 1000, force: false }).catch(() => {});
-          this.log('Auto-dismissed popup (native click)');
-        }
-      } catch {}
-    }, 1200);
+    }, 1000);
     return interval;
   }
 
@@ -700,10 +725,10 @@ class ScraperSession {
           }
           this.log(`After auth — current URL: ${page.url()}`);
           await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
-          await page.waitForTimeout(1500);
+          await page.waitForTimeout(500);
           this.log(`Settled URL: ${page.url()}`);
-          // Dismiss any post-login notification/permission popups
-          await this._dismissPopups(page);
+          // Dismiss any post-login notification/permission popups (12s window for slow modals)
+          await this._dismissPopups(page, 12000);
           this.log('Authentication complete', 'success');
 
           // Save session keyed to the post-login URL (may differ from login URL)
@@ -973,14 +998,18 @@ class ScraperSession {
       );
 
       try {
-        const nav = await this._navigateWithRetry(page, url, origin);
-        if (!nav.success) {
-          this.log(`Skipping ${pathname} — ${nav.reason}`, 'warn');
-          continue;
+        // Skip navigation if the page is already at this URL (e.g. post-auth dashboard)
+        const currentNorm = normalize(page.url());
+        if (currentNorm !== normalize(url)) {
+          const nav = await this._navigateWithRetry(page, url, origin);
+          if (!nav.success) {
+            this.log(`Skipping ${pathname} — ${nav.reason}`, 'warn');
+            continue;
+          }
+          await page.waitForTimeout(400);
         }
-        await page.waitForTimeout(600);
 
-        await this._dismissPopups(page, 2000);  // short per-page window
+        await this._dismissPopups(page, 1500);  // short per-page window
         if (autoScroll) await this._autoScroll(page);
         const pageData = await extractPageData(page, url);
 
