@@ -7,6 +7,7 @@ const WebSocket = require('ws');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const ScraperSession = require('./scraper');
+const { clearSession } = require('./scraper');
 const { exportHAR } = require('./har-exporter');
 const { inferSchema } = require('./schema-inferrer');
 const { diffScrapes } = require('./diff');
@@ -46,6 +47,25 @@ const KNOWN_SITES = [
     password: process.env.APA_PASSWORD,
   },
 ];
+
+// Check if a saved session exists for a URL
+app.get('/api/session/check', (req, res) => {
+  const url = req.query.url || '';
+  const fs = require('fs');
+  const path = require('path');
+  try {
+    const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+    const file = path.join(__dirname, '../.scraper-sessions', `${hostname}.json`);
+    res.json({ exists: fs.existsSync(file) });
+  } catch { res.json({ exists: false }); }
+});
+
+// Clear saved session for a URL
+app.delete('/api/session', (req, res) => {
+  const url = req.query.url || '';
+  const cleared = clearSession(url);
+  res.json({ cleared });
+});
 
 // Return pre-configured credentials for a URL (never logs the password)
 app.get('/api/site-credentials', (req, res) => {

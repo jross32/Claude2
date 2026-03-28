@@ -1,6 +1,36 @@
 const { chromium } = require('playwright');
 const { extractPageData } = require('./extractor');
 const { handleAuth } = require('./auth');
+const fs = require('fs');
+const path = require('path');
+
+const SESSIONS_DIR = path.join(__dirname, '../.scraper-sessions');
+
+function sessionFile(url) {
+  try {
+    const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+    if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    return path.join(SESSIONS_DIR, `${hostname}.json`);
+  } catch { return null; }
+}
+
+function loadSession(url) {
+  try {
+    const file = sessionFile(url);
+    if (file && fs.existsSync(file)) return file;
+  } catch {}
+  return null;
+}
+
+function clearSession(url) {
+  try {
+    const file = sessionFile(url);
+    if (file && fs.existsSync(file)) { fs.unlinkSync(file); return true; }
+  } catch {}
+  return false;
+}
+
+module.exports.clearSession = clearSession;
 
 
 class ScraperSession {
@@ -199,12 +229,16 @@ class ScraperSession {
     });
 
     try {
+      const savedSession = loadSession(primaryUrl);
+      if (savedSession) this.log('Restoring saved session state...', 'info');
+
       const context = await this.browser.newContext({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         viewport: { width: 1440, height: 900 },
-        // Accept all content
         ignoreHTTPSErrors: true,
+        ...(savedSession ? { storageState: savedSession } : {}),
       });
+      this.context = context;
 
       const page = await context.newPage();
 
@@ -468,6 +502,17 @@ class ScraperSession {
           });
           await page.waitForLoadState('networkidle').catch(() => {});
           this.log('Authentication complete', 'success');
+
+          // Save session state so future scrapes (and mid-crawl restores) skip login
+          try {
+            const file = sessionFile(primaryUrl);
+            if (file) {
+              await context.storageState({ path: file });
+              this.savedSession = file;
+              this.log('Session state saved — will auto-restore if logged out', 'success');
+              this.broadcast(this.sessionId, { type: 'sessionSaved', hostname: new URL(primaryUrl).hostname });
+            }
+          } catch {}
         }
       } else {
         this.log('No login form detected — proceeding without authentication.');
@@ -692,6 +737,17 @@ class ScraperSession {
 
       try {
         await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+
+        // Detect mid-crawl logout — if we landed on a login page, restore session and retry
+        if (this._isLoginRedirect(page.url(), url, origin)) {
+          this.log(`Session expired on ${pathname} — restoring saved session...`, 'warn');
+          if (await this._restoreSession(page, url)) {
+            this.log('Session restored, retrying page...', 'info');
+          } else {
+            this.log('Could not restore session — page may be behind login wall', 'warn');
+          }
+        }
+
         if (autoScroll) await this._autoScroll(page);
         const pageData = await extractPageData(page, url);
 
@@ -768,6 +824,34 @@ class ScraperSession {
   }
 
   // Build a nested tree of pages grouped by URL path segments
+  _isLoginRedirect(currentUrl, intendedUrl, origin) {
+    if (!currentUrl.startsWith(origin)) return false;
+    if (currentUrl === intendedUrl) return false;
+    return /login|signin|sign-in|auth|sso|account\/login/i.test(currentUrl);
+  }
+
+  async _restoreSession(page, retryUrl) {
+    if (!this.savedSession && !loadSession(retryUrl)) return false;
+    try {
+      const file = this.savedSession || loadSession(retryUrl);
+      const state = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (this.context) {
+        await this.context.clearCookies();
+        if (state.cookies?.length) await this.context.addCookies(state.cookies);
+      }
+      // Restore localStorage
+      if (state.origins?.length) {
+        for (const o of state.origins) {
+          for (const item of (o.localStorage || [])) {
+            await page.evaluate(([k, v]) => { try { localStorage.setItem(k, v); } catch {} }, [item.name, item.value]);
+          }
+        }
+      }
+      await page.goto(retryUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      return !this._isLoginRedirect(page.url(), retryUrl, new URL(retryUrl).origin);
+    } catch { return false; }
+  }
+
   _buildSiteTree(pages, origin) {
     const tree = { path: '/', url: origin, children: {}, pages: [] };
     for (const page of pages) {

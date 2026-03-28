@@ -43,6 +43,10 @@ function handleWSMessage(msg) {
     case 'liveFrame':
       updateLiveFrame(msg.dataUrl);
       break;
+    case 'sessionSaved':
+      document.getElementById('session-badge').style.display = 'flex';
+      showToast(`Session saved for ${msg.hostname}`);
+      break;
     case 'complete':
       onScrapeComplete(msg.data);
       break;
@@ -66,19 +70,33 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 // ---- Auth toggle ----
 // Auth section is shown automatically when a login form is detected — no manual toggle
 
-// Auto-fill credentials from .env when URL matches a known site
+// Auto-fill credentials from .env + check for saved session when URL changes
 document.getElementById('url').addEventListener('blur', async () => {
   const url = document.getElementById('url').value.trim();
   if (!url) return;
   try {
     const res = await fetch(`/api/site-credentials?url=${encodeURIComponent(url)}`);
     const data = await res.json();
-    if (data.found) {
-      showKnownSiteBadge(data.username);
-    } else {
-      clearKnownSiteBadge();
-    }
+    if (data.found) showKnownSiteBadge(data.username);
+    else clearKnownSiteBadge();
   } catch {}
+  checkSavedSession(url);
+});
+
+async function checkSavedSession(url) {
+  try {
+    const res = await fetch(`/api/session/check?url=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    document.getElementById('session-badge').style.display = data.exists ? 'flex' : 'none';
+  } catch {}
+}
+
+document.getElementById('btn-clear-session').addEventListener('click', async () => {
+  const url = document.getElementById('url').value.trim();
+  if (!url) return;
+  await fetch(`/api/session?url=${encodeURIComponent(url)}`, { method: 'DELETE' });
+  document.getElementById('session-badge').style.display = 'none';
+  showToast('Saved session cleared');
 });
 
 function showKnownSiteBadge(username) {
