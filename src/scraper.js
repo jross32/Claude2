@@ -698,7 +698,11 @@ class ScraperSession {
         allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll);
       } else {
         const visited = new Set();
-        allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll);
+        const pageLimit = maxPages > 0 ? maxPages : Infinity;
+        allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll, pageLimit);
+        if (allResults.length >= pageLimit) {
+          this.log(`Page limit reached (${pageLimit} pages).`, 'warn');
+        }
       }
 
       // ── Download images as base64 ────────────────────────────────────────
@@ -773,6 +777,7 @@ class ScraperSession {
           totalErrors: this.errors.length,
         },
         siteInfo,
+        visitedUrls: allResults.map(p => p.meta?.url).filter(Boolean),
         pages: allResults,
         apiCalls: {
           graphql: this.graphqlCalls,
@@ -808,10 +813,10 @@ class ScraperSession {
     }
   }
 
-  async _scrapePage(page, url, depth, visited, autoScroll = false) {
-    if (visited.has(url) || this.stopped) return [];
+  async _scrapePage(page, url, depth, visited, autoScroll = false, maxPages = Infinity) {
+    if (visited.has(url) || this.stopped || visited.size >= maxPages) return [];
     visited.add(url);
-    this.log(`Extracting: ${url}`);
+    this.log(`Extracting (${visited.size}${maxPages !== Infinity ? `/${maxPages}` : ''}): ${url}`);
     if (autoScroll && depth >= 1) await this._autoScroll(page);
     const pageData = await extractPageData(page, url);
     const results = [pageData];
@@ -822,11 +827,11 @@ class ScraperSession {
         .slice(0, 8);
 
       for (const link of links) {
-        if (this.stopped) break;
+        if (this.stopped || visited.size >= maxPages) break;
         try {
           await page.goto(link.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
           if (autoScroll) await this._autoScroll(page);
-          results.push(...await this._scrapePage(page, link.href, depth - 1, visited));
+          results.push(...await this._scrapePage(page, link.href, depth - 1, visited, autoScroll, maxPages));
         } catch (err) {
           this.errors.push({ type: 'navigationError', url: link.href, message: err.message });
         }
