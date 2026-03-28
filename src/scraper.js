@@ -253,7 +253,7 @@ class ScraperSession {
   }
 
   // Download images as base64 (up to N images, capped by size)
-  async _downloadImages(page, images, maxImages = 30, maxSizeKB = 500) {
+  async _downloadImages(page, images, maxImages = Infinity, maxSizeKB = 500) {
     const downloaded = [];
     const toFetch = images.filter(img => img.src && !img.src.startsWith('data:')).slice(0, maxImages);
     for (const img of toFetch) {
@@ -299,6 +299,7 @@ class ScraperSession {
       captureAssets,
       captureAllRequests,
       captureImages,
+      imageLimit,
       autoScroll,
       clickSequence,
       showBrowser,
@@ -703,9 +704,10 @@ class ScraperSession {
       // ── Download images as base64 ────────────────────────────────────────
       if (captureImages && allResults.length > 0) {
         this.progress('Downloading images', 80);
-        this.log('Downloading images as base64...');
+        const imgMax = (imageLimit === 0 || imageLimit === undefined) ? Infinity : imageLimit;
+        this.log(`Downloading images as base64${imgMax === Infinity ? ' (unlimited)' : ` (first ${imgMax})`}...`);
         const firstPageImages = allResults[0]?.images || [];
-        this.downloadedImages = await this._downloadImages(page, firstPageImages);
+        this.downloadedImages = await this._downloadImages(page, firstPageImages, imgMax);
         this.log(`Downloaded ${this.downloadedImages.length} images`);
       }
 

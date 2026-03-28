@@ -125,7 +125,13 @@
               </label>
               <label class="checkbox-label">
                 <input type="checkbox" id="capture-images" />
-                <span>Download images as base64 (first 30)</span>
+                <span>Download images as base64
+                  <span id="images-inline-wrap" style="display:none;margin-left:8px">
+                    — <input type="number" id="image-limit" min="0" value="0" style="width:60px;display:inline-block;padding:2px 6px"
+                      title="0 = unlimited" />
+                    <span class="hint">max (0 = unlimited)</span>
+                  </span>
+                </span>
               </label>
               <label class="checkbox-label">
                 <input type="checkbox" id="auto-scroll" checked />

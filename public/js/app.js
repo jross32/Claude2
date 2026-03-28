@@ -121,7 +121,7 @@ function renderPresets() {
           <span class="preset-item-url">${escapeHTML(preset.url || '')}</span>
         </div>
         <div class="preset-item-badges">
-          ${preset.fullCrawl ? '<span class="preset-badge">Full Crawl</span>' : `<span class="preset-badge">Depth ${preset.scrapeDepth || 1}</span>`}
+          ${preset.fullCrawl ? '<span class="preset-badge">Full Crawl</span>' : (preset.limitDepth ? `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>` : '<span class="preset-badge">Depth ∞</span>')}
           ${preset.liveView !== false ? '<span class="preset-badge">Live</span>' : ''}
         </div>
       </div>
@@ -266,7 +266,7 @@ function showPresetConfirm(idx) {
       </div>
     </div>
     <div class="preset-confirm-tags">
-      ${preset.fullCrawl ? '<span class="preset-badge">Full Crawl</span>' : `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>`}
+      ${preset.fullCrawl ? '<span class="preset-badge">Full Crawl</span>' : (preset.limitDepth ? `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>` : '<span class="preset-badge">Depth ∞</span>')}
       ${preset.captureGraphQL ? '<span class="preset-badge">GraphQL</span>' : ''}
       ${preset.captureREST ? '<span class="preset-badge">REST</span>' : ''}
       ${preset.liveView !== false ? '<span class="preset-badge">Live View</span>' : '<span class="preset-badge">Headless</span>'}
@@ -441,6 +441,13 @@ document.getElementById('limit-depth').addEventListener('change', function () {
 document.getElementById('scrape-depth').addEventListener('click', e => e.stopPropagation());
 document.getElementById('scrape-depth').addEventListener('mousedown', e => e.stopPropagation());
 
+// ---- Image limit toggle ----
+document.getElementById('capture-images').addEventListener('change', function () {
+  document.getElementById('images-inline-wrap').style.display = this.checked ? 'inline' : 'none';
+});
+document.getElementById('image-limit').addEventListener('click', e => e.stopPropagation());
+document.getElementById('image-limit').addEventListener('mousedown', e => e.stopPropagation());
+
 // ---- Detect site ----
 document.getElementById('btn-detect').addEventListener('click', async () => {
   const url = document.getElementById('url').value.trim();
@@ -477,6 +484,7 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     captureAssets: document.getElementById('capture-assets').checked,
     captureAllRequests: document.getElementById('capture-all-requests').checked,
     captureImages: document.getElementById('capture-images').checked,
+    imageLimit: parseInt(document.getElementById('image-limit').value, 10) || 0,
     autoScroll: document.getElementById('auto-scroll').checked,
     showBrowser: false,
     liveView: document.getElementById('live-view').value === 'true',
