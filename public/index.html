@@ -255,12 +255,39 @@
                 <input type="number" id="preset-maxpages" value="100" min="1" max="9999" style="width:120px" />
               </div>
               <div class="field">
-                <label>Options</label>
+                <label>Capture Options</label>
                 <div class="checkboxes">
-                  <label class="checkbox-label"><input type="checkbox" id="preset-graphql" checked /><span>Capture GraphQL</span></label>
-                  <label class="checkbox-label"><input type="checkbox" id="preset-rest" checked /><span>Capture REST</span></label>
-                  <label class="checkbox-label"><input type="checkbox" id="preset-assets" /><span>Capture Assets</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-capture-urls" checked /><span>Capture Visited URLs</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-graphql" checked /><span>Capture GraphQL Calls</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-rest" checked /><span>Capture REST API Calls</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-assets" /><span>Capture Asset URLs</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-all-requests" /><span>Capture ALL network requests</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-images" /><span>Download images as base64
+                    <span id="preset-images-wrap" style="display:none;margin-left:8px">
+                      — <input type="number" id="preset-image-limit" min="0" value="0" style="width:60px;display:inline-block;padding:2px 6px" />
+                      <span class="hint">max (0 = unlimited)</span>
+                    </span>
+                  </span></label>
+                </div>
+              </div>
+              <div class="field">
+                <label>Skip Links <span class="hint">— links the scraper should not follow</span></label>
+                <div class="checkboxes avoid-tags-grid" id="preset-avoid-grid">
+                  <label><input type="checkbox" class="preset-avoid-tag" value="logout" checked />Logout</label>
+                  <label><input type="checkbox" class="preset-avoid-tag" value="cart" checked />Cart</label>
+                  <label><input type="checkbox" class="preset-avoid-tag" value="delete" />Delete</label>
+                  <label><input type="checkbox" class="preset-avoid-tag" value="register" />Register</label>
+                  <label><input type="checkbox" class="preset-avoid-tag" value="print" />Print</label>
+                  <label><input type="checkbox" class="preset-avoid-tag" value="social" />Social</label>
+                  <label><input type="checkbox" class="preset-avoid-tag" value="legal" />Legal</label>
+                  <label><input type="checkbox" class="preset-avoid-tag" value="external" />External</label>
+                </div>
+              </div>
+              <div class="field">
+                <label>Browser Options</label>
+                <div class="checkboxes">
                   <label class="checkbox-label"><input type="checkbox" id="preset-scroll" checked /><span>Auto-scroll</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-liveview" checked /><span>&#127909; Live Browser View</span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-fullcrawl" /><span>&#127760; Full site crawl</span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-limitdepth" /><span>Limit scrape depth
                     <span id="preset-depth-wrap" style="display:none;margin-left:8px">
@@ -268,7 +295,6 @@
                       <span class="hint">levels deep</span>
                     </span>
                   </span></label>
-                  <label class="checkbox-label"><input type="checkbox" id="preset-liveview" checked /><span>&#127909; Live Browser View</span></label>
                 </div>
               </div>
             </div>

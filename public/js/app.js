@@ -153,15 +153,30 @@ function openPresetModal(editIdx = -1) {
     mp.disabled = on; mp.placeholder = on ? 'Unlimited' : ''; if (on) mp.value = '';
   };
 
+  const setImagesUI = (on, limit) => {
+    document.getElementById('preset-images').checked = on;
+    document.getElementById('preset-images-wrap').style.display = on ? 'inline' : 'none';
+    document.getElementById('preset-image-limit').value = limit || 0;
+  };
+  const setAvoidTags = (tags = []) => {
+    document.querySelectorAll('.preset-avoid-tag').forEach(cb => {
+      cb.checked = tags.includes(cb.value);
+    });
+  };
+
   if (editIdx >= 0) {
     const p = getPresets()[editIdx];
     title.textContent = '✎ Edit Preset';
     document.getElementById('preset-name').value = p.name || '';
     document.getElementById('preset-url').value = p.url || '';
     document.getElementById('preset-icon-url').value = p.iconUrl || '';
+    document.getElementById('preset-capture-urls').checked = p.capturePageUrls !== false;
     document.getElementById('preset-graphql').checked = p.captureGraphQL !== false;
     document.getElementById('preset-rest').checked = p.captureREST !== false;
     document.getElementById('preset-assets').checked = !!p.captureAssets;
+    document.getElementById('preset-all-requests').checked = !!p.captureAllRequests;
+    setImagesUI(!!p.captureImages, p.imageLimit);
+    setAvoidTags(p.avoidTags || ['logout', 'cart']);
     document.getElementById('preset-scroll').checked = p.autoScroll !== false;
     document.getElementById('preset-liveview').checked = p.liveView !== false;
     document.getElementById('preset-maxpages').value = p.maxPages || 100;
@@ -173,9 +188,14 @@ function openPresetModal(editIdx = -1) {
     document.getElementById('preset-name').value = '';
     document.getElementById('preset-url').value = document.getElementById('url').value || '';
     document.getElementById('preset-icon-url').value = '';
+    document.getElementById('preset-capture-urls').checked = document.getElementById('capture-urls').checked;
     document.getElementById('preset-graphql').checked = document.getElementById('capture-graphql').checked;
     document.getElementById('preset-rest').checked = document.getElementById('capture-rest').checked;
     document.getElementById('preset-assets').checked = document.getElementById('capture-assets').checked;
+    document.getElementById('preset-all-requests').checked = document.getElementById('capture-all-requests').checked;
+    const captImgOn = document.getElementById('capture-images').checked;
+    setImagesUI(captImgOn, document.getElementById('image-limit').value);
+    setAvoidTags([...document.querySelectorAll('.avoid-tag:checked')].map(el => el.value));
     document.getElementById('preset-scroll').checked = document.getElementById('auto-scroll').checked;
     document.getElementById('preset-liveview').checked = document.getElementById('live-view').value === 'true';
     document.getElementById('preset-maxpages').value = document.getElementById('max-pages').value || 100;
@@ -207,6 +227,11 @@ document.getElementById('preset-limitdepth').addEventListener('change', function
 });
 document.getElementById('preset-depth').addEventListener('click', e => e.stopPropagation());
 document.getElementById('preset-depth').addEventListener('mousedown', e => e.stopPropagation());
+document.getElementById('preset-images').addEventListener('change', function () {
+  document.getElementById('preset-images-wrap').style.display = this.checked ? 'inline' : 'none';
+});
+document.getElementById('preset-image-limit').addEventListener('click', e => e.stopPropagation());
+document.getElementById('preset-image-limit').addEventListener('mousedown', e => e.stopPropagation());
 
 document.getElementById('btn-preset-save').addEventListener('click', () => {
   const name = document.getElementById('preset-name').value.trim();
@@ -216,14 +241,20 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
   if (!url)  { document.getElementById('preset-url').focus(); return; }
   const limitDepth = document.getElementById('preset-limitdepth').checked;
   const fullCrawl  = document.getElementById('preset-fullcrawl').checked;
+  const captureImages = document.getElementById('preset-images').checked;
   const preset = {
     name, url,
     iconUrl: iconUrl || '',
     limitDepth,
     scrapeDepth: limitDepth ? (parseInt(document.getElementById('preset-depth').value) || 3) : 99,
+    capturePageUrls: document.getElementById('preset-capture-urls').checked,
     captureGraphQL: document.getElementById('preset-graphql').checked,
     captureREST: document.getElementById('preset-rest').checked,
     captureAssets: document.getElementById('preset-assets').checked,
+    captureAllRequests: document.getElementById('preset-all-requests').checked,
+    captureImages,
+    imageLimit: captureImages ? (parseInt(document.getElementById('preset-image-limit').value) || 0) : 0,
+    avoidTags: [...document.querySelectorAll('.preset-avoid-tag:checked')].map(el => el.value),
     autoScroll: document.getElementById('preset-scroll').checked,
     fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
@@ -276,9 +307,20 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   if (!preset) return;
   // Load preset settings into main form
   document.getElementById('url').value = preset.url;
+  document.getElementById('capture-urls').checked = preset.capturePageUrls !== false;
   document.getElementById('capture-graphql').checked = preset.captureGraphQL !== false;
   document.getElementById('capture-rest').checked = preset.captureREST !== false;
   document.getElementById('capture-assets').checked = !!preset.captureAssets;
+  document.getElementById('capture-all-requests').checked = !!preset.captureAllRequests;
+  // Images
+  const imgOn = !!preset.captureImages;
+  document.getElementById('capture-images').checked = imgOn;
+  document.getElementById('images-inline-wrap').style.display = imgOn ? 'inline' : 'none';
+  document.getElementById('image-limit').value = preset.imageLimit || 0;
+  // Avoid tags
+  const avoidTags = preset.avoidTags || ['logout', 'cart'];
+  document.querySelectorAll('.avoid-tag').forEach(cb => { cb.checked = avoidTags.includes(cb.value); });
+  document.getElementById('avoid-links-count').textContent = document.querySelectorAll('.avoid-tag:checked').length;
   document.getElementById('auto-scroll').checked = preset.autoScroll !== false;
   // Full crawl + max pages
   const fc = !!preset.fullCrawl;
