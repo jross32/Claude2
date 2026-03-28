@@ -412,8 +412,8 @@ class ScraperSession {
 
       const page = await context.newPage();
 
-      // ── Persistent popup watcher (dismisses "No Thanks" modals automatically)
-      this._popupWatcherInterval = this._registerPopupWatcher(page);
+      // Native dialog dismissal only (alert/confirm/prompt boxes)
+      page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
 
       // ── Live screenshot stream ────────────────────────────────────────────
       if (liveView !== false) this._startLiveStream(page);
@@ -973,7 +973,6 @@ class ScraperSession {
           await page.waitForTimeout(400);
         }
 
-        await this._dismissPopups(page, 1500);  // short per-page window
         if (autoScroll) await this._autoScroll(page);
         const pageData = await extractPageData(page, url);
 
@@ -1112,8 +1111,7 @@ class ScraperSession {
         log: this.log.bind(this),
       });
       await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
-      await page.waitForTimeout(1500);
-      await this._dismissPopups(page);
+      await page.waitForTimeout(500);
 
       // Save refreshed session
       try {
