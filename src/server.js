@@ -48,6 +48,48 @@ const KNOWN_SITES = [
   },
 ];
 
+// Lightweight site detection — fetch title + favicon without launching a scrape
+app.get('/api/detect', async (req, res) => {
+  const url = req.query.url || '';
+  if (!url) return res.status(400).json({ error: 'No URL' });
+  try {
+    const https = require('https');
+    const http = require('http');
+    const { URL } = require('url');
+    const parsed = new URL(url);
+    const origin = parsed.origin;
+
+    const body = await new Promise((resolve, reject) => {
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const req2 = mod.get(url, { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+        let data = '';
+        r.on('data', (chunk) => { data += chunk; if (data.length > 80000) r.destroy(); });
+        r.on('end', () => resolve(data));
+        r.on('close', () => resolve(data));
+      });
+      req2.on('error', reject);
+      req2.on('timeout', () => { req2.destroy(); reject(new Error('timeout')); });
+    });
+
+    const titleMatch = body.match(/<title[^>]*>([^<]{0,200})<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : parsed.hostname;
+
+    const faviconMatch = body.match(/<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]+href=["']([^"']+)["']/i)
+      || body.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*icon[^"']*["']/i);
+    let favicon = faviconMatch ? faviconMatch[1] : '/favicon.ico';
+    if (favicon && !favicon.startsWith('http')) {
+      favicon = favicon.startsWith('/') ? `${origin}${favicon}` : `${origin}/${favicon}`;
+    }
+
+    const descMatch = body.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{0,300})["']/i);
+    const description = descMatch ? descMatch[1].trim() : '';
+
+    res.json({ title, favicon, url, description });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Check if a saved session exists for a URL
 app.get('/api/session/check', (req, res) => {
   const url = req.query.url || '';

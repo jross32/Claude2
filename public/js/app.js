@@ -138,18 +138,19 @@ document.getElementById('scrape-depth').addEventListener('input', function () {
 document.getElementById('btn-detect').addEventListener('click', async () => {
   const url = document.getElementById('url').value.trim();
   if (!url) return;
-  appendLog(`Detecting site info for ${url}...`);
+  const btn = document.getElementById('btn-detect');
+  btn.textContent = '...';
+  btn.disabled = true;
   try {
-    const res = await fetch('/api/scrape', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, scrapeDepth: 1, captureGraphQL: false, captureREST: false }),
-    });
-    const { sessionId } = await res.json();
-    currentSessionId = sessionId;
-    showProgress();
+    const res = await fetch(`/api/detect?url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    updateSitePreview(data);
   } catch (err) {
     appendLog(`Detection failed: ${err.message}`, 'error');
+  } finally {
+    btn.textContent = 'Detect';
+    btn.disabled = false;
   }
 });
 
