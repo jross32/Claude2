@@ -1171,3 +1171,83 @@ body.light .json-bool { color: #b45309; }
 .session-site-title { font-size: 13px; font-weight: 600; color: var(--text); display: block; }
 .session-site-url { font-size: 11px; color: var(--text2); display: block; }
 .session-site-badges { display: flex; gap: 4px; margin-top: 4px; }
+
+/* ============================
+   Endpoint Banner & Visited URLs
+   ============================ */
+.endpoint-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.endpoint-banner-label {
+  color: var(--text2);
+  font-weight: 600;
+  margin-right: 2px;
+}
+.endpoint-banner-url {
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.call-name {
+  flex: 1;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.call-full-url {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  word-break: break-all;
+  padding: 4px 0;
+}
+
+.visited-urls-section { margin-top: 20px; }
+.visited-urls-list {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.visited-url-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.visited-url-row:last-child { border-bottom: none; }
+.visited-url-num {
+  color: var(--text3);
+  font-size: 11px;
+  min-width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.visited-url-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+.visited-url-link:hover { text-decoration: underline; }

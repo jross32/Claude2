@@ -470,6 +470,7 @@ async function startScrapeSession(name, faviconUrl) {
   const payload = {
     url,
     scrapeDepth: document.getElementById('limit-depth').checked ? parseInt(document.getElementById('scrape-depth').value, 10) : 99,
+    capturePageUrls: document.getElementById('capture-urls').checked,
     captureGraphQL: document.getElementById('capture-graphql').checked,
     captureREST: document.getElementById('capture-rest').checked,
     captureAssets: document.getElementById('capture-assets').checked,
@@ -791,6 +792,21 @@ function renderResults(data) {
     grid.appendChild(card);
   });
 
+  // ── Visited URLs ──
+  const vuSection = document.getElementById('visited-urls-section');
+  if (vuSection) {
+    if (data.visitedUrls?.length) {
+      vuSection.style.display = 'block';
+      document.getElementById('visited-urls-badge').textContent = data.visitedUrls.length;
+      const list = document.getElementById('visited-urls-list');
+      list.innerHTML = data.visitedUrls.map((u, i) =>
+        `<div class="visited-url-row"><span class="visited-url-num">${i + 1}</span><a class="visited-url-link" href="${escapeHTML(u)}" target="_blank" rel="noopener">${escapeHTML(u)}</a></div>`
+      ).join('');
+    } else {
+      vuSection.style.display = 'none';
+    }
+  }
+
   // ── Tech fingerprint ──
   const tech = firstPage?.tech;
   if (tech) {
@@ -1093,6 +1109,28 @@ document.getElementById('btn-copy-json').addEventListener('click', () => {
 });
 
 // ---- API Calls rendering ----
+function extractGQLName(call) {
+  // 1. Use operationName from the request body
+  if (call.body?.operationName) return call.body.operationName;
+  // 2. Parse "query FooName {" or "mutation FooName {" from the query string
+  const q = call.body?.query || '';
+  const m = q.match(/^\s*(query|mutation|subscription)\s+(\w+)/i);
+  if (m) return m[2];
+  // 3. Derive from first field in the selection set
+  const field = q.match(/\{\s*(\w+)/);
+  if (field) return field[1];
+  return 'GraphQL Call';
+}
+
+function renderEndpointBanner(bannerId, urls) {
+  const banner = document.getElementById(bannerId);
+  if (!banner) return;
+  if (!urls.length) { banner.style.display = 'none'; return; }
+  banner.style.display = 'flex';
+  banner.innerHTML = `<span class="endpoint-banner-label">Captured via</span>` +
+    urls.map(u => `<span class="endpoint-banner-url">${escapeHTML(u)}</span>`).join('');
+}
+
 function renderAPICalls(apiCalls) {
   if (!apiCalls) return;
 
@@ -1102,6 +1140,12 @@ function renderAPICalls(apiCalls) {
 
   document.getElementById('gql-count').textContent = apiCalls.graphql?.length || 0;
   document.getElementById('rest-count').textContent = apiCalls.rest?.length || 0;
+
+  // Endpoint banners
+  const gqlEndpoints = [...new Set((apiCalls.graphql || []).map(c => c.url))];
+  const restOrigins  = [...new Set((apiCalls.rest   || []).map(c => { try { const u = new URL(c.url); return u.origin; } catch { return c.url; } }))];
+  renderEndpointBanner('gql-endpoint-banner', gqlEndpoints);
+  renderEndpointBanner('rest-endpoint-banner', restOrigins);
 
   renderCallList(document.getElementById('graphql-list'), apiCalls.graphql || [], true);
   renderCallList(document.getElementById('rest-list'), apiCalls.rest || [], false);
@@ -1117,17 +1161,22 @@ function renderCallList(container, calls, isGraphQL) {
     const statusClass = status && status < 400 ? 'status-ok' : 'status-err';
     const methodClass = `method-${call.method || 'GET'}`;
 
+    const displayName = isGraphQL
+      ? extractGQLName(call)
+      : (() => { try { const u = new URL(call.url); return u.pathname + (u.search ? u.search.substring(0, 40) : ''); } catch { return call.url; } })();
+
     card.innerHTML = `
       <div class="call-header" data-i="${i}">
         <span class="call-method ${methodClass}">${call.method || 'GET'}</span>
         ${isGraphQL ? `<span class="call-graphql-badge">GraphQL</span>` : ''}
-        <span class="call-url">${escapeHTML(call.url)}</span>
+        <span class="call-name">${escapeHTML(displayName)}</span>
         ${status ? `<span class="call-status ${statusClass}">${status}</span>` : ''}
         <span class="call-time">${formatTime(call.timestamp)}</span>
         <span>&#9660;</span>
       </div>
       <div class="call-body" style="display:none">
-        ${call.body ? `<div class="call-section-label">Request Body</div><pre class="call-json">${escapeHTML(JSON.stringify(call.body, null, 2))}</pre>` : ''}
+        <div class="call-section-label">URL</div><div class="call-full-url">${escapeHTML(call.url)}</div>
+        ${call.body ? `<div class="call-section-label" style="margin-top:10px">Request Body</div><pre class="call-json">${escapeHTML(JSON.stringify(call.body, null, 2))}</pre>` : ''}
         ${call.response?.body ? `<div class="call-section-label" style="margin-top:10px">Response</div><pre class="call-json">${escapeHTML(JSON.stringify(call.response.body, null, 2)).substring(0, 3000)}</pre>` : ''}
       </div>`;
 

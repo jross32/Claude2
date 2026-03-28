@@ -294,6 +294,7 @@ class ScraperSession {
       verificationType,
       verificationCode,
       scrapeDepth,
+      capturePageUrls,
       captureGraphQL,
       captureREST,
       captureAssets,
@@ -777,7 +778,7 @@ class ScraperSession {
           totalErrors: this.errors.length,
         },
         siteInfo,
-        visitedUrls: allResults.map(p => p.meta?.url).filter(Boolean),
+        visitedUrls: capturePageUrls !== false ? allResults.map(p => p.meta?.url).filter(Boolean) : [],
         pages: allResults,
         apiCalls: {
           graphql: this.graphqlCalls,

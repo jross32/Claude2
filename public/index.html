@@ -108,6 +108,10 @@
             </h2>
             <div class="checkboxes">
               <label class="checkbox-label">
+                <input type="checkbox" id="capture-urls" checked />
+                <span>Capture Visited URLs</span>
+              </label>
+              <label class="checkbox-label">
                 <input type="checkbox" id="capture-graphql" checked />
                 <span>Capture GraphQL Calls</span>
               </label>
@@ -315,6 +319,12 @@
             <div class="site-tree" id="site-tree"></div>
           </div>
 
+          <!-- Visited URLs -->
+          <div class="visited-urls-section" id="visited-urls-section" style="display:none">
+            <h3 class="section-heading">&#128279; Visited URLs <span class="badge" id="visited-urls-badge">0</span></h3>
+            <div class="visited-urls-list" id="visited-urls-list"></div>
+          </div>
+
           <!-- Tech fingerprint -->
           <div class="tech-section" id="tech-section" style="display:none">
             <h3 class="section-heading">&#128187; Technology Stack</h3>
@@ -395,9 +405,11 @@
             <button class="api-tab" data-tab="schema">Schema</button>
           </div>
           <div class="api-tab-panel active" id="tab-graphql">
+            <div class="endpoint-banner" id="gql-endpoint-banner" style="display:none"></div>
             <div class="call-list" id="graphql-list"></div>
           </div>
           <div class="api-tab-panel" id="tab-rest">
+            <div class="endpoint-banner" id="rest-endpoint-banner" style="display:none"></div>
             <div class="call-list" id="rest-list"></div>
           </div>
           <div class="api-tab-panel" id="tab-websocket">
