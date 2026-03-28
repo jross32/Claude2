@@ -217,25 +217,27 @@
                 <input type="text" id="preset-url" placeholder="https://example.com" autocomplete="off" data-lpignore="true" />
               </div>
               <div class="field">
-                <label>Scrape Depth
-                  <span class="hint">(1 = entry page only, 2+ = follow links that many levels deep)</span>
+                <label>Max Pages to Crawl
+                  <span class="hint">(how many pages to visit — disabled when Full site crawl is on)</span>
                 </label>
-                <input type="number" id="preset-depth" min="1" max="99" value="1" style="width:90px" />
+                <input type="number" id="preset-maxpages" value="100" min="1" max="9999" style="width:120px" />
               </div>
               <div class="field">
                 <label>Options</label>
                 <div class="checkboxes">
                   <label class="checkbox-label"><input type="checkbox" id="preset-graphql" checked /><span>Capture GraphQL</span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-rest" checked /><span>Capture REST</span></label>
-                  <label class="checkbox-label"><input type="checkbox" id="preset-assets" checked /><span>Capture Assets</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-assets" /><span>Capture Assets</span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-scroll" checked /><span>Auto-scroll</span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-fullcrawl" /><span>&#127760; Full site crawl</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-limitdepth" /><span>Limit scrape depth
+                    <span id="preset-depth-wrap" style="display:none;margin-left:8px">
+                      — <input type="number" id="preset-depth" min="1" max="99" value="3" style="width:60px;display:inline-block;padding:2px 6px" />
+                      <span class="hint">levels deep</span>
+                    </span>
+                  </span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-liveview" checked /><span>&#127909; Live Browser View</span></label>
                 </div>
-              </div>
-              <div class="field" id="preset-maxpages-field" style="display:none">
-                <label>Max Pages</label>
-                <input type="number" id="preset-maxpages" value="100" min="1" max="9999" style="width:120px" />
               </div>
             </div>
             <div class="modal-footer">

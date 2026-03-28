@@ -156,35 +156,43 @@ function renderPresets() {
 function openPresetModal(editIdx = -1) {
   const modal = document.getElementById('preset-modal-backdrop');
   const title = document.getElementById('preset-modal-title');
+  const setDepthUI = (limitDepth, depth) => {
+    document.getElementById('preset-limitdepth').checked = !!limitDepth;
+    document.getElementById('preset-depth-wrap').style.display = limitDepth ? 'inline' : 'none';
+    document.getElementById('preset-depth').value = depth || 3;
+  };
+  const setFullCrawlUI = (on) => {
+    document.getElementById('preset-fullcrawl').checked = on;
+    const mp = document.getElementById('preset-maxpages');
+    mp.disabled = on; mp.placeholder = on ? 'Unlimited' : ''; if (on) mp.value = '';
+  };
+
   if (editIdx >= 0) {
     const p = getPresets()[editIdx];
     title.textContent = '✎ Edit Preset';
     document.getElementById('preset-name').value = p.name || '';
     document.getElementById('preset-url').value = p.url || '';
-    document.getElementById('preset-depth').value = p.scrapeDepth || 1;
     document.getElementById('preset-graphql').checked = p.captureGraphQL !== false;
     document.getElementById('preset-rest').checked = p.captureREST !== false;
-    document.getElementById('preset-assets').checked = p.captureAssets !== false;
+    document.getElementById('preset-assets').checked = !!p.captureAssets;
     document.getElementById('preset-scroll').checked = p.autoScroll !== false;
-    document.getElementById('preset-fullcrawl').checked = !!p.fullCrawl;
     document.getElementById('preset-liveview').checked = p.liveView !== false;
     document.getElementById('preset-maxpages').value = p.maxPages || 100;
-    document.getElementById('preset-maxpages-field').style.display = p.fullCrawl ? 'block' : 'none';
+    setFullCrawlUI(!!p.fullCrawl);
+    setDepthUI(!!p.limitDepth, p.scrapeDepth);
     document.getElementById('btn-preset-save').dataset.editIdx = editIdx;
   } else {
     title.textContent = '★ Save Scrape Preset';
-    // Pre-fill from current form values
     document.getElementById('preset-name').value = '';
     document.getElementById('preset-url').value = document.getElementById('url').value || '';
-    document.getElementById('preset-depth').value = document.getElementById('scrape-depth').value;
     document.getElementById('preset-graphql').checked = document.getElementById('capture-graphql').checked;
     document.getElementById('preset-rest').checked = document.getElementById('capture-rest').checked;
     document.getElementById('preset-assets').checked = document.getElementById('capture-assets').checked;
     document.getElementById('preset-scroll').checked = document.getElementById('auto-scroll').checked;
-    document.getElementById('preset-fullcrawl').checked = document.getElementById('full-crawl').checked;
     document.getElementById('preset-liveview').checked = document.getElementById('live-view').value === 'true';
     document.getElementById('preset-maxpages').value = document.getElementById('max-pages').value || 100;
-    document.getElementById('preset-maxpages-field').style.display = document.getElementById('full-crawl').checked ? 'block' : 'none';
+    setFullCrawlUI(document.getElementById('full-crawl').checked);
+    setDepthUI(document.getElementById('limit-depth').checked, document.getElementById('scrape-depth').value);
     delete document.getElementById('btn-preset-save').dataset.editIdx;
   }
   modal.style.display = 'flex';
@@ -201,24 +209,35 @@ document.getElementById('btn-preset-cancel').addEventListener('click', closePres
 document.getElementById('preset-modal-backdrop').addEventListener('click', (e) => { if (e.target === e.currentTarget) closePresetModal(); });
 
 document.getElementById('preset-fullcrawl').addEventListener('change', function () {
-  document.getElementById('preset-maxpages-field').style.display = this.checked ? 'block' : 'none';
+  const mp = document.getElementById('preset-maxpages');
+  mp.disabled = this.checked; mp.placeholder = this.checked ? 'Unlimited' : ''; if (this.checked) mp.value = '';
+  else { mp.value = 100; }
 });
+document.getElementById('preset-limitdepth').addEventListener('change', function () {
+  document.getElementById('preset-depth-wrap').style.display = this.checked ? 'inline' : 'none';
+  if (this.checked) document.getElementById('preset-depth').click();
+});
+document.getElementById('preset-depth').addEventListener('click', e => e.stopPropagation());
+document.getElementById('preset-depth').addEventListener('mousedown', e => e.stopPropagation());
 
 document.getElementById('btn-preset-save').addEventListener('click', () => {
   const name = document.getElementById('preset-name').value.trim();
   const url  = document.getElementById('preset-url').value.trim();
   if (!name) { document.getElementById('preset-name').focus(); return; }
   if (!url)  { document.getElementById('preset-url').focus(); return; }
+  const limitDepth = document.getElementById('preset-limitdepth').checked;
+  const fullCrawl  = document.getElementById('preset-fullcrawl').checked;
   const preset = {
     name, url,
-    scrapeDepth: parseInt(document.getElementById('preset-depth').value),
+    limitDepth,
+    scrapeDepth: limitDepth ? (parseInt(document.getElementById('preset-depth').value) || 3) : 99,
     captureGraphQL: document.getElementById('preset-graphql').checked,
     captureREST: document.getElementById('preset-rest').checked,
     captureAssets: document.getElementById('preset-assets').checked,
     autoScroll: document.getElementById('preset-scroll').checked,
-    fullCrawl: document.getElementById('preset-fullcrawl').checked,
+    fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
-    maxPages: parseInt(document.getElementById('preset-maxpages').value) || 100,
+    maxPages: fullCrawl ? 0 : (parseInt(document.getElementById('preset-maxpages').value) || 100),
     favicon: url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(url).hostname)}` : '',
   };
   const list = getPresets();
@@ -266,14 +285,20 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   if (!preset) return;
   // Load preset settings into main form
   document.getElementById('url').value = preset.url;
-  document.getElementById('scrape-depth').value = preset.scrapeDepth || 1;
   document.getElementById('capture-graphql').checked = preset.captureGraphQL !== false;
   document.getElementById('capture-rest').checked = preset.captureREST !== false;
-  document.getElementById('capture-assets').checked = preset.captureAssets !== false;
+  document.getElementById('capture-assets').checked = !!preset.captureAssets;
   document.getElementById('auto-scroll').checked = preset.autoScroll !== false;
-  document.getElementById('full-crawl').checked = !!preset.fullCrawl;
-  document.getElementById('max-pages').value = preset.maxPages || 100;
-  document.getElementById('max-pages-field').style.display = preset.fullCrawl ? 'block' : 'none';
+  // Full crawl + max pages
+  const fc = !!preset.fullCrawl;
+  document.getElementById('full-crawl').checked = fc;
+  const mp = document.getElementById('max-pages');
+  mp.disabled = fc; mp.placeholder = fc ? 'Unlimited' : ''; mp.value = fc ? '' : (preset.maxPages || 100);
+  // Limit depth
+  const ld = !!preset.limitDepth;
+  document.getElementById('limit-depth').checked = ld;
+  document.getElementById('depth-inline-wrap').style.display = ld ? 'inline' : 'none';
+  document.getElementById('scrape-depth').value = preset.scrapeDepth || 3;
   // Set live view toggle
   const liveOn = preset.liveView !== false;
   document.getElementById('live-view').value = String(liveOn);
