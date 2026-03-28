@@ -469,22 +469,27 @@ class ScraperSession {
       this.log(`Site detected: ${siteInfo.title}`);
       this.broadcast(this.sessionId, { type: 'siteInfo', data: siteInfo });
 
-      // ── Authentication (auto-detected) ──────────────────────────────────
-      if (siteInfo.hasLoginForm) {
+      // ── Authentication ───────────────────────────────────────────────────
+      // If saved session was loaded and we're no longer on the login page — already logged in
+      const currentUrl = page.url();
+      const stillOnLoginPage = siteInfo.hasLoginForm &&
+        /login|signin|sign-in|auth/i.test(currentUrl);
+
+      if (savedSession && !stillOnLoginPage) {
+        this.log('Session restored — already logged in, skipping auth.', 'success');
+      } else if (siteInfo.hasLoginForm) {
         let authUser = username;
         let authPass = password;
 
-        // If credentials weren't pre-supplied, pause and ask the user
+        // If no credentials supplied, prompt user via live view
         if (!authUser || !authPass) {
           this.log('Login form detected — waiting for credentials...', 'warn');
           this.progress('Waiting for credentials', 28);
           const creds = await this.waitForCredentials();
-          if (creds) {
-            authUser = creds.username;
-            authPass = creds.password;
-          } else {
-            this.log('No credentials provided — skipping login, scraping public page only.', 'warn');
-          }
+          if (creds) { authUser = creds.username; authPass = creds.password; }
+          else this.log('No credentials provided — scraping public page only.', 'warn');
+        } else {
+          this.log('Login form detected — authenticating automatically.', 'info');
         }
 
         if (authUser && authPass) {
@@ -493,23 +498,20 @@ class ScraperSession {
           await handleAuth(page, {
             username: authUser,
             password: authPass,
-            verificationType,
             verificationCode,
             waitForVerification: this.waitForVerification.bind(this),
             log: this.log.bind(this),
-            sessionId: this.sessionId,
-            broadcast: this.broadcast,
           });
           await page.waitForLoadState('networkidle').catch(() => {});
           this.log('Authentication complete', 'success');
 
-          // Save session state so future scrapes (and mid-crawl restores) skip login
+          // Save session for next time
           try {
             const file = sessionFile(primaryUrl);
             if (file) {
               await context.storageState({ path: file });
               this.savedSession = file;
-              this.log('Session state saved — will auto-restore if logged out', 'success');
+              this.log('Session saved — future scrapes will skip login', 'success');
               this.broadcast(this.sessionId, { type: 'sessionSaved', hostname: new URL(primaryUrl).hostname });
             }
           } catch {}
