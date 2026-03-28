@@ -550,14 +550,21 @@ class ScraperSession {
         if (authUser && authPass) {
           this.progress('Authenticating', 32);
           this.log(`Logging in as ${authUser}...`);
-          await handleAuth(page, {
-            username: authUser,
-            password: authPass,
-            verificationCode,
-            waitForVerification: this.waitForVerification.bind(this),
-            log: this.log.bind(this),
-          });
-          await page.waitForLoadState('networkidle').catch(() => {});
+          try {
+            await handleAuth(page, {
+              username: authUser,
+              password: authPass,
+              verificationCode,
+              waitForVerification: this.waitForVerification.bind(this),
+              log: this.log.bind(this),
+            });
+          } catch (authErr) {
+            this.log(`Auth error: ${authErr.message}`, 'error');
+          }
+          this.log(`After auth — current URL: ${page.url()}`);
+          await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+          await page.waitForTimeout(1500);
+          this.log(`Settled URL: ${page.url()}`);
           this.log('Authentication complete', 'success');
 
           // Save session keyed to the post-login URL (may differ from login URL)
