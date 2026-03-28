@@ -248,6 +248,7 @@ class ScraperSession {
       autoScroll,
       clickSequence,
       showBrowser,
+      liveView,
       slowMotion,
       fullCrawl,
       maxPages,
@@ -289,7 +290,7 @@ class ScraperSession {
       const page = await context.newPage();
 
       // ── Live screenshot stream ────────────────────────────────────────────
-      this._startLiveStream(page);
+      if (liveView !== false) this._startLiveStream(page);
 
       // ── Console log capture ──────────────────────────────────────────────
       page.on('console', (msg) => {

@@ -161,6 +161,7 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     captureImages: document.getElementById('capture-images').checked,
     autoScroll: document.getElementById('auto-scroll').checked,
     showBrowser: false,
+    liveView: document.getElementById('live-view').checked,
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
     fullCrawl: document.getElementById('full-crawl').checked,
     maxPages: parseInt(document.getElementById('max-pages').value, 10) || 100,
@@ -227,7 +228,8 @@ document.getElementById('btn-submit-code').addEventListener('click', async () =>
 function showProgress() {
   document.getElementById('progress-card').style.display = 'flex';
   document.getElementById('progress-card').classList.add('scraping');
-  document.getElementById('live-browser-panel').style.display = 'block';
+  const liveView = document.getElementById('live-view').checked;
+  document.getElementById('live-browser-panel').style.display = liveView ? 'block' : 'none';
 }
 
 function updateProgress(step, percent) {
@@ -268,6 +270,7 @@ function resetScrapeUI() {
 }
 
 function updateLiveFrame(dataUrl) {
+  if (!document.getElementById('live-view').checked) return;
   const panel = document.getElementById('live-browser-panel');
   if (panel.style.display === 'none') panel.style.display = 'block';
   document.getElementById('live-frame').src = dataUrl;
