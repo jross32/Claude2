@@ -99,6 +99,8 @@ class ScraperSession {
     this.securityHeaders = {};
     this.downloadedImages = [];
     this.credentialsResolver = null;
+    this.authRedirectedPages = [];  // pages that bounced to login mid-crawl
+    this.failedPages = [];          // pages that failed to load (after retry)
   }
 
   log(message, type = 'info') {
@@ -261,6 +263,37 @@ class ScraperSession {
     await page.waitForTimeout(1500);
   }
 
+  // Build avoidance filter from user-selected tags
+  _buildAvoidFilter(tags = []) {
+    if (!tags || tags.length === 0) return null;
+    const MAP = {
+      logout:   { url: /logout|signout|log-out|sign-out/i,   text: /sign[\s-]?out|log[\s-]?out|logout|signout/i },
+      cart:     { url: /\/cart|\/checkout|\/basket/i,         text: /\bcart\b|checkout|basket|shopping\s+bag|buy\s+now/i },
+      delete:   { url: /\/delete|\/deactivate|\/remove-account|\/close-account/i, text: /delete\s+(my\s+)?account|remove\s+account|deactivate|close\s+account/i },
+      register: { url: /\/signup|\/register|\/join|\/create-account/i, text: /sign[\s-]?up|register|create\s+(an?\s+)?account|\bjoin\b/i },
+      print:    { url: /\/print|print=/i,                     text: /\bprint\b|print\s+page|export\s+pdf/i },
+      social:   { url: /facebook\.com|twitter\.com|instagram\.com|linkedin\.com|pinterest\.com|tiktok\.com|youtube\.com/i, text: /share\s+on|follow\s+(us|me)|tweet\s+this/i },
+      legal:    { url: /\/privacy|\/terms|\/cookies|\/legal|\/disclaimer|\/accessibility/i, text: /privacy\s+policy|terms\s+(of\s+(service|use))?|cookie\s+policy|legal\s+notice|disclaimer/i },
+      external: null, // handled separately
+    };
+    const patterns = tags.map(t => MAP[t]).filter(Boolean);
+    const includeExternal = tags.includes('external');
+    return { patterns, includeExternal };
+  }
+
+  _isAvoidedLink(link, filter, pageOrigin) {
+    if (!filter) return false;
+    const href = (link.href || '').toLowerCase();
+    const text = (link.text || '').trim();
+    if (filter.includeExternal && pageOrigin) {
+      try { if (new URL(link.href).origin !== pageOrigin) return true; } catch {}
+    }
+    for (const p of filter.patterns) {
+      if (p.url.test(href) || p.text.test(text)) return true;
+    }
+    return false;
+  }
+
   // Download images as base64 (up to N images, capped by size)
   async _downloadImages(page, images, maxImages = Infinity, maxSizeKB = 500) {
     const downloaded = [];
@@ -303,6 +336,7 @@ class ScraperSession {
       verificationType,
       verificationCode,
       scrapeDepth,
+      avoidTags,
       capturePageUrls,
       captureGraphQL,
       captureREST,
@@ -690,6 +724,7 @@ class ScraperSession {
 
       this.progress('Extracting page data', 50);
       let allResults = [];
+      const avoidFilter = this._buildAvoidFilter(avoidTags);
 
       if (targetUrls.length > 1) {
         for (let i = 0; i < targetUrls.length; i++) {
@@ -705,11 +740,11 @@ class ScraperSession {
           }
         }
       } else if (fullCrawl) {
-        allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll);
+        allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll, avoidFilter);
       } else {
         const visited = new Set();
         const pageLimit = maxPages > 0 ? maxPages : Infinity;
-        allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll, pageLimit);
+        allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll, pageLimit, avoidFilter);
         if (allResults.length >= pageLimit) {
           this.log(`Page limit reached (${pageLimit} pages).`, 'warn');
         }
@@ -785,9 +820,13 @@ class ScraperSession {
           totalDownloadedImages: this.downloadedImages.length,
           totalConsoleLogs: this.consoleLogs.length,
           totalErrors: this.errors.length,
+          totalAuthRedirects: this.authRedirectedPages.length,
+          totalFailedPages: this.failedPages.length,
         },
         siteInfo,
         visitedUrls: capturePageUrls !== false ? allResults.map(p => p.meta?.url).filter(Boolean) : [],
+        authRedirectedPages: this.authRedirectedPages,
+        failedPages: this.failedPages,
         pages: allResults,
         apiCalls: {
           graphql: this.graphqlCalls,
@@ -823,10 +862,24 @@ class ScraperSession {
     }
   }
 
-  async _scrapePage(page, url, depth, visited, autoScroll = false, maxPages = Infinity) {
+  async _scrapePage(page, url, depth, visited, autoScroll = false, maxPages = Infinity, avoidFilter = null) {
     if (visited.has(url) || this.stopped || visited.size >= maxPages) return [];
     visited.add(url);
     this.log(`Extracting (${visited.size}${maxPages !== Infinity ? `/${maxPages}` : ''}): ${url}`);
+
+    const origin = (() => { try { return new URL(url).origin; } catch { return ''; } })();
+
+    // Check if the page is currently on a login redirect (first call after auth)
+    if (this._isLoginRedirect(page.url(), url, origin)) {
+      this.log(`Current page is a login redirect for ${url} — re-authenticating...`, 'warn');
+      if (!this.authRedirectedPages.includes(url)) this.authRedirectedPages.push(url);
+      const ok = await this._reAuthenticate(page, url);
+      if (!ok) {
+        this.failedPages.push({ url, reason: 'auth-redirect' });
+        return [];
+      }
+    }
+
     if (autoScroll && depth >= 1) await this._autoScroll(page);
     const pageData = await extractPageData(page, url);
     const results = [pageData];
@@ -834,24 +887,23 @@ class ScraperSession {
     if (depth > 1) {
       const links = (pageData.links || [])
         .filter(l => l.isInternal && !visited.has(l.href) && l.href?.startsWith('http'))
+        .filter(l => !this._isAvoidedLink(l, avoidFilter, origin))
+        .filter(l => !/\/login|\/signin|\/sign-in\b/i.test(l.href))  // skip login page links
         .slice(0, 8);
 
       for (const link of links) {
         if (this.stopped || visited.size >= maxPages) break;
-        try {
-          await page.goto(link.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          if (autoScroll) await this._autoScroll(page);
-          results.push(...await this._scrapePage(page, link.href, depth - 1, visited, autoScroll, maxPages));
-        } catch (err) {
-          this.errors.push({ type: 'navigationError', url: link.href, message: err.message });
-        }
+        const nav = await this._navigateWithRetry(page, link.href, origin);
+        if (!nav.success) continue;
+        if (autoScroll) await this._autoScroll(page);
+        results.push(...await this._scrapePage(page, link.href, depth - 1, visited, autoScroll, maxPages, avoidFilter));
       }
     }
     return results;
   }
 
   // BFS full-site crawl — visits every reachable internal link, ordered by path depth
-  async _fullCrawl(page, startUrl, maxPages = 100, autoScroll = false) {
+  async _fullCrawl(page, startUrl, maxPages = 100, autoScroll = false, avoidFilter = null) {
     const origin = new URL(startUrl).origin;
     const visited = new Set();
     // Priority queue sorted by URL path depth (shallow first)
@@ -886,18 +938,12 @@ class ScraperSession {
       );
 
       try {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await page.waitForTimeout(600);
-
-        // Detect mid-crawl logout — if we landed on a login page, restore session and retry
-        if (this._isLoginRedirect(page.url(), url, origin)) {
-          this.log(`Session expired on ${pathname} — restoring saved session...`, 'warn');
-          if (await this._restoreSession(page, url)) {
-            this.log('Session restored, retrying page...', 'info');
-          } else {
-            this.log('Could not restore session — page may be behind login wall', 'warn');
-          }
+        const nav = await this._navigateWithRetry(page, url, origin);
+        if (!nav.success) {
+          this.log(`Skipping ${pathname} — ${nav.reason}`, 'warn');
+          continue;
         }
+        await page.waitForTimeout(600);
 
         await this._dismissPopups(page);
         if (autoScroll) await this._autoScroll(page);
@@ -932,10 +978,16 @@ class ScraperSession {
           inboundCount.set(n, (inboundCount.get(n) || 0) + 1);
         });
 
-        // Only queue unvisited, unqueued links
+        // Only queue unvisited, unqueued, non-avoided, non-login links
         const toQueue = newLinks.filter(href => {
           const n = normalize(href);
-          return !visited.has(n) && !queued.has(n);
+          if (visited.has(n) || queued.has(n)) return false;
+          if (/\/login|\/signin|\/sign-in\b/i.test(href)) return false;
+          if (avoidFilter) {
+            const linkText = (pageData.links || []).find(l => l.href === href)?.text || '';
+            if (this._isAvoidedLink({ href, text: linkText }, avoidFilter, origin)) return false;
+          }
+          return true;
         });
 
         // Sort new links by path depth (shallow first) before adding to queue
@@ -1002,6 +1054,89 @@ class ScraperSession {
       await page.goto(retryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       return !this._isLoginRedirect(page.url(), retryUrl, new URL(retryUrl).origin);
     } catch { return false; }
+  }
+
+  // Re-authenticate when a mid-crawl session expires — tries saved session first,
+  // then falls back to a full credential-based login
+  async _reAuthenticate(page, retryUrl) {
+    // 1. Try restoring saved session cookies
+    if (await this._restoreSession(page, retryUrl)) {
+      this.log('Session cookie restore succeeded', 'info');
+      return true;
+    }
+
+    // 2. Try full login with saved credentials
+    const creds = loadSavedCreds(retryUrl);
+    if (!creds?.username || !creds?.password) {
+      this.log('No saved credentials — cannot re-authenticate', 'warn');
+      return false;
+    }
+
+    this.log(`Re-logging in as ${creds.username}...`, 'info');
+    try {
+      const { handleAuth } = require('./auth');
+      // Page is currently on the login page (redirected there), run auth
+      await handleAuth(page, {
+        username: creds.username,
+        password: creds.password,
+        verificationCode: null,
+        waitForVerification: this.waitForVerification.bind(this),
+        log: this.log.bind(this),
+      });
+      await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+      await this._dismissPopups(page);
+
+      // Save refreshed session
+      try {
+        const file = sessionFile(retryUrl);
+        if (file) {
+          await this.context.storageState({ path: file });
+          this.savedSession = file;
+          this.log('Session re-saved after re-login', 'success');
+        }
+      } catch {}
+
+      // Navigate back to intended URL
+      await page.goto(retryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      const origin = (() => { try { return new URL(retryUrl).origin; } catch { return ''; } })();
+      return !this._isLoginRedirect(page.url(), retryUrl, origin);
+    } catch (err) {
+      this.log(`Re-authentication failed: ${err.message}`, 'error');
+      return false;
+    }
+  }
+
+  // Navigate to a URL with retry-on-failure and automatic session recovery
+  async _navigateWithRetry(page, url, origin) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+        // Detect mid-crawl logout redirect
+        if (this._isLoginRedirect(page.url(), url, origin)) {
+          this.log(`Redirected to login on ${url} — re-authenticating...`, 'warn');
+          if (!this.authRedirectedPages.includes(url)) this.authRedirectedPages.push(url);
+          const ok = await this._reAuthenticate(page, url);
+          if (ok) { this.log('Re-authenticated, continuing...', 'info'); return { success: true }; }
+          this.failedPages.push({ url, reason: 'auth-redirect' });
+          return { success: false, reason: 'auth' };
+        }
+
+        return { success: true };
+      } catch (err) {
+        if (attempt === 0) {
+          this.log(`Load failed for ${url} — retrying in 2s... (${err.message})`, 'warn');
+          await page.waitForTimeout(2000);
+        } else {
+          this.errors.push({ type: 'navigationError', url, message: err.message });
+          this.failedPages.push({ url, reason: err.message });
+          this.log(`Could not load ${url}: ${err.message}`, 'error');
+          return { success: false, reason: 'error', message: err.message };
+        }
+      }
+    }
+    return { success: false, reason: 'unknown' };
   }
 
   _buildSiteTree(pages, origin) {

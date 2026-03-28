@@ -441,6 +441,23 @@ document.getElementById('capture-images').addEventListener('change', function ()
 document.getElementById('image-limit').addEventListener('click', e => e.stopPropagation());
 document.getElementById('image-limit').addEventListener('mousedown', e => e.stopPropagation());
 
+// ---- Avoid Links toggle ----
+document.getElementById('avoid-links-toggle').addEventListener('click', () => {
+  const panel = document.getElementById('avoid-links-panel');
+  const chevron = document.getElementById('avoid-links-chevron');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  chevron.innerHTML = open ? '&#9650;' : '&#9660;';
+});
+// Update badge count on change
+document.querySelectorAll('.avoid-tag').forEach(cb => {
+  cb.addEventListener('change', () => {
+    const count = document.querySelectorAll('.avoid-tag:checked').length;
+    document.getElementById('avoid-links-count').textContent = count;
+    document.getElementById('avoid-links-count').style.display = count ? 'inline-block' : 'none';
+  });
+});
+
 // ---- Detect site ----
 document.getElementById('btn-detect').addEventListener('click', async () => {
   const url = document.getElementById('url').value.trim();
@@ -470,6 +487,7 @@ async function startScrapeSession(name, faviconUrl) {
   const payload = {
     url,
     scrapeDepth: document.getElementById('limit-depth').checked ? parseInt(document.getElementById('scrape-depth').value, 10) : 99,
+    avoidTags: [...document.querySelectorAll('.avoid-tag:checked')].map(el => el.value),
     capturePageUrls: document.getElementById('capture-urls').checked,
     captureGraphQL: document.getElementById('capture-graphql').checked,
     captureREST: document.getElementById('capture-rest').checked,
@@ -523,6 +541,7 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
       </div>
       <span class="session-hdr-step" id="shs-${sid}">Starting...</span>
       <span class="session-hdr-pct" id="shp-${sid}">0%</span>
+      <button class="btn-xs session-log-toggle" id="slt-${sid}" title="Hide/show console">&#128221; Console</button>
       <button class="btn-xs session-collapse-btn" id="scb-${sid}" title="Collapse">&#9650;</button>
       <button class="btn-xs session-stop-btn" id="ssb-${sid}">&#9632; Stop</button>
     </div>
@@ -563,6 +582,16 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
       </div>
     </div>
   `;
+
+  // Console toggle
+  panel.querySelector(`#slt-${sid}`).addEventListener('click', () => {
+    const log = document.getElementById(`slb-${sid}`);
+    const btn = document.getElementById(`slt-${sid}`);
+    if (!log) return;
+    const hidden = log.style.display === 'none';
+    log.style.display = hidden ? 'block' : 'none';
+    btn.style.opacity = hidden ? '1' : '0.45';
+  });
 
   // Collapse toggle
   panel.querySelector(`#scb-${sid}`).addEventListener('click', () => {
@@ -783,11 +812,13 @@ function renderResults(data) {
     { label: 'Scripts', value: firstPage?.scripts?.length || 0 },
     { label: 'Forms', value: firstPage?.forms?.length || 0 },
     { label: 'Errors', value: data.errors?.length || 0 },
+    ...(data.authRedirectedPages?.length ? [{ label: 'Auth Redirects', value: data.authRedirectedPages.length, warn: true }] : []),
+    ...(data.failedPages?.length ? [{ label: 'Failed Pages', value: data.failedPages.length, err: true }] : []),
   ];
 
   cards.forEach((c) => {
     const card = document.createElement('div');
-    card.className = 'summary-card';
+    card.className = 'summary-card' + (c.warn ? ' s-warn' : '') + (c.err ? ' s-err' : '');
     card.innerHTML = `<span class="s-label">${c.label}</span><span class="s-value">${c.value}</span>`;
     grid.appendChild(card);
   });
@@ -804,6 +835,34 @@ function renderResults(data) {
       ).join('');
     } else {
       vuSection.style.display = 'none';
+    }
+  }
+
+  // ── Auth-Redirected Pages ──
+  const arSection = document.getElementById('auth-redirects-section');
+  if (arSection) {
+    if (data.authRedirectedPages?.length) {
+      arSection.style.display = 'block';
+      document.getElementById('auth-redirects-badge').textContent = data.authRedirectedPages.length;
+      document.getElementById('auth-redirects-list').innerHTML = data.authRedirectedPages.map((u, i) =>
+        `<div class="visited-url-row"><span class="visited-url-num">${i + 1}</span><a class="visited-url-link" href="${escapeHTML(u)}" target="_blank" rel="noopener">${escapeHTML(u)}</a></div>`
+      ).join('');
+    } else {
+      arSection.style.display = 'none';
+    }
+  }
+
+  // ── Failed Pages ──
+  const fpSection = document.getElementById('failed-pages-section');
+  if (fpSection) {
+    if (data.failedPages?.length) {
+      fpSection.style.display = 'block';
+      document.getElementById('failed-pages-badge').textContent = data.failedPages.length;
+      document.getElementById('failed-pages-list').innerHTML = data.failedPages.map((p, i) =>
+        `<div class="visited-url-row"><span class="visited-url-num">${i + 1}</span><a class="visited-url-link" href="${escapeHTML(p.url)}" target="_blank" rel="noopener">${escapeHTML(p.url)}</a><span class="failed-reason">${escapeHTML(p.reason || '')}</span></div>`
+      ).join('');
+    } else {
+      fpSection.style.display = 'none';
     }
   }
 

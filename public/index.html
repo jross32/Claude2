@@ -156,6 +156,27 @@
                 </span>
               </label>
             </div>
+
+            <!-- Avoid Links -->
+            <div class="avoid-links-section">
+              <button class="avoid-links-toggle" id="avoid-links-toggle" type="button">
+                <span>&#128683; Skip Links</span>
+                <span class="avoid-links-count badge" id="avoid-links-count">2</span>
+                <span class="avoid-links-chevron" id="avoid-links-chevron">&#9660;</span>
+              </button>
+              <div class="avoid-links-panel" id="avoid-links-panel" style="display:none">
+                <div class="checkboxes avoid-tags-grid">
+                  <label class="checkbox-label"><input type="checkbox" class="avoid-tag" value="logout" checked /><span title="logout, sign out, log out">Logout</span></label>
+                  <label class="checkbox-label"><input type="checkbox" class="avoid-tag" value="cart" checked /><span title="cart, checkout, basket, buy now">Cart</span></label>
+                  <label class="checkbox-label"><input type="checkbox" class="avoid-tag" value="delete" /><span title="delete account, remove account, deactivate, close account">Delete</span></label>
+                  <label class="checkbox-label"><input type="checkbox" class="avoid-tag" value="register" /><span title="sign up, register, create account, join">Register</span></label>
+                  <label class="checkbox-label"><input type="checkbox" class="avoid-tag" value="print" /><span title="print, print page, export PDF">Print</span></label>
+                  <label class="checkbox-label"><input type="checkbox" class="avoid-tag" value="social" /><span title="share, facebook, twitter, instagram, linkedin, pinterest">Social</span></label>
+                  <label class="checkbox-label"><input type="checkbox" class="avoid-tag" value="legal" /><span title="privacy policy, terms of service, cookie policy, legal notices">Legal</span></label>
+                  <label class="checkbox-label"><input type="checkbox" class="avoid-tag" value="external" /><span title="any link to a different domain">External</span></label>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Browser options -->
@@ -323,6 +344,20 @@
           <div class="visited-urls-section" id="visited-urls-section" style="display:none">
             <h3 class="section-heading">&#128279; Visited URLs <span class="badge" id="visited-urls-badge">0</span></h3>
             <div class="visited-urls-list" id="visited-urls-list"></div>
+          </div>
+
+          <!-- Auth Redirects -->
+          <div class="visited-urls-section" id="auth-redirects-section" style="display:none">
+            <h3 class="section-heading" style="color:#e8a534">&#128274; Auth-Redirected Pages <span class="badge" id="auth-redirects-badge">0</span></h3>
+            <p style="font-size:0.82rem;color:#999;margin:0 0 8px">These pages redirected to login mid-crawl. The scraper attempted to re-authenticate automatically.</p>
+            <div class="visited-urls-list" id="auth-redirects-list"></div>
+          </div>
+
+          <!-- Failed Pages -->
+          <div class="visited-urls-section" id="failed-pages-section" style="display:none">
+            <h3 class="section-heading" style="color:#e05050">&#10060; Failed Pages <span class="badge" id="failed-pages-badge">0</span></h3>
+            <p style="font-size:0.82rem;color:#999;margin:0 0 8px">These pages could not be loaded after one retry.</p>
+            <div class="visited-urls-list" id="failed-pages-list"></div>
           </div>
 
           <!-- Tech fingerprint -->
