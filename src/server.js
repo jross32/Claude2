@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -37,6 +38,26 @@ function broadcast(sessionId, data) {
   });
 }
 
+// Known site credentials from .env — keyed by hostname fragment
+const KNOWN_SITES = [
+  {
+    match: 'poolplayers.com',
+    username: process.env.APA_USERNAME,
+    password: process.env.APA_PASSWORD,
+  },
+];
+
+// Return pre-configured credentials for a URL (never logs the password)
+app.get('/api/site-credentials', (req, res) => {
+  const url = req.query.url || '';
+  for (const site of KNOWN_SITES) {
+    if (url.includes(site.match) && site.username && site.password) {
+      return res.json({ found: true, username: site.username });
+    }
+  }
+  res.json({ found: false });
+});
+
 // ---- Scrape ----
 app.post('/api/scrape', async (req, res) => {
   const {
@@ -63,6 +84,18 @@ app.post('/api/scrape', async (req, res) => {
     return res.status(400).json({ error: 'URL is required' });
   }
 
+  // Auto-inject credentials from .env for known sites
+  let resolvedUsername = username;
+  let resolvedPassword = password;
+  const targetUrl = url || (urls && urls[0]) || '';
+  for (const site of KNOWN_SITES) {
+    if (targetUrl.includes(site.match) && site.username && site.password) {
+      if (!resolvedUsername) resolvedUsername = site.username;
+      if (!resolvedPassword) resolvedPassword = site.password;
+      break;
+    }
+  }
+
   const sessionId = uuidv4();
   res.json({ sessionId, message: 'Scraping started' });
 
@@ -74,8 +107,8 @@ app.post('/api/scrape', async (req, res) => {
       url,
       urls,
       hasAuth,
-      username,
-      password,
+      username: resolvedUsername,
+      password: resolvedPassword,
       verificationType,
       verificationCode,
       scrapeDepth: scrapeDepth || 1,

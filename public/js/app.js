@@ -63,6 +63,38 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 // ---- Auth toggle ----
 // Auth section is shown automatically when a login form is detected — no manual toggle
 
+// Auto-fill credentials from .env when URL matches a known site
+document.getElementById('url').addEventListener('blur', async () => {
+  const url = document.getElementById('url').value.trim();
+  if (!url) return;
+  try {
+    const res = await fetch(`/api/site-credentials?url=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    if (data.found) {
+      showKnownSiteBadge(data.username);
+    } else {
+      clearKnownSiteBadge();
+    }
+  } catch {}
+});
+
+function showKnownSiteBadge(username) {
+  let badge = document.getElementById('known-creds-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'known-creds-badge';
+    badge.className = 'known-creds-badge';
+    document.getElementById('url').closest('.url-input-wrap').after(badge);
+  }
+  badge.innerHTML = `&#10003; Saved credentials found for <strong>${escapeHTML(username)}</strong> — will be used automatically.`;
+  badge.style.display = 'flex';
+}
+
+function clearKnownSiteBadge() {
+  const badge = document.getElementById('known-creds-badge');
+  if (badge) badge.style.display = 'none';
+}
+
 // ---- Password visibility ----
 document.getElementById('btn-eye').addEventListener('click', () => {
   const pw = document.getElementById('password');
