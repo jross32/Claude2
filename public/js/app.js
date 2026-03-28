@@ -504,10 +504,12 @@ function renderResults(data) {
 
   // ── Site tree (full crawl) ──
   const siteTreeSection = document.getElementById('site-tree-section');
-  if (data._siteTree) {
+  if (data._siteTree && data.pages?.length) {
     siteTreeSection.style.display = 'block';
-    document.getElementById('site-tree-badge').textContent = data.pages?.length || 0;
-    document.getElementById('site-tree').innerHTML = renderSiteTree(data._siteTree);
+    document.getElementById('site-tree-badge').textContent = data.pages.length;
+    renderCrawlTree(data, 'depth');
+    // Reset active tab
+    document.querySelectorAll('.sort-tab').forEach(t => t.classList.toggle('active', t.dataset.sort === 'depth'));
   } else {
     siteTreeSection.style.display = 'none';
   }
@@ -937,12 +939,25 @@ document.getElementById('full-crawl').addEventListener('change', function () {
   if (label) label.classList.toggle('active-opt', this.checked);
 });
 
-// ---- Site tree renderer ----
-function renderSiteTree(node, depth = 0) {
+// ---- Crawl tree / sort renderers ----
+let _crawlData = null; // holds current crawl result for re-sorting
+
+function renderCrawlTree(data, mode) {
+  _crawlData = data;
+  const container = document.getElementById('site-tree');
+  switch (mode) {
+    case 'depth':    container.innerHTML = renderTreeByDepth(data._siteTree); break;
+    case 'inbound':  container.innerHTML = renderFlatByInbound(data.pages); break;
+    case 'discovery':container.innerHTML = renderFlatByDiscovery(data.pages); break;
+    case 'section':  container.innerHTML = renderBySection(data.pages); break;
+  }
+}
+
+// Mode 1: path-depth hierarchy tree (original)
+function renderTreeByDepth(node, depth = 0) {
   if (!node) return '';
   const indent = depth * 18;
   let html = '';
-  // Pages at this level
   (node.pages || []).forEach(p => {
     html += `<div class="site-tree-item" style="padding-left:${indent}px">
       <span class="site-tree-icon">&#128196;</span>
@@ -950,19 +965,92 @@ function renderSiteTree(node, depth = 0) {
       <span class="site-tree-title">${escapeHTML(p.title || '')}</span>
     </div>`;
   });
-  // Children (sub-paths)
   Object.entries(node.children || {}).sort(([a],[b]) => a.localeCompare(b)).forEach(([seg, child]) => {
     html += `<div class="site-tree-segment" style="padding-left:${indent}px">
       <span class="site-tree-icon">&#128193;</span>
       <span class="site-tree-seg-name">/${escapeHTML(seg)}</span>
     </div>`;
-    html += renderSiteTree(child, depth + 1);
+    html += renderTreeByDepth(child, depth + 1);
   });
   return html;
 }
 
+// Mode 2: flat list sorted by inbound link count (most-linked first)
+function renderFlatByInbound(pages) {
+  if (!pages?.length) return '';
+  const sorted = [...pages].sort((a, b) => (b._crawl?.inboundCount || 0) - (a._crawl?.inboundCount || 0));
+  return sorted.map(p => {
+    const url = p.meta?.url || '';
+    const count = p._crawl?.inboundCount || 0;
+    return `<div class="site-tree-item">
+      <span class="site-tree-icon">&#128279;</span>
+      <span class="site-tree-inbound" title="${count} page(s) link here">${count}</span>
+      <a class="site-tree-url" href="${escapeHTML(url)}" target="_blank">${escapeHTML(url)}</a>
+      <span class="site-tree-title">${escapeHTML(p.meta?.title || '')}</span>
+    </div>`;
+  }).join('');
+}
+
+// Mode 3: flat list in discovery order (order crawler first found each URL)
+function renderFlatByDiscovery(pages) {
+  if (!pages?.length) return '';
+  const sorted = [...pages].sort((a, b) => (a._crawl?.discoveryOrder ?? 0) - (b._crawl?.discoveryOrder ?? 0));
+  return sorted.map((p, i) => {
+    const url = p.meta?.url || '';
+    return `<div class="site-tree-item">
+      <span class="site-tree-icon">&#128269;</span>
+      <span class="site-tree-inbound" title="Discovery position">#${i + 1}</span>
+      <a class="site-tree-url" href="${escapeHTML(url)}" target="_blank">${escapeHTML(url)}</a>
+      <span class="site-tree-title">${escapeHTML(p.meta?.title || '')}</span>
+    </div>`;
+  }).join('');
+}
+
+// Mode 4: grouped by top-level path section (/blog, /docs, /products, etc.)
+function renderBySection(pages) {
+  if (!pages?.length) return '';
+  const groups = new Map();
+  pages.forEach(p => {
+    const section = p._crawl?.section || '(root)';
+    if (!groups.has(section)) groups.set(section, []);
+    groups.get(section).push(p);
+  });
+  // Sort groups alphabetically, root first
+  const sorted = [...groups.entries()].sort(([a], [b]) => {
+    if (a === '(root)') return -1;
+    if (b === '(root)') return 1;
+    return a.localeCompare(b);
+  });
+  return sorted.map(([section, sectionPages]) => {
+    const items = sectionPages
+      .sort((a, b) => (a._crawl?.depth || 0) - (b._crawl?.depth || 0))
+      .map(p => {
+        const url = p.meta?.url || '';
+        return `<div class="site-tree-item" style="padding-left:18px">
+          <span class="site-tree-icon">&#128196;</span>
+          <a class="site-tree-url" href="${escapeHTML(url)}" target="_blank">${escapeHTML(url)}</a>
+          <span class="site-tree-title">${escapeHTML(p.meta?.title || '')}</span>
+        </div>`;
+      }).join('');
+    return `<div class="site-tree-segment">
+      <span class="site-tree-icon">&#128193;</span>
+      <span class="site-tree-seg-name">/${escapeHTML(section)}</span>
+      <span class="site-tree-count">${sectionPages.length}</span>
+    </div>${items}`;
+  }).join('');
+}
+
 document.getElementById('slow-motion').addEventListener('input', function () {
   document.getElementById('slowmo-value').textContent = `${this.value}ms`;
+});
+
+// ---- Crawl sort tabs ----
+document.getElementById('crawl-sort-tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.sort-tab');
+  if (!btn || !_crawlData) return;
+  document.querySelectorAll('.sort-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderCrawlTree(_crawlData, btn.dataset.sort);
 });
 
 // ---- Init ----

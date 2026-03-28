@@ -282,7 +282,15 @@
 
           <!-- Site tree (full crawl) -->
           <div class="site-tree-section" id="site-tree-section" style="display:none">
-            <h3 class="section-heading">&#127760; Site Map <span class="badge" id="site-tree-badge">0</span></h3>
+            <div class="site-tree-header">
+              <h3 class="section-heading" style="margin:0">&#127760; Site Map <span class="badge" id="site-tree-badge">0</span></h3>
+              <div class="sort-tabs" id="crawl-sort-tabs">
+                <button class="sort-tab active" data-sort="depth" title="Grouped by URL path hierarchy">&#128193; Path Depth</button>
+                <button class="sort-tab" data-sort="inbound" title="Most-linked pages first (PageRank-like)">&#128279; Inbound Links</button>
+                <button class="sort-tab" data-sort="discovery" title="Order the crawler first found each link">&#128269; Discovery Order</button>
+                <button class="sort-tab" data-sort="section" title="Grouped by top-level path segment (/blog, /docs, etc.)">&#128196; By Section</button>
+              </div>
+            </div>
             <div class="site-tree" id="site-tree"></div>
           </div>
 

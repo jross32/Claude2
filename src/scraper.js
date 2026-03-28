@@ -647,6 +647,13 @@ class ScraperSession {
     const pathDepth = (url) => { try { return new URL(url).pathname.split('/').filter(Boolean).length; } catch { return 0; } };
     const normalize = (url) => url.split('#')[0].replace(/\/$/, '') || url;
     const isSkippable = (url) => /\.(pdf|zip|png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|mp4|mp3|xml|json|rss|atom)(\?|$)/i.test(url);
+    const getSection = (url) => { try { return new URL(url).pathname.split('/').filter(Boolean)[0] || '(root)'; } catch { return '(root)'; } };
+
+    // Inbound link tracking: url -> count of pages that link to it
+    const inboundCount = new Map();
+    // Discovery order: url -> position when first queued
+    const discoveryOrder = new Map([[normalize(startUrl), 0]]);
+    let discoveryCounter = 1;
 
     this.log(`Full crawl starting from ${startUrl} (max ${maxPages} pages)`, 'info');
 
@@ -672,7 +679,10 @@ class ScraperSession {
           depth: pathDepth(url),
           index: results.length + 1,
           pathname,
+          section: getSection(url),
+          discoveryOrder: discoveryOrder.get(norm) ?? 0,
           parent: results.length > 0 ? results[results.length - 1].meta?.url : null,
+          // inboundCount filled in after full crawl completes
         };
 
         results.push(pageData);
@@ -684,23 +694,45 @@ class ScraperSession {
           .filter(href => {
             if (!href?.startsWith(origin)) return false;
             if (isSkippable(href)) return false;
-            const n = normalize(href);
-            return !visited.has(n) && !queued.has(n);
+            return true;
           });
 
+        // Count inbound links for every internal URL seen (including already-visited)
+        newLinks.forEach(href => {
+          const n = normalize(href);
+          inboundCount.set(n, (inboundCount.get(n) || 0) + 1);
+        });
+
+        // Only queue unvisited, unqueued links
+        const toQueue = newLinks.filter(href => {
+          const n = normalize(href);
+          return !visited.has(n) && !queued.has(n);
+        });
+
         // Sort new links by path depth (shallow first) before adding to queue
-        newLinks.sort((a, b) => pathDepth(a) - pathDepth(b));
-        newLinks.forEach(href => { queue.push(href); queued.add(href); });
+        toQueue.sort((a, b) => pathDepth(a) - pathDepth(b));
+        toQueue.forEach(href => {
+          const n = normalize(href);
+          queue.push(href);
+          queued.add(n);
+          discoveryOrder.set(n, discoveryCounter++);
+        });
 
         // Re-sort entire queue by path depth to always process shallowest next
         queue.sort((a, b) => pathDepth(a) - pathDepth(b));
 
-        this.log(`  +${newLinks.length} new links queued (${queue.length} total in queue)`, 'info');
+        this.log(`  +${toQueue.length} new links queued (${queue.length} total in queue)`, 'info');
       } catch (err) {
         this.errors.push({ type: 'crawlError', url, message: err.message });
         this.log(`  Failed: ${pathname} — ${err.message}`, 'warn');
       }
     }
+
+    // Backfill inbound counts now that the full crawl is done
+    results.forEach(p => {
+      const norm = normalize(p.meta?.url || '');
+      p._crawl.inboundCount = inboundCount.get(norm) || 0;
+    });
 
     const remaining = queue.length;
     if (results.length >= maxPages && remaining > 0) {
