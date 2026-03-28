@@ -31,6 +31,26 @@ class ScraperSession {
     this.broadcast(this.sessionId, { type: 'log', level: type, message });
   }
 
+  _startLiveStream(page, intervalMs = 800) {
+    this._liveStreamInterval = setInterval(async () => {
+      if (this.stopped || !page) { this._stopLiveStream(); return; }
+      try {
+        const buf = await page.screenshot({ type: 'jpeg', quality: 50 });
+        this.broadcast(this.sessionId, {
+          type: 'liveFrame',
+          dataUrl: 'data:image/jpeg;base64,' + buf.toString('base64'),
+        });
+      } catch {}
+    }, intervalMs);
+  }
+
+  _stopLiveStream() {
+    if (this._liveStreamInterval) {
+      clearInterval(this._liveStreamInterval);
+      this._liveStreamInterval = null;
+    }
+  }
+
   progress(step, percent) {
     this.broadcast(this.sessionId, { type: 'progress', step, percent });
   }
@@ -78,6 +98,7 @@ class ScraperSession {
 
   stop() {
     this.stopped = true;
+    this._stopLiveStream();
     if (this.browser) {
       this.browser.close().catch(() => {});
     }
@@ -190,6 +211,9 @@ class ScraperSession {
       });
 
       const page = await context.newPage();
+
+      // ── Live screenshot stream ────────────────────────────────────────────
+      this._startLiveStream(page);
 
       // ── Console log capture ──────────────────────────────────────────────
       page.on('console', (msg) => {
@@ -604,6 +628,7 @@ class ScraperSession {
       return result;
 
     } finally {
+      this._stopLiveStream();
       if (this.browser) await this.browser.close().catch(() => {});
     }
   }

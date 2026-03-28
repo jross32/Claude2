@@ -810,6 +810,25 @@ body.light .json-bool { color: #b45309; }
   animation: fadeIn 0.2s ease;
 }
 
+/* Live browser panel */
+.live-browser-panel {
+  margin-top: 14px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); overflow: hidden;
+}
+.live-browser-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; background: var(--surface-2);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  user-select: none;
+}
+.live-browser-header:hover { background: var(--surface-3, rgba(255,255,255,0.06)); }
+.live-browser-chevron { font-size: 11px; color: var(--text-muted); }
+.live-browser-body { background: #000; line-height: 0; }
+.live-frame-img {
+  width: 100%; max-height: 540px; object-fit: contain;
+  display: block;
+}
+
 /* Site tree */
 .site-tree-section { margin-top: 24px; }
 .site-tree-header {

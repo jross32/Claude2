@@ -40,6 +40,9 @@ function handleWSMessage(msg) {
     case 'needVerification':
       showVerificationPrompt();
       break;
+    case 'liveFrame':
+      updateLiveFrame(msg.dataUrl);
+      break;
     case 'complete':
       onScrapeComplete(msg.data);
       break;
@@ -226,6 +229,7 @@ document.getElementById('btn-submit-code').addEventListener('click', async () =>
 function showProgress() {
   document.getElementById('progress-card').style.display = 'flex';
   document.getElementById('progress-card').classList.add('scraping');
+  document.getElementById('live-browser-panel').style.display = 'block';
 }
 
 function updateProgress(step, percent) {
@@ -263,7 +267,15 @@ function resetScrapeUI() {
   document.getElementById('btn-stop').style.display = 'none';
   document.getElementById('progress-card').classList.remove('scraping');
   document.getElementById('verification-prompt').style.display = 'none';
+  document.getElementById('live-browser-panel').style.display = 'none';
+  document.getElementById('live-frame').src = '';
   currentSessionId = null;
+}
+
+function updateLiveFrame(dataUrl) {
+  const panel = document.getElementById('live-browser-panel');
+  if (panel.style.display === 'none') panel.style.display = 'block';
+  document.getElementById('live-frame').src = dataUrl;
 }
 
 // ---- Site preview ----
@@ -1042,6 +1054,15 @@ function renderBySection(pages) {
 
 document.getElementById('slow-motion').addEventListener('input', function () {
   document.getElementById('slowmo-value').textContent = `${this.value}ms`;
+});
+
+// ---- Live browser collapse toggle ----
+document.getElementById('live-browser-toggle').addEventListener('click', () => {
+  const body = document.getElementById('live-browser-body');
+  const chevron = document.getElementById('live-browser-chevron');
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? 'block' : 'none';
+  chevron.textContent = collapsed ? '▲' : '▼';
 });
 
 // ---- Crawl sort tabs ----
