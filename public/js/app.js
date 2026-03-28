@@ -117,16 +117,7 @@ function clearKnownSiteBadge() {
 }
 
 // ---- Password visibility ----
-document.getElementById('btn-eye').addEventListener('click', () => {
-  const pw = document.getElementById('password');
-  pw.type = pw.type === 'password' ? 'text' : 'password';
-});
 
-// ---- Verification type toggle ----
-document.getElementById('verification-type').addEventListener('change', function () {
-  document.getElementById('code-field').style.display =
-    ['totp', 'email', 'sms'].includes(this.value) ? 'flex' : 'none';
-});
 
 // ---- Depth slider ----
 document.getElementById('scrape-depth').addEventListener('input', function () {
@@ -162,10 +153,6 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
 
   const payload = {
     url,
-    username: document.getElementById('username').value.trim(),
-    password: document.getElementById('password').value,
-    verificationType: document.getElementById('verification-type').value,
-    verificationCode: document.getElementById('verification-code').value.trim(),
     scrapeDepth: parseInt(document.getElementById('scrape-depth').value, 10),
     captureGraphQL: document.getElementById('capture-graphql').checked,
     captureREST: document.getElementById('capture-rest').checked,
@@ -208,13 +195,6 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
   resetScrapeUI();
 });
 
-// ---- Skip auth ----
-document.getElementById('btn-skip-auth').addEventListener('click', () => {
-  document.getElementById('auth-detected-banner').style.display = 'none';
-  document.getElementById('auth-section').style.display = 'none';
-  document.getElementById('username').value = '';
-  document.getElementById('password').value = '';
-});
 
 // ---- Live credential submit (mid-scrape prompt) ----
 document.getElementById('btn-submit-creds').addEventListener('click', async () => {
@@ -273,9 +253,6 @@ function appendLog(message, level = 'info') {
 
 function clearLog() {
   document.getElementById('log-box').innerHTML = '';
-  // Reset auth/prompt state for a fresh scrape
-  document.getElementById('auth-detected-banner').style.display = 'none';
-  document.getElementById('auth-section').style.display = 'none';
   document.getElementById('live-creds-prompt').style.display = 'none';
   document.getElementById('site-preview').style.display = 'none';
 }
@@ -311,14 +288,8 @@ function updateSitePreview(info) {
   if (info.hasCaptcha) badges.innerHTML += `<span class="site-badge captcha">CAPTCHA</span>`;
   preview.style.display = 'flex';
 
-  // Auto-show auth section when login form detected
   if (info.hasLoginForm) {
-    document.getElementById('auth-detected-banner').style.display = 'flex';
-    document.getElementById('auth-section').style.display = 'block';
-    appendLog('Login form detected — credentials section shown.', 'warn');
-    // Scroll auth section into view
-    document.getElementById('auth-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    document.getElementById('username').focus();
+    appendLog('Login form detected — will authenticate automatically.', 'info');
   }
 }
 

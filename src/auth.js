@@ -131,10 +131,38 @@ async function handleAuth(page, options) {
   // Handle intermediate "Continue" / account-confirmation pages (e.g. APA SSO)
   await clickContinueIfPresent(page, log);
 
-  // Handle verification step
-  if (verificationType && verificationType !== 'none') {
+  // Auto-detect and handle verification / 2FA if it appeared after login
+  const detectedType = await detectVerificationType(page);
+  if (detectedType && detectedType !== 'none') {
+    log(`Auto-detected verification type: ${detectedType}`, 'info');
+    await handleVerification(page, { verificationType: detectedType, verificationCode, waitForVerification, log });
+  } else if (verificationType && verificationType !== 'none' && verificationType !== 'auto') {
+    // Fallback: use explicitly passed type if provided
     await handleVerification(page, { verificationType, verificationCode, waitForVerification, log });
   }
+}
+
+async function detectVerificationType(page) {
+  try {
+    return await page.evaluate(() => {
+      const body = document.body?.innerText?.toLowerCase() || '';
+      const inputs = [...document.querySelectorAll('input')];
+      const hasCodeInput = inputs.some(el =>
+        el.offsetParent !== null && (
+          /otp|code|token|verify|2fa/i.test(el.name + el.id + el.placeholder + (el.autocomplete || '')) ||
+          (el.type === 'number' && el.maxLength <= 8) ||
+          el.autocomplete === 'one-time-code'
+        )
+      );
+      if (!hasCodeInput) return 'none';
+      if (/captcha/i.test(body)) return 'captcha';
+      if (/authenticator|totp|google auth|authy/i.test(body)) return 'totp';
+      if (/sent.*email|email.*code|check your email/i.test(body)) return 'email';
+      if (/text message|sms|phone number/i.test(body)) return 'sms';
+      if (hasCodeInput) return 'totp'; // generic code input — treat as TOTP/code
+      return 'none';
+    });
+  } catch { return 'none'; }
 }
 
 async function clickContinueIfPresent(page, log) {

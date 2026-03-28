@@ -143,52 +143,6 @@
             </div>
           </div>
 
-          <!-- Auth Section -->
-          <!-- Auth section — hidden until auto-detected or login wall hit -->
-          <div class="auth-detected-banner" id="auth-detected-banner" style="display:none">
-            <span class="auth-banner-icon">&#128274;</span>
-            <span class="auth-banner-text">Login form detected — enter your credentials below to scrape behind the login.</span>
-            <button class="btn-xs" id="btn-skip-auth">Skip (scrape public page only)</button>
-          </div>
-
-          <div class="form-section auth-section" id="auth-section" style="display:none">
-            <h2 class="section-title">
-              <span class="section-icon">&#128274;</span> Login Credentials
-            </h2>
-            <div class="auth-fields" id="auth-fields">
-              <div class="field-row">
-                <div class="field">
-                  <label for="username">Username / Email</label>
-                  <input type="text" id="username" placeholder="user@example.com" autocomplete="username" />
-                </div>
-                <div class="field">
-                  <label for="password">Password</label>
-                  <div class="password-wrap">
-                    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
-                    <button class="btn-eye" id="btn-eye" tabindex="-1">&#128065;</button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Verification -->
-              <div class="field">
-                <label for="verification-type">Verification / 2FA</label>
-                <select id="verification-type">
-                  <option value="none">None / Not required</option>
-                  <option value="totp">TOTP / Authenticator App</option>
-                  <option value="email">Email Code</option>
-                  <option value="sms">SMS Code</option>
-                  <option value="captcha">CAPTCHA (manual)</option>
-                </select>
-              </div>
-
-              <div class="field" id="code-field" style="display:none">
-                <label for="verification-code">Verification Code (optional — leave blank to be prompted live)</label>
-                <input type="text" id="verification-code" placeholder="123456" maxlength="10" />
-              </div>
-            </div>
-          </div>
-
           </div>
 
           <!-- Browser options -->
