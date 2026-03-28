@@ -112,8 +112,7 @@ function renderPresets() {
     const card = document.createElement('div');
     card.className = 'preset-item';
     card.dataset.idx = idx;
-    const faviconDomain = (() => { try { return new URL(preset.iconUrl || preset.url || '').hostname; } catch { return ''; } })();
-    const faviconUrl = preset.favicon || (faviconDomain ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(faviconDomain)}` : '');
+    const faviconUrl = preset.iconUrl || preset.favicon || (preset.url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent((() => { try { return new URL(preset.url).hostname; } catch { return ''; } })())}` : '');
     card.innerHTML = `
       <div class="preset-item-main" data-idx="${idx}">
         ${faviconUrl ? `<img class="preset-favicon" src="${escapeHTML(faviconUrl)}" alt="" onerror="this.style.display='none'" />` : '<span class="preset-favicon-placeholder">&#127760;</span>'}
@@ -122,7 +121,8 @@ function renderPresets() {
           <span class="preset-item-url">${escapeHTML(preset.url || '')}</span>
         </div>
         <div class="preset-item-badges">
-          ${preset.fullCrawl ? '<span class="preset-badge">Full Crawl</span>' : (preset.limitDepth ? `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>` : '<span class="preset-badge">Depth ∞</span>')}
+          ${preset.limitDepth ? `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>` : '<span class="preset-badge">Depth ∞</span>'}
+          ${preset.fullCrawl ? '<span class="preset-badge">🌐 Full Crawl</span>' : `<span class="preset-badge">${preset.maxPages ? preset.maxPages + ' pages' : '∞ pages'}</span>`}
           ${preset.liveView !== false ? '<span class="preset-badge">Live</span>' : ''}
         </div>
       </div>
@@ -231,7 +231,7 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
   if (!url)  { document.getElementById('preset-url').focus(); return; }
   const limitDepth = document.getElementById('preset-limitdepth').checked;
   const fullCrawl  = document.getElementById('preset-fullcrawl').checked;
-  const faviconDomain = (() => { try { return new URL(iconUrl || url).hostname; } catch { return ''; } })();
+  const faviconDomain = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
   const preset = {
     name, url,
     iconUrl: iconUrl || '',
@@ -244,7 +244,7 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
     fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
     maxPages: fullCrawl ? 0 : (parseInt(document.getElementById('preset-maxpages').value) || 100),
-    favicon: faviconDomain ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(faviconDomain)}` : '',
+    favicon: (!iconUrl && faviconDomain) ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(faviconDomain)}` : '',
   };
   const list = getPresets();
   const editIdx = document.getElementById('btn-preset-save').dataset.editIdx;
@@ -262,7 +262,7 @@ function showPresetConfirm(idx) {
   if (!preset) return;
   _pendingPresetIdx = idx;
   const info = document.getElementById('preset-confirm-info');
-  const faviconUrl = preset.favicon || (preset.url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(preset.url).hostname)}` : '');
+  const faviconUrl = preset.iconUrl || preset.favicon || (preset.url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent((() => { try { return new URL(preset.url).hostname; } catch { return ''; } })())}` : '');
   info.innerHTML = `
     <div class="preset-confirm-row">
       ${faviconUrl ? `<img class="preset-favicon" src="${escapeHTML(faviconUrl)}" alt="" onerror="this.style.display='none'" />` : ''}
@@ -272,7 +272,8 @@ function showPresetConfirm(idx) {
       </div>
     </div>
     <div class="preset-confirm-tags">
-      ${preset.fullCrawl ? '<span class="preset-badge">Full Crawl</span>' : (preset.limitDepth ? `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>` : '<span class="preset-badge">Depth ∞</span>')}
+      ${preset.limitDepth ? `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>` : '<span class="preset-badge">Depth ∞</span>'}
+      ${preset.fullCrawl ? '<span class="preset-badge">🌐 Full Crawl</span>' : `<span class="preset-badge">${preset.maxPages ? preset.maxPages + ' pages' : '∞ pages'}</span>`}
       ${preset.captureGraphQL ? '<span class="preset-badge">GraphQL</span>' : ''}
       ${preset.captureREST ? '<span class="preset-badge">REST</span>' : ''}
       ${preset.liveView !== false ? '<span class="preset-badge">Live View</span>' : '<span class="preset-badge">Headless</span>'}
