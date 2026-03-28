@@ -1425,9 +1425,10 @@ class ScraperSession {
     // ── Try clicking a visible link on the current page before doing a full goto ──
     // This handles SPA tab-links (e.g. NEWS/EVENTS/DIVISIONS tabs) that update
     // content client-side and would 504 if loaded directly from the server.
+    const _norm = (u) => u.split('#')[0].replace(/\/$/, '') || u;
     if (await this._tryClickLink(page, url)) {
       const landed = page.url();
-      if (normalize(landed) === normalize(url) && !this._isLoginRedirect(landed, url, origin)) {
+      if (_norm(landed) === _norm(url) && !this._isLoginRedirect(landed, url, origin)) {
         this.log(`Navigated via link click: ${url}`, 'info');
         return { success: true, clicked: true };
       }
