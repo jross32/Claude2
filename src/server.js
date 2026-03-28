@@ -79,12 +79,48 @@ app.get('/api/favicon', async (req, res) => {
     });
   }
 
-  let origin;
-  try { origin = new URL(rawUrl).origin; } catch { return res.status(400).send('bad url'); }
+  let origin, hostname;
+  try { const p = new URL(rawUrl); origin = p.origin; hostname = p.hostname; }
+  catch { return res.status(400).send('bad url'); }
 
-  // Try /favicon.ico first, then /apple-touch-icon.png
-  const candidates = [`${origin}/favicon.ico`, `${origin}/apple-touch-icon.png`];
-  for (const candidate of candidates) {
+  // Helper: fetch a URL as text (HTML)
+  async function fetchText(url) {
+    return new Promise((resolve, reject) => {
+      let parsed; try { parsed = new URL(url); } catch { return reject(new Error('bad url')); }
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const req2 = mod.get(url, { timeout: 6000, headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+        if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
+          return fetchText(r.headers.location).then(resolve).catch(reject);
+        }
+        let data = '';
+        r.on('data', c => { data += c; if (data.length > 60000) r.destroy(); });
+        r.on('end', () => resolve(data));
+        r.on('close', () => resolve(data));
+      });
+      req2.on('error', reject);
+      req2.on('timeout', () => { req2.destroy(); reject(new Error('timeout')); });
+    });
+  }
+
+  // 1. Try parsing the page HTML for <link rel="icon">
+  try {
+    const html = await fetchText(rawUrl);
+    const m = html.match(/<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]+href=["']([^"']+)["']/i)
+           || html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*icon[^"']*["']/i);
+    if (m) {
+      let iconHref = m[1];
+      if (!iconHref.startsWith('http')) iconHref = iconHref.startsWith('/') ? `${origin}${iconHref}` : `${origin}/${iconHref}`;
+      const { buf, ct } = await fetchBytes(iconHref);
+      if (buf.length > 0) {
+        res.set('Content-Type', ct || 'image/x-icon');
+        res.set('Cache-Control', 'public, max-age=86400');
+        return res.send(buf);
+      }
+    }
+  } catch {}
+
+  // 2. Try /favicon.ico, then /apple-touch-icon.png
+  for (const candidate of [`${origin}/favicon.ico`, `${origin}/apple-touch-icon.png`]) {
     try {
       const { buf, ct } = await fetchBytes(candidate);
       if (buf.length > 0) {
@@ -95,8 +131,8 @@ app.get('/api/favicon', async (req, res) => {
     } catch {}
   }
 
-  // Redirect to Google as last resort
-  res.redirect(`https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(rawUrl).hostname)}`);
+  // 3. Google as last resort
+  res.redirect(`https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(hostname)}`);
 });
 
 app.get('/api/detect', async (req, res) => {
