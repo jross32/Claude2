@@ -90,6 +90,209 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 // ---- Auth toggle ----
 // Auth section is shown automatically when a login form is detected — no manual toggle
 
+// ---- Presets ----
+const PRESETS_KEY = 'wsp_presets';
+
+function getPresets() {
+  try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]'); } catch { return []; }
+}
+function savePresets(list) {
+  localStorage.setItem(PRESETS_KEY, JSON.stringify(list));
+}
+
+function renderPresets() {
+  const list = getPresets();
+  const container = document.getElementById('presets-list');
+  const empty = document.getElementById('presets-empty');
+  if (list.length === 0) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  // Remove existing preset cards (not the empty msg)
+  container.querySelectorAll('.preset-item').forEach(el => el.remove());
+  list.forEach((preset, idx) => {
+    const card = document.createElement('div');
+    card.className = 'preset-item';
+    card.dataset.idx = idx;
+    const faviconUrl = preset.url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(preset.url).hostname)}` : '';
+    card.innerHTML = `
+      <div class="preset-item-main" data-idx="${idx}">
+        ${faviconUrl ? `<img class="preset-favicon" src="${escapeHTML(faviconUrl)}" alt="" onerror="this.style.display='none'" />` : '<span class="preset-favicon-placeholder">&#127760;</span>'}
+        <div class="preset-item-info">
+          <span class="preset-item-name">${escapeHTML(preset.name)}</span>
+          <span class="preset-item-url">${escapeHTML(preset.url || '')}</span>
+        </div>
+        <div class="preset-item-badges">
+          ${preset.fullCrawl ? '<span class="preset-badge">Full Crawl</span>' : `<span class="preset-badge">Depth ${preset.scrapeDepth || 1}</span>`}
+          ${preset.liveView !== false ? '<span class="preset-badge">Live</span>' : ''}
+        </div>
+      </div>
+      <div class="preset-item-actions">
+        <button class="btn-xs preset-edit-btn" data-idx="${idx}" title="Edit">&#9998;</button>
+        <button class="btn-xs preset-delete-btn" data-idx="${idx}" title="Delete">&#128465;</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  // Run on click (main area)
+  container.querySelectorAll('.preset-item-main').forEach(el => {
+    el.addEventListener('click', () => showPresetConfirm(parseInt(el.dataset.idx)));
+  });
+  // Edit
+  container.querySelectorAll('.preset-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openPresetModal(parseInt(btn.dataset.idx)); });
+  });
+  // Delete
+  container.querySelectorAll('.preset-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const list = getPresets();
+      list.splice(parseInt(btn.dataset.idx), 1);
+      savePresets(list);
+      renderPresets();
+    });
+  });
+}
+
+function openPresetModal(editIdx = -1) {
+  const modal = document.getElementById('preset-modal-backdrop');
+  const title = document.getElementById('preset-modal-title');
+  if (editIdx >= 0) {
+    const p = getPresets()[editIdx];
+    title.textContent = '✎ Edit Preset';
+    document.getElementById('preset-name').value = p.name || '';
+    document.getElementById('preset-url').value = p.url || '';
+    document.getElementById('preset-depth').value = p.scrapeDepth || 1;
+    document.getElementById('preset-depth-value').textContent = p.scrapeDepth || 1;
+    document.getElementById('preset-graphql').checked = p.captureGraphQL !== false;
+    document.getElementById('preset-rest').checked = p.captureREST !== false;
+    document.getElementById('preset-assets').checked = p.captureAssets !== false;
+    document.getElementById('preset-scroll').checked = p.autoScroll !== false;
+    document.getElementById('preset-fullcrawl').checked = !!p.fullCrawl;
+    document.getElementById('preset-liveview').checked = p.liveView !== false;
+    document.getElementById('preset-maxpages').value = p.maxPages || 100;
+    document.getElementById('preset-maxpages-field').style.display = p.fullCrawl ? 'block' : 'none';
+    document.getElementById('btn-preset-save').dataset.editIdx = editIdx;
+  } else {
+    title.textContent = '★ Save Scrape Preset';
+    // Pre-fill from current form values
+    document.getElementById('preset-name').value = '';
+    document.getElementById('preset-url').value = document.getElementById('url').value || '';
+    document.getElementById('preset-depth').value = document.getElementById('scrape-depth').value;
+    document.getElementById('preset-depth-value').textContent = document.getElementById('scrape-depth').value;
+    document.getElementById('preset-graphql').checked = document.getElementById('capture-graphql').checked;
+    document.getElementById('preset-rest').checked = document.getElementById('capture-rest').checked;
+    document.getElementById('preset-assets').checked = document.getElementById('capture-assets').checked;
+    document.getElementById('preset-scroll').checked = document.getElementById('auto-scroll').checked;
+    document.getElementById('preset-fullcrawl').checked = document.getElementById('full-crawl').checked;
+    document.getElementById('preset-liveview').checked = document.getElementById('live-view').value === 'true';
+    document.getElementById('preset-maxpages').value = document.getElementById('max-pages').value || 100;
+    document.getElementById('preset-maxpages-field').style.display = document.getElementById('full-crawl').checked ? 'block' : 'none';
+    delete document.getElementById('btn-preset-save').dataset.editIdx;
+  }
+  modal.style.display = 'flex';
+  document.getElementById('preset-name').focus();
+}
+
+function closePresetModal() {
+  document.getElementById('preset-modal-backdrop').style.display = 'none';
+}
+
+document.getElementById('btn-new-preset').addEventListener('click', () => openPresetModal());
+document.getElementById('btn-preset-modal-close').addEventListener('click', closePresetModal);
+document.getElementById('btn-preset-cancel').addEventListener('click', closePresetModal);
+document.getElementById('preset-modal-backdrop').addEventListener('click', (e) => { if (e.target === e.currentTarget) closePresetModal(); });
+
+document.getElementById('preset-depth').addEventListener('input', function () {
+  document.getElementById('preset-depth-value').textContent = this.value;
+});
+document.getElementById('preset-fullcrawl').addEventListener('change', function () {
+  document.getElementById('preset-maxpages-field').style.display = this.checked ? 'block' : 'none';
+});
+
+document.getElementById('btn-preset-save').addEventListener('click', () => {
+  const name = document.getElementById('preset-name').value.trim();
+  const url  = document.getElementById('preset-url').value.trim();
+  if (!name) { document.getElementById('preset-name').focus(); return; }
+  if (!url)  { document.getElementById('preset-url').focus(); return; }
+  const preset = {
+    name, url,
+    scrapeDepth: parseInt(document.getElementById('preset-depth').value),
+    captureGraphQL: document.getElementById('preset-graphql').checked,
+    captureREST: document.getElementById('preset-rest').checked,
+    captureAssets: document.getElementById('preset-assets').checked,
+    autoScroll: document.getElementById('preset-scroll').checked,
+    fullCrawl: document.getElementById('preset-fullcrawl').checked,
+    liveView: document.getElementById('preset-liveview').checked,
+    maxPages: parseInt(document.getElementById('preset-maxpages').value) || 100,
+    favicon: url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(url).hostname)}` : '',
+  };
+  const list = getPresets();
+  const editIdx = document.getElementById('btn-preset-save').dataset.editIdx;
+  if (editIdx !== undefined) list[parseInt(editIdx)] = preset;
+  else list.push(preset);
+  savePresets(list);
+  renderPresets();
+  closePresetModal();
+  showToast(`Preset "${name}" saved`);
+});
+
+let _pendingPresetIdx = -1;
+function showPresetConfirm(idx) {
+  const preset = getPresets()[idx];
+  if (!preset) return;
+  _pendingPresetIdx = idx;
+  const info = document.getElementById('preset-confirm-info');
+  const faviconUrl = preset.favicon || (preset.url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(preset.url).hostname)}` : '');
+  info.innerHTML = `
+    <div class="preset-confirm-row">
+      ${faviconUrl ? `<img class="preset-favicon" src="${escapeHTML(faviconUrl)}" alt="" onerror="this.style.display='none'" />` : ''}
+      <div>
+        <div class="preset-confirm-name">${escapeHTML(preset.name)}</div>
+        <div class="preset-confirm-url">${escapeHTML(preset.url)}</div>
+      </div>
+    </div>
+    <div class="preset-confirm-tags">
+      ${preset.fullCrawl ? '<span class="preset-badge">Full Crawl</span>' : `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>`}
+      ${preset.captureGraphQL ? '<span class="preset-badge">GraphQL</span>' : ''}
+      ${preset.captureREST ? '<span class="preset-badge">REST</span>' : ''}
+      ${preset.liveView !== false ? '<span class="preset-badge">Live View</span>' : '<span class="preset-badge">Headless</span>'}
+    </div>
+  `;
+  document.getElementById('preset-confirm-backdrop').style.display = 'flex';
+}
+
+document.getElementById('btn-confirm-close').addEventListener('click', () => { document.getElementById('preset-confirm-backdrop').style.display = 'none'; });
+document.getElementById('btn-confirm-cancel').addEventListener('click', () => { document.getElementById('preset-confirm-backdrop').style.display = 'none'; });
+document.getElementById('preset-confirm-backdrop').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.style.display = 'none'; });
+
+document.getElementById('btn-confirm-run').addEventListener('click', async () => {
+  document.getElementById('preset-confirm-backdrop').style.display = 'none';
+  const preset = getPresets()[_pendingPresetIdx];
+  if (!preset) return;
+  // Load preset settings into main form
+  document.getElementById('url').value = preset.url;
+  document.getElementById('scrape-depth').value = preset.scrapeDepth || 1;
+  document.getElementById('depth-value').textContent = preset.scrapeDepth || 1;
+  document.getElementById('capture-graphql').checked = preset.captureGraphQL !== false;
+  document.getElementById('capture-rest').checked = preset.captureREST !== false;
+  document.getElementById('capture-assets').checked = preset.captureAssets !== false;
+  document.getElementById('auto-scroll').checked = preset.autoScroll !== false;
+  document.getElementById('full-crawl').checked = !!preset.fullCrawl;
+  document.getElementById('max-pages').value = preset.maxPages || 100;
+  document.getElementById('max-pages-field').style.display = preset.fullCrawl ? 'block' : 'none';
+  // Set live view toggle
+  const liveOn = preset.liveView !== false;
+  document.getElementById('live-view').value = String(liveOn);
+  document.getElementById('live-view-btn').dataset.active = String(liveOn);
+  document.getElementById('live-view-btn').classList.toggle('active', liveOn);
+  document.getElementById('live-view-label').textContent = liveOn ? 'ON' : 'OFF';
+  // Start the scrape
+  document.getElementById('btn-scrape').click();
+});
+
+// Init presets on load
+renderPresets();
+
 // ---- Recent URLs ----
 const RECENT_URLS_KEY = 'wsp_recent_urls';
 const MAX_RECENT = 10;

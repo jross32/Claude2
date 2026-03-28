@@ -183,6 +183,85 @@
           </div>
         </div>
 
+        <!-- Saved Scrapes (Presets) -->
+        <div class="presets-card" id="presets-card">
+          <div class="presets-header">
+            <div class="presets-title">
+              <span class="section-icon">&#9733;</span> Saved Scrapes
+            </div>
+            <button class="btn-primary btn-sm" id="btn-new-preset">&#43; Save Current</button>
+          </div>
+          <div class="presets-list" id="presets-list">
+            <div class="presets-empty" id="presets-empty">
+              <span>No saved scrapes yet. Configure a scrape above and click <strong>Save Current</strong> to save it as a preset.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preset Modal -->
+        <div class="modal-backdrop" id="preset-modal-backdrop" style="display:none">
+          <div class="modal-box" id="preset-modal">
+            <div class="modal-header">
+              <span id="preset-modal-title">&#9733; Save Scrape Preset</span>
+              <button class="modal-close" id="btn-preset-modal-close">&#10005;</button>
+            </div>
+            <div class="modal-body">
+              <div class="field">
+                <label>Preset Name <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="preset-name" placeholder="e.g. APA Full Crawl" autocomplete="off" data-lpignore="true" />
+              </div>
+              <div class="field">
+                <label>Website URL <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="preset-url" placeholder="https://example.com" autocomplete="off" data-lpignore="true" />
+              </div>
+              <div class="field">
+                <label>Scrape Depth</label>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <input type="range" id="preset-depth" min="1" max="3" value="1" style="width:160px" />
+                  <span id="preset-depth-value">1</span>
+                </div>
+              </div>
+              <div class="field">
+                <label>Options</label>
+                <div class="checkboxes">
+                  <label class="checkbox-label"><input type="checkbox" id="preset-graphql" checked /><span>Capture GraphQL</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-rest" checked /><span>Capture REST</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-assets" checked /><span>Capture Assets</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-scroll" checked /><span>Auto-scroll</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-fullcrawl" /><span>&#127760; Full site crawl</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-liveview" checked /><span>&#127909; Live Browser View</span></label>
+                </div>
+              </div>
+              <div class="field" id="preset-maxpages-field" style="display:none">
+                <label>Max Pages</label>
+                <input type="number" id="preset-maxpages" value="100" min="1" max="9999" style="width:120px" />
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-secondary" id="btn-preset-cancel">Cancel</button>
+              <button class="btn-primary" id="btn-preset-save">&#9733; Save Preset</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Run Preset Confirmation Modal -->
+        <div class="modal-backdrop" id="preset-confirm-backdrop" style="display:none">
+          <div class="modal-box modal-box-sm" id="preset-confirm-modal">
+            <div class="modal-header">
+              <span>&#9654; Run Preset</span>
+              <button class="modal-close" id="btn-confirm-close">&#10005;</button>
+            </div>
+            <div class="modal-body">
+              <div class="preset-confirm-info" id="preset-confirm-info"></div>
+              <p style="margin-top:12px;color:var(--text2);font-size:14px">This will load all saved settings and start scraping immediately.</p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-secondary" id="btn-confirm-cancel">Cancel</button>
+              <button class="btn-primary" id="btn-confirm-run">&#9654; Yes, Run It</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Progress -->
         <div class="progress-card" id="progress-card" style="display:none">
           <div class="progress-header">

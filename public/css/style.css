@@ -879,6 +879,76 @@ body.light .json-bool { color: #b45309; }
   overflow-y: auto; white-space: pre-wrap; word-break: break-all;
 }
 
+/* ===================== Presets ===================== */
+.presets-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px 24px; margin-top: 16px;
+}
+.presets-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+}
+.presets-title {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.presets-empty {
+  color: var(--text3); font-size: 13px; padding: 12px 0;
+}
+.presets-list { display: flex; flex-direction: column; gap: 8px; }
+
+.preset-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 14px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.preset-item:hover { border-color: var(--accent); background: var(--bg4); }
+.preset-item-main {
+  display: flex; align-items: center; gap: 12px; flex: 1; cursor: pointer; min-width: 0;
+}
+.preset-favicon { width: 24px; height: 24px; border-radius: 4px; flex-shrink: 0; object-fit: contain; }
+.preset-favicon-placeholder { font-size: 20px; flex-shrink: 0; }
+.preset-item-info { display: flex; flex-direction: column; min-width: 0; }
+.preset-item-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset-item-url  { font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset-item-badges { display: flex; gap: 4px; flex-shrink: 0; margin-left: 10px; }
+.preset-badge { background: var(--bg4); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; font-size: 10px; color: var(--text2); white-space: nowrap; }
+.preset-item-actions { display: flex; gap: 6px; margin-left: 10px; flex-shrink: 0; }
+.btn-sm { padding: 5px 12px; font-size: 13px; }
+
+/* Modals */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); width: 100%; max-width: 520px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6); display: flex; flex-direction: column;
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-box-sm { max-width: 400px; }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
+  font-size: 15px; font-weight: 700; color: var(--text);
+}
+.modal-close {
+  background: none; border: none; color: var(--text3); cursor: pointer;
+  font-size: 16px; padding: 2px 6px; border-radius: 4px;
+  transition: color 0.1s;
+}
+.modal-close:hover { color: var(--danger); }
+.modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 22px 18px; border-top: 1px solid var(--border);
+}
+.preset-confirm-row { display: flex; align-items: center; gap: 12px; }
+.preset-confirm-name { font-size: 16px; font-weight: 700; color: var(--text); }
+.preset-confirm-url  { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.preset-confirm-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+
 /* Live view toggle */
 .live-view-toggle-label {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; cursor: default;
