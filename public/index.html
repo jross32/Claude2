@@ -184,20 +184,6 @@
             </div>
           </div>
 
-          <!-- Mid-scrape credential prompt (shown if login wall hit unexpectedly) -->
-          <div class="mid-auth-prompt" id="mid-auth-prompt" style="display:none">
-            <div class="mid-auth-icon">&#128274;</div>
-            <p><strong>Login wall detected.</strong> Enter credentials to continue:</p>
-            <div class="field-row" style="max-width:500px;margin:10px auto 0">
-              <div class="field">
-                <input type="text" id="live-username" placeholder="Username / Email" autocomplete="off" />
-              </div>
-              <div class="field">
-                <input type="password" id="live-password" placeholder="Password" />
-              </div>
-            </div>
-            <button class="btn-primary" id="btn-submit-creds" style="margin-top:10px">Submit &amp; Continue</button>
-          </div>
           </div>
 
           <!-- Browser options -->
@@ -246,15 +232,26 @@
             <div class="live-browser-body" id="live-browser-body">
               <img id="live-frame" class="live-frame-img" src="" alt="Live browser view" />
             </div>
-          </div>
 
-          <!-- Live verification prompt -->
-          <div class="verification-prompt" id="verification-prompt" style="display:none">
-            <div class="verify-icon">&#128273;</div>
-            <p>The site requires a verification code. Enter it below:</p>
-            <div class="verify-input-row">
-              <input type="text" id="live-code" placeholder="Enter code..." maxlength="10" />
-              <button class="btn-primary" id="btn-submit-code">Submit</button>
+            <!-- Credentials prompt — shown inline when login wall detected -->
+            <div class="live-creds-prompt" id="live-creds-prompt" style="display:none">
+              <span class="live-creds-icon">&#128274;</span>
+              <strong>Login required</strong>
+              <div class="live-creds-fields">
+                <input type="text" id="live-username" placeholder="Username / Email" autocomplete="off" />
+                <input type="password" id="live-password" placeholder="Password" />
+                <button class="btn-primary" id="btn-submit-creds">Continue</button>
+              </div>
+            </div>
+
+            <!-- Verification code prompt -->
+            <div class="live-creds-prompt" id="verification-prompt" style="display:none">
+              <span class="live-creds-icon">&#128273;</span>
+              <strong>Verification code required</strong>
+              <div class="live-creds-fields">
+                <input type="text" id="live-code" placeholder="Enter code..." maxlength="10" />
+                <button class="btn-primary" id="btn-submit-code">Submit</button>
+              </div>
             </div>
           </div>
         </div>

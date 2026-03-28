@@ -208,7 +208,7 @@ document.getElementById('btn-submit-creds').addEventListener('click', async () =
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   });
-  document.getElementById('mid-auth-prompt').style.display = 'none';
+  document.getElementById('live-creds-prompt').style.display = 'none';
   appendLog('Credentials submitted — continuing scrape...', 'info');
 });
 
@@ -258,7 +258,7 @@ function clearLog() {
   // Reset auth/prompt state for a fresh scrape
   document.getElementById('auth-detected-banner').style.display = 'none';
   document.getElementById('auth-section').style.display = 'none';
-  document.getElementById('mid-auth-prompt').style.display = 'none';
+  document.getElementById('live-creds-prompt').style.display = 'none';
   document.getElementById('site-preview').style.display = 'none';
 }
 
@@ -306,8 +306,8 @@ function updateSitePreview(info) {
 
 function showMidAuthPrompt() {
   // Shown mid-scrape when login wall is hit without pre-supplied credentials
-  document.getElementById('mid-auth-prompt').style.display = 'block';
-  document.getElementById('mid-auth-prompt').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('live-creds-prompt').style.display = 'block';
+  document.getElementById('live-creds-prompt').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   document.getElementById('live-username').focus();
 }
 

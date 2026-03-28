@@ -810,6 +810,23 @@ body.light .json-bool { color: #b45309; }
   animation: fadeIn 0.2s ease;
 }
 
+/* Inline credentials / verification prompt inside live browser panel */
+.live-creds-prompt {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; background: rgba(245, 158, 11, 0.08);
+  border-top: 1px solid var(--warning); font-size: 13px;
+}
+.live-creds-icon { font-size: 20px; flex-shrink: 0; }
+.live-creds-fields {
+  display: flex; gap: 8px; flex: 1; flex-wrap: wrap; align-items: center;
+}
+.live-creds-fields input {
+  flex: 1; min-width: 140px; padding: 6px 10px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary); font-size: 13px;
+}
+.live-creds-fields .btn-primary { flex-shrink: 0; padding: 6px 16px; font-size: 13px; }
+
 /* Live browser panel */
 .live-browser-panel {
   margin-top: 14px; border: 1px solid var(--border);

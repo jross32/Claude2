@@ -32,6 +32,7 @@ async function handleAuth(page, options) {
     'input[type="submit"]',
     'button[id*="login" i]',
     'button[id*="signin" i]',
+    'button[id*="sign-in" i]',
     'button[class*="login" i]',
     'button[class*="signin" i]',
     '[data-testid*="login" i]',
@@ -39,31 +40,60 @@ async function handleAuth(page, options) {
     'form button',
   ];
 
+  // Helper: fill a field reliably (works with React/Vue/Angular)
+  async function fillField(sel, value) {
+    await page.waitForSelector(sel, { timeout: 5000, state: 'visible' });
+    await page.click(sel, { clickCount: 3 });
+    await page.fill(sel, value);
+    // Trigger React synthetic events
+    await page.evaluate((selector, val) => {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      const nativeInput = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      nativeInput.set.call(el, val);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, sel, value);
+  }
+
   // Fill username
   if (username) {
     let filledUser = false;
     for (const sel of usernameSelectors) {
       try {
-        await page.waitForSelector(sel, { timeout: 3000 });
-        await page.click(sel, { clickCount: 3 });
-        await page.type(sel, username, { delay: 50 });
+        await fillField(sel, username);
         log(`Filled username field: ${sel}`);
         filledUser = true;
         break;
       } catch {}
     }
     if (!filledUser) {
-      log('Could not find username field - may already be logged in or different auth flow', 'warn');
+      // Last resort: find any visible text/email input
+      try {
+        await page.evaluate((val) => {
+          const inputs = [...document.querySelectorAll('input[type="text"], input[type="email"]')];
+          const visible = inputs.find(el => el.offsetParent !== null && !el.readOnly);
+          if (visible) {
+            const nv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            nv.set.call(visible, val);
+            visible.dispatchEvent(new Event('input', { bubbles: true }));
+            visible.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }, username);
+        log('Filled username via DOM fallback', 'warn');
+        filledUser = true;
+      } catch {}
     }
+    if (!filledUser) log('Could not find username field', 'warn');
   }
+
+  await delay(300);
 
   // Fill password
   let filledPassword = false;
   for (const sel of passwordSelectors) {
     try {
-      await page.waitForSelector(sel, { timeout: 3000 });
-      await page.click(sel, { clickCount: 3 });
-      await page.type(sel, password, { delay: 50 });
+      await fillField(sel, password);
       log(`Filled password field: ${sel}`);
       filledPassword = true;
       break;
@@ -75,11 +105,13 @@ async function handleAuth(page, options) {
     return;
   }
 
+  await delay(300);
+
   // Submit form
   let submitted = false;
   for (const sel of submitSelectors) {
     try {
-      await page.waitForSelector(sel, { timeout: 2000 });
+      await page.waitForSelector(sel, { timeout: 2000, state: 'visible' });
       await page.click(sel);
       log(`Clicked submit: ${sel}`);
       submitted = true;
@@ -88,17 +120,49 @@ async function handleAuth(page, options) {
   }
 
   if (!submitted) {
-    // Try pressing Enter in the password field
     await page.keyboard.press('Enter');
     log('Submitted via Enter key');
   }
 
-  // Wait briefly for page response
-  await delay(2000);
+  // Wait for navigation/response
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  await delay(1000);
+
+  // Handle intermediate "Continue" / account-confirmation pages (e.g. APA SSO)
+  await clickContinueIfPresent(page, log);
 
   // Handle verification step
   if (verificationType && verificationType !== 'none') {
     await handleVerification(page, { verificationType, verificationCode, waitForVerification, log });
+  }
+}
+
+async function clickContinueIfPresent(page, log) {
+  // Selectors that match "Continue", "Proceed", "Accept" style confirmation buttons
+  const continueSelectors = [
+    'button:has-text("Continue")',
+    'button:has-text("Proceed")',
+    'button:has-text("Accept")',
+    'button:has-text("Allow")',
+    'a:has-text("Continue")',
+    'input[value*="Continue" i]',
+    'input[value*="Proceed" i]',
+    '[type="submit"][value*="Continue" i]',
+  ];
+
+  for (const sel of continueSelectors) {
+    try {
+      const el = await page.waitForSelector(sel, { timeout: 3000, state: 'visible' });
+      if (el) {
+        await el.click();
+        log(`Clicked intermediate continue button: ${sel}`);
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+        await delay(500);
+        // Check again in case there are multiple confirmation steps
+        await clickContinueIfPresent(page, log);
+        return;
+      }
+    } catch {}
   }
 }
 
@@ -122,19 +186,12 @@ async function handleVerification(page, options) {
   ];
 
   if (verificationType === 'captcha') {
-    log(
-      'CAPTCHA detected. Automated CAPTCHA solving is not supported - manual intervention required.',
-      'warn'
-    );
-    // Notify UI to show captcha warning
+    log('CAPTCHA detected. Automated CAPTCHA solving is not supported - manual intervention required.', 'warn');
     return;
   }
 
-  // For TOTP, email code, or SMS - get the code
   let code = verificationCode;
-
   if (!code) {
-    // Ask user to provide code via UI
     log('Waiting for verification code from user...', 'info');
     code = await waitForVerification();
   }
@@ -144,15 +201,13 @@ async function handleVerification(page, options) {
     return;
   }
 
-  // Wait for code input to appear
   await delay(1500);
 
   let filledCode = false;
   for (const sel of codeInputSelectors) {
     try {
       await page.waitForSelector(sel, { timeout: 5000 });
-      await page.click(sel, { clickCount: 3 });
-      await page.type(sel, code.toString(), { delay: 80 });
+      await page.fill(sel, code.toString());
       log(`Entered verification code in: ${sel}`);
       filledCode = true;
       break;
@@ -160,13 +215,13 @@ async function handleVerification(page, options) {
   }
 
   if (!filledCode) {
-    // Try finding any visible text input that appeared after login
     try {
       await page.evaluate((codeStr) => {
         const inputs = document.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"]');
         for (const input of inputs) {
           if (input.offsetParent !== null) {
-            input.value = codeStr;
+            const nv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            nv.set.call(input, codeStr);
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
             return true;
@@ -180,7 +235,6 @@ async function handleVerification(page, options) {
   }
 
   if (filledCode) {
-    // Submit verification
     const submitSelectors = [
       'button[type="submit"]',
       'button[id*="verify" i]',
