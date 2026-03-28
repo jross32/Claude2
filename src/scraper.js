@@ -23,10 +23,31 @@ function credsFile(url) {
 }
 
 function loadSavedCreds(url) {
+  // Check the given URL and also the root domain (e.g. poolplayers.com covers both subdomains)
+  const urlsToCheck = [url];
   try {
-    const file = credsFile(url);
-    if (file && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
+    const u = new URL(url);
+    const parts = u.hostname.split('.');
+    if (parts.length > 2) urlsToCheck.push(`${u.protocol}//${parts.slice(-2).join('.')}`);
   } catch {}
+  for (const u of urlsToCheck) {
+    try {
+      const file = credsFile(u);
+      if (file && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {}
+    // Also check sibling subdomains (accounts.x.com → league.x.com creds)
+    try {
+      const dir = SESSIONS_DIR;
+      if (fs.existsSync(dir)) {
+        const domain = new URL(u).hostname.split('.').slice(-2).join('_');
+        const files = fs.readdirSync(dir).filter(f => f.includes(domain) && f.endsWith('.creds.json'));
+        for (const f of files) {
+          const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+          if (data.username && data.password) return data;
+        }
+      }
+    } catch {}
+  }
   return null;
 }
 
@@ -538,14 +559,19 @@ class ScraperSession {
           await page.waitForLoadState('networkidle').catch(() => {});
           this.log('Authentication complete', 'success');
 
-          // Save session for next time
+          // Save session keyed to the post-login URL (may differ from login URL)
+          const postLoginUrl = page.url();
+          const sessionUrl = postLoginUrl.startsWith('http') ? postLoginUrl : primaryUrl;
           try {
-            const file = sessionFile(primaryUrl);
+            const file = sessionFile(sessionUrl);
             if (file) {
               await context.storageState({ path: file });
+              // Also save under the original login URL so it's found next time
+              const loginFile = sessionFile(primaryUrl);
+              if (loginFile && loginFile !== file) await context.storageState({ path: loginFile });
               this.savedSession = file;
-              this.log('Session saved — future scrapes will skip login', 'success');
-              this.broadcast(this.sessionId, { type: 'sessionSaved', hostname: new URL(primaryUrl).hostname });
+              this.log(`Session saved (${new URL(sessionUrl).hostname}) — future scrapes will skip login`, 'success');
+              this.broadcast(this.sessionId, { type: 'sessionSaved', hostname: new URL(sessionUrl).hostname });
             }
           } catch {}
         }
@@ -580,6 +606,10 @@ class ScraperSession {
       }
 
       // ── Scrape pages ─────────────────────────────────────────────────────
+      // Use current page URL as crawl start (may differ from primaryUrl after auth redirect)
+      const crawlStartUrl = page.url().startsWith('http') ? page.url() : primaryUrl;
+      if (crawlStartUrl !== primaryUrl) this.log(`Scraping from post-auth URL: ${crawlStartUrl}`);
+
       this.progress('Extracting page data', 50);
       let allResults = [];
 
@@ -597,10 +627,10 @@ class ScraperSession {
           }
         }
       } else if (fullCrawl) {
-        allResults = await this._fullCrawl(page, primaryUrl, maxPages || 100, autoScroll);
+        allResults = await this._fullCrawl(page, crawlStartUrl, maxPages || 100, autoScroll);
       } else {
         const visited = new Set();
-        allResults = await this._scrapePage(page, primaryUrl, scrapeDepth || 1, visited, autoScroll);
+        allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll);
       }
 
       // ── Download images as base64 ────────────────────────────────────────
