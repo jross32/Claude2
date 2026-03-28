@@ -2,7 +2,6 @@ const { chromium } = require('playwright');
 const { extractPageData } = require('./extractor');
 const { handleAuth } = require('./auth');
 
-const CHROMIUM_PATH = '/root/.cache/ms-playwright/chromium-1194/chrome-linux/chrome';
 
 class ScraperSession {
   constructor(sessionId, broadcast) {
@@ -189,7 +188,6 @@ class ScraperSession {
     this.log(showBrowser ? 'Launching visible browser window...' : 'Launching headless browser...');
 
     this.browser = await chromium.launch({
-      executablePath: CHROMIUM_PATH,
       headless: isHeadless,
       slowMo: showBrowser && slowMotion ? parseInt(slowMotion) : 0,
       args: [
