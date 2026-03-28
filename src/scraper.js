@@ -182,64 +182,54 @@ class ScraperSession {
     }
   }
 
-  async _dismissPopups(page, waitMs = 8000) {
-    // Specific dismiss phrases ordered by preference
-    const DISMISS_TEXTS = ['No Thanks', 'No, Thanks', 'Not Now', 'Maybe Later', 'Skip', 'Dismiss'];
+  // Find a dismiss button and return its center coordinates via DOM
+  async _findDismissCoords(page) {
     const dismissRe = /no[\s,]*thanks?|not\s+now|maybe\s+later|\bskip\b|^dismiss$|don.t\s+(ask|show|notify)/i;
+    try {
+      return await page.evaluate((reStr) => {
+        const re = new RegExp(reStr, 'i');
+        const sel = 'button, [role="button"], input[type="button"], input[type="submit"]';
+        for (const el of document.querySelectorAll(sel)) {
+          const text = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
+          if (!re.test(text)) continue;
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) continue;
+          // Must be in the visible viewport
+          if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, text };
+        }
+        return null;
+      }, dismissRe.source);
+    } catch { return null; }
+  }
 
+  async _dismissPopups(page, waitMs = 8000) {
     const tryDismiss = async () => {
-      // ── Strategy 1: Playwright native getByRole (most React-compatible) ──
-      for (const text of DISMISS_TEXTS) {
+      // ── PRIMARY: real mouse click at button coordinates (works for any framework) ──
+      const coords = await this._findDismissCoords(page);
+      if (coords) {
         try {
-          const btn = page.getByRole('button', { name: text, exact: false });
-          if (await btn.first().count().catch(() => 0) > 0) {
-            await btn.first().click({ timeout: 1500, force: true });
-            this.log(`Dismissed popup: "${text}"`);
-            return true;
-          }
-        } catch {}
-      }
-
-      // ── Strategy 2: CSS :has-text selector with force ──
-      for (const text of DISMISS_TEXTS) {
-        try {
-          await page.click(`button:has-text("${text}")`, { timeout: 400, force: true });
-          this.log(`Dismissed popup (css): "${text}"`);
+          await page.mouse.move(coords.x, coords.y);
+          await page.mouse.click(coords.x, coords.y);
+          this.log(`Dismissed popup: "${coords.text}" (mouse click at ${Math.round(coords.x)},${Math.round(coords.y)})`);
           return true;
         } catch {}
       }
 
-      // ── Strategy 3: evaluate with full pointer+mouse event sequence (React 17+) ──
-      try {
-        const clicked = await page.evaluate((reStr) => {
-          const re = new RegExp(reStr, 'i');
-          const els = [...document.querySelectorAll('button, [role="button"], [role="dialog"] button')];
-          for (const el of els) {
-            const rect = el.getBoundingClientRect();
-            if (rect.width === 0 && rect.height === 0) continue;
-            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
-            if (!re.test(text)) continue;
-            const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-            const opts = { bubbles: true, cancelable: true, clientX: cx, clientY: cy };
-            el.dispatchEvent(new PointerEvent('pointerover', opts));
-            el.dispatchEvent(new PointerEvent('pointerdown', opts));
-            el.dispatchEvent(new PointerEvent('pointerup', opts));
-            el.dispatchEvent(new MouseEvent('click', opts));
-            el.click();
-            return text;
-          }
-          return null;
-        }, dismissRe.source);
-        if (clicked) { this.log(`Dismissed popup (eval): "${clicked}"`); return true; }
-      } catch {}
+      // ── FALLBACK: Playwright locator with force ──
+      for (const text of ['No Thanks', 'No, Thanks', 'Not Now', 'Maybe Later', 'Skip', 'Dismiss']) {
+        try {
+          await page.click(`button:has-text("${text}")`, { timeout: 300, force: true });
+          this.log(`Dismissed popup (locator): "${text}"`);
+          return true;
+        } catch {}
+      }
 
       return false;
     };
 
-    // Try immediately
     if (await tryDismiss()) return;
 
-    // Poll every 600ms until waitMs expires
     const start = Date.now();
     while (Date.now() - start < waitMs) {
       await page.waitForTimeout(600);
@@ -250,56 +240,30 @@ class ScraperSession {
 
   // Register a persistent popup watcher for the whole page lifetime
   _registerPopupWatcher(page) {
-    const DISMISS_TEXTS = ['No Thanks', 'No, Thanks', 'Not Now', 'Maybe Later', 'Skip', 'Dismiss'];
-    const dismissRe = /no[\s,]*thanks?|not\s+now|maybe\s+later|\bskip\b|^dismiss$|don.t\s+(ask|show|notify)/i;
     page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
 
     const interval = setInterval(async () => {
       if (this.stopped) { clearInterval(interval); return; }
 
-      // Strategy 1: getByRole with force (most reliable for React)
-      for (const text of DISMISS_TEXTS) {
+      // Primary: real mouse click via coordinates
+      const coords = await this._findDismissCoords(page).catch(() => null);
+      if (coords) {
         try {
-          const btn = page.getByRole('button', { name: text, exact: false });
-          if (await btn.first().count().catch(() => 0) > 0) {
-            await btn.first().click({ timeout: 800, force: true });
-            this.log(`Auto-dismissed popup: "${text}"`);
-            return;
-          }
-        } catch {}
-      }
-
-      // Strategy 2: CSS has-text
-      for (const text of DISMISS_TEXTS) {
-        try {
-          await page.click(`button:has-text("${text}")`, { timeout: 300, force: true });
-          this.log(`Auto-dismissed popup (css): "${text}"`);
+          await page.mouse.move(coords.x, coords.y);
+          await page.mouse.click(coords.x, coords.y);
+          this.log(`Auto-dismissed popup: "${coords.text}"`);
           return;
         } catch {}
       }
 
-      // Strategy 3: evaluate + full pointer event sequence
-      try {
-        const clicked = await page.evaluate((reStr) => {
-          const re = new RegExp(reStr, 'i');
-          const els = [...document.querySelectorAll('button, [role="button"], [role="dialog"] button')];
-          for (const el of els) {
-            const rect = el.getBoundingClientRect();
-            if (rect.width === 0 && rect.height === 0) continue;
-            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
-            if (!re.test(text)) continue;
-            const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-            const opts = { bubbles: true, cancelable: true, clientX: cx, clientY: cy };
-            el.dispatchEvent(new PointerEvent('pointerdown', opts));
-            el.dispatchEvent(new PointerEvent('pointerup', opts));
-            el.dispatchEvent(new MouseEvent('click', opts));
-            el.click();
-            return text;
-          }
-          return null;
-        }, dismissRe.source);
-        if (clicked) this.log(`Auto-dismissed popup (eval): "${clicked}"`);
-      } catch {}
+      // Fallback: locator with force
+      for (const text of ['No Thanks', 'No, Thanks', 'Not Now', 'Maybe Later']) {
+        try {
+          await page.click(`button:has-text("${text}")`, { timeout: 200, force: true });
+          this.log(`Auto-dismissed popup (locator): "${text}"`);
+          return;
+        } catch {}
+      }
     }, 1000);
     return interval;
   }
