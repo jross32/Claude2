@@ -359,11 +359,11 @@ class ScraperSession {
     await page.evaluate(async () => {
       await new Promise((resolve) => {
         let totalHeight = 0;
-        const distance = 300;
+        const distance = 500;
         const timer = setInterval(() => {
           window.scrollBy(0, distance);
           totalHeight += distance;
-          if (totalHeight >= document.body.scrollHeight || totalHeight > 20000) {
+          if (totalHeight >= document.body.scrollHeight || totalHeight > 8000) {
             clearInterval(timer);
             window.scrollTo(0, 0);
             resolve();
@@ -687,7 +687,7 @@ class ScraperSession {
           await page.waitForTimeout(500);
           this.log(`Settled URL: ${page.url()}`);
           // Dismiss any post-login notification/permission popups (wait up to 5s for slow modals)
-          await this._dismissPopups(page, 5000);
+          await this._dismissPopups(page, 2500);
           this.log('Authentication complete', 'success');
 
           // Save session keyed to the post-login URL (may differ from login URL)
@@ -720,7 +720,7 @@ class ScraperSession {
           try {
             await page.click(step.selector, { timeout: 5000 });
             if (step.waitFor) await page.waitForSelector(step.waitFor, { timeout: 5000 }).catch(() => {});
-            else await page.waitForLoadState('networkidle').catch(() => {});
+            else await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
             this.log(`Clicked: ${step.selector}`);
           } catch (err) {
             this.log(`Click failed on ${step.selector}: ${err.message}`, 'warn');
@@ -733,7 +733,7 @@ class ScraperSession {
         this.progress('Scrolling page (loading lazy content)', 42);
         this.log('Auto-scrolling to trigger lazy loads...');
         await this._autoScroll(page);
-        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
       }
 
       // ── Scrape pages ─────────────────────────────────────────────────────
