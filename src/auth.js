@@ -8,14 +8,14 @@ async function handleAuth(page, options) {
   async function fill(sel, value) {
     await page.focus(sel);
     await page.fill(sel, value);
-    await page.evaluate((s, v) => {
+    await page.evaluate(([s, v]) => {
       const el = document.querySelector(s);
       if (!el) return;
       const nv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
       nv.set.call(el, v);
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, sel, value);
+    }, [sel, value]);
   }
 
   // Find the first visible matching selector

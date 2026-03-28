@@ -14,6 +14,29 @@ function sessionFile(url) {
   } catch { return null; }
 }
 
+function credsFile(url) {
+  try {
+    const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+    if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    return path.join(SESSIONS_DIR, `${hostname}.creds.json`);
+  } catch { return null; }
+}
+
+function loadSavedCreds(url) {
+  try {
+    const file = credsFile(url);
+    if (file && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {}
+  return null;
+}
+
+function saveCreds(url, username, password) {
+  try {
+    const file = credsFile(url);
+    if (file) fs.writeFileSync(file, JSON.stringify({ username, password }));
+  } catch {}
+}
+
 function loadSession(url) {
   try {
     const file = sessionFile(url);
@@ -26,6 +49,8 @@ function clearSession(url) {
   try {
     const file = sessionFile(url);
     if (file && fs.existsSync(file)) { fs.unlinkSync(file); return true; }
+    const cf = credsFile(url);
+    if (cf && fs.existsSync(cf)) fs.unlinkSync(cf);
   } catch {}
   return false;
 }
@@ -481,13 +506,21 @@ class ScraperSession {
         let authUser = username;
         let authPass = password;
 
-        // If no credentials supplied, prompt user via live view
+        // Fallback: try locally saved credentials
+        if (!authUser || !authPass) {
+          const saved = loadSavedCreds(primaryUrl);
+          if (saved) { authUser = saved.username; authPass = saved.password; this.log('Using saved credentials.', 'info'); }
+        }
+
+        // Last resort: prompt user via live view
         if (!authUser || !authPass) {
           this.log('Login form detected — waiting for credentials...', 'warn');
           this.progress('Waiting for credentials', 28);
           const creds = await this.waitForCredentials();
-          if (creds) { authUser = creds.username; authPass = creds.password; }
-          else this.log('No credentials provided — scraping public page only.', 'warn');
+          if (creds) {
+            authUser = creds.username; authPass = creds.password;
+            saveCreds(primaryUrl, authUser, authPass); // save for next time
+          } else this.log('No credentials provided — scraping public page only.', 'warn');
         } else {
           this.log('Login form detected — authenticating automatically.', 'info');
         }
