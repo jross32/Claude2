@@ -32,9 +32,22 @@
         <button class="nav-item" data-panel="refactor">
           <span class="nav-icon">&#9998;</span> Refactor
         </button>
+        <button class="nav-item" data-panel="batch">
+          <span class="nav-icon">&#128295;</span> Batch
+        </button>
+        <button class="nav-item" data-panel="diff">
+          <span class="nav-icon">&#9870;</span> Diff
+        </button>
+        <button class="nav-item" data-panel="schedule">
+          <span class="nav-icon">&#128336;</span> Schedule
+        </button>
+        <button class="nav-item" data-panel="history">
+          <span class="nav-icon">&#128202;</span> History
+        </button>
       </nav>
       <div class="sidebar-footer">
-        <span class="version">v1.0.0</span>
+        <button class="btn-theme-toggle" id="btn-theme-toggle" title="Toggle light/dark theme">&#9728;</button>
+        <span class="version">v2.0.0</span>
       </div>
     </aside>
 
@@ -98,6 +111,10 @@
               <label class="checkbox-label">
                 <input type="checkbox" id="capture-assets" />
                 <span>Capture Asset URLs (images, fonts, scripts)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-scroll" />
+                <span>Auto-scroll (infinite load)</span>
               </label>
             </div>
           </div>
@@ -185,6 +202,8 @@
         <div class="panel-header">
           <h1>Scraped Results</h1>
           <div class="panel-actions">
+            <button class="btn-secondary" id="btn-split-view">&#9700; Split View</button>
+            <button class="btn-secondary" id="btn-download-har">&#8659; HAR</button>
             <button class="btn-secondary" id="btn-copy-json">&#128203; Copy JSON</button>
             <button class="btn-primary" id="btn-download-json">&#8659; Download JSON</button>
           </div>
@@ -196,21 +215,32 @@
         <div class="results-content" id="results-content" style="display:none">
           <!-- Summary cards -->
           <div class="summary-grid" id="summary-grid"></div>
-          <!-- Screenshot -->
-          <div class="screenshot-wrap" id="screenshot-wrap" style="display:none">
-            <h3>Page Screenshot</h3>
-            <img id="page-screenshot" class="page-screenshot" src="" alt="Page screenshot" />
+
+          <!-- Entities section -->
+          <div class="entities-section" id="entities-section" style="display:none">
+            <h3 class="section-heading">Extracted Entities</h3>
+            <div class="entities-grid" id="entities-grid"></div>
           </div>
-          <!-- JSON tree viewer -->
-          <div class="json-viewer-wrap">
-            <div class="json-toolbar">
-              <span>JSON Output</span>
-              <div>
-                <button class="btn-xs" id="btn-expand-all">Expand All</button>
-                <button class="btn-xs" id="btn-collapse-all">Collapse All</button>
-              </div>
+
+          <!-- Split view or normal -->
+          <div id="results-layout">
+            <!-- Screenshot -->
+            <div class="screenshot-wrap" id="screenshot-wrap" style="display:none">
+              <h3>Page Screenshot</h3>
+              <img id="page-screenshot" class="page-screenshot" src="" alt="Page screenshot" />
             </div>
-            <div class="json-viewer" id="json-viewer"></div>
+            <!-- JSON tree viewer -->
+            <div class="json-viewer-wrap">
+              <div class="json-toolbar">
+                <span>JSON Output</span>
+                <div class="json-toolbar-right">
+                  <input type="text" id="json-search" class="json-search-input" placeholder="Search JSON..." />
+                  <button class="btn-xs" id="btn-expand-all">Expand All</button>
+                  <button class="btn-xs" id="btn-collapse-all">Collapse All</button>
+                </div>
+              </div>
+              <div class="json-viewer" id="json-viewer"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -232,12 +262,34 @@
           <div class="api-tabs">
             <button class="api-tab active" data-tab="graphql">GraphQL <span class="badge" id="gql-count">0</span></button>
             <button class="api-tab" data-tab="rest">REST <span class="badge" id="rest-count">0</span></button>
+            <button class="api-tab" data-tab="websocket">WebSocket <span class="badge" id="ws-count">0</span></button>
+            <button class="api-tab" data-tab="schema">Schema</button>
           </div>
           <div class="api-tab-panel active" id="tab-graphql">
             <div class="call-list" id="graphql-list"></div>
           </div>
           <div class="api-tab-panel" id="tab-rest">
             <div class="call-list" id="rest-list"></div>
+          </div>
+          <div class="api-tab-panel" id="tab-websocket">
+            <div class="call-list" id="websocket-list"></div>
+          </div>
+          <div class="api-tab-panel" id="tab-schema">
+            <div class="schema-content" id="schema-content">
+              <button class="btn-primary" id="btn-infer-schema">&#9881; Infer Schema from GraphQL</button>
+              <div class="schema-output" id="schema-output" style="display:none">
+                <div class="schema-tabs">
+                  <button class="schema-tab active" data-stab="typescript">TypeScript</button>
+                  <button class="schema-tab" data-stab="jsonschema">JSON Schema</button>
+                </div>
+                <div class="schema-tab-panel active" id="stab-typescript">
+                  <pre class="code-pre" id="schema-typescript"></pre>
+                </div>
+                <div class="schema-tab-panel" id="stab-jsonschema">
+                  <pre class="code-pre" id="schema-jsonschema"></pre>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -272,7 +324,7 @@
       <section class="panel" id="panel-refactor">
         <div class="panel-header">
           <h1>Refactor / Rebuild</h1>
-          <p class="subtitle">Generate a clean HTML scaffold from the scraped data</p>
+          <p class="subtitle">Generate clean code from the scraped data</p>
         </div>
         <div class="refactor-empty" id="refactor-empty">
           <div class="empty-icon">&#9998;</div>
@@ -299,10 +351,140 @@
             <button class="btn-primary" id="btn-generate">&#9881; Generate Scaffold</button>
             <button class="btn-secondary" id="btn-download-scaffold">&#8659; Download HTML</button>
           </div>
+          <!-- Export buttons row -->
+          <div class="export-row">
+            <button class="btn-secondary" id="btn-gen-react">&#9881; Generate React</button>
+            <button class="btn-secondary" id="btn-gen-css">&#127912; Extract CSS</button>
+            <button class="btn-secondary" id="btn-gen-markdown">&#128196; Export Markdown</button>
+            <button class="btn-secondary" id="btn-gen-sitemap">&#127760; Generate Sitemap</button>
+          </div>
           <div class="code-editor-wrap">
-            <textarea class="code-editor" id="scaffold-editor" spellcheck="false" placeholder="Generated HTML will appear here..."></textarea>
+            <textarea class="code-editor" id="scaffold-editor" spellcheck="false" placeholder="Generated code will appear here..."></textarea>
           </div>
         </div>
+      </section>
+
+      <!-- ===== BATCH PANEL ===== -->
+      <section class="panel" id="panel-batch">
+        <div class="panel-header">
+          <h1>Batch Scraper</h1>
+          <p class="subtitle">Scrape multiple URLs at once</p>
+        </div>
+        <div class="form-card">
+          <div class="form-section">
+            <h2 class="section-title"><span class="section-icon">&#128295;</span> URLs</h2>
+            <div class="field">
+              <label for="batch-urls">Enter URLs (one per line)</label>
+              <textarea id="batch-urls" class="code-editor" style="min-height:150px" placeholder="https://example.com&#10;https://another.com&#10;https://third.com"></textarea>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="batch-depth">Scrape Depth</label>
+                <input type="number" id="batch-depth" value="1" min="1" max="3" />
+              </div>
+            </div>
+            <div class="checkboxes">
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-graphql" checked />
+                <span>Capture GraphQL</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-rest" checked />
+                <span>Capture REST</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" id="btn-batch-scrape">&#9654; Start Batch Scrape</button>
+          </div>
+        </div>
+        <div class="batch-progress" id="batch-progress" style="display:none">
+          <div class="batch-progress-list" id="batch-progress-list"></div>
+        </div>
+        <div class="batch-results" id="batch-results" style="display:none">
+          <div class="panel-actions" style="margin-bottom:12px">
+            <button class="btn-primary" id="btn-download-batch">&#8659; Download All Results</button>
+          </div>
+          <div id="batch-results-content"></div>
+        </div>
+      </section>
+
+      <!-- ===== DIFF PANEL ===== -->
+      <section class="panel" id="panel-diff">
+        <div class="panel-header">
+          <h1>Diff Scrapes</h1>
+          <p class="subtitle">Compare two scrape results</p>
+        </div>
+        <div class="form-card">
+          <div class="form-section">
+            <h2 class="section-title"><span class="section-icon">&#9870;</span> Select Results to Compare</h2>
+            <div class="field-row">
+              <div class="field">
+                <label for="diff-a">Result A</label>
+                <select id="diff-a">
+                  <option value="">-- Select from history --</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="diff-b">Result B</label>
+                <select id="diff-b">
+                  <option value="">-- Select from history --</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" id="btn-run-diff">&#9870; Compare</button>
+          </div>
+        </div>
+        <div class="diff-results" id="diff-results" style="display:none"></div>
+      </section>
+
+      <!-- ===== SCHEDULE PANEL ===== -->
+      <section class="panel" id="panel-schedule">
+        <div class="panel-header">
+          <h1>Scheduled Scraping</h1>
+          <p class="subtitle">Run scrapes automatically on a schedule</p>
+        </div>
+        <div class="form-card">
+          <div class="form-section">
+            <h2 class="section-title"><span class="section-icon">&#128336;</span> New Schedule</h2>
+            <div class="field-row">
+              <div class="field">
+                <label for="sched-url">URL to scrape</label>
+                <input type="url" id="sched-url" placeholder="https://example.com" />
+              </div>
+              <div class="field">
+                <label for="sched-cron">Cron Expression
+                  <span class="hint">e.g. "*/30 * * * *" = every 30 min</span>
+                </label>
+                <input type="text" id="sched-cron" placeholder="0 * * * *" />
+              </div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" id="btn-create-schedule">&#43; Create Schedule</button>
+            <button class="btn-secondary" id="btn-refresh-schedules">&#8635; Refresh</button>
+          </div>
+        </div>
+        <div class="schedule-list" id="schedule-list">
+          <p class="empty-hint">No schedules yet.</p>
+        </div>
+      </section>
+
+      <!-- ===== HISTORY PANEL ===== -->
+      <section class="panel" id="panel-history">
+        <div class="panel-header">
+          <h1>Scrape History</h1>
+          <div class="panel-actions">
+            <button class="btn-danger" id="btn-clear-history">&#128465; Clear All</button>
+          </div>
+        </div>
+        <div class="history-empty" id="history-empty">
+          <div class="empty-icon">&#128202;</div>
+          <p>No history yet. Complete a scrape to see it here.</p>
+        </div>
+        <div class="history-list" id="history-list" style="display:none"></div>
       </section>
 
     </main>

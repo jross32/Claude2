@@ -1,6 +1,8 @@
 /**
- * Extracts all meaningful data from a Puppeteer page and formats it as structured JSON.
+ * Extracts all meaningful data from a Playwright page and formats it as structured JSON.
  */
+const { extractEntities } = require('./entity-extractor');
+
 async function extractPageData(page, url) {
   const data = await page.evaluate((pageUrl) => {
     const origin = new URL(pageUrl).origin;
@@ -240,10 +242,17 @@ async function extractPageData(page, url) {
 
   // Take screenshot
   try {
-    const screenshot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 70 });
-    data.screenshot = `data:image/jpeg;base64,${screenshot}`;
+    const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 70 });
+    data.screenshot = `data:image/jpeg;base64,${screenshotBuf.toString('base64')}`;
   } catch {
     data.screenshot = null;
+  }
+
+  // Extract entities from full text
+  try {
+    data.entities = extractEntities(data.fullText || '');
+  } catch {
+    data.entities = { emails: [], phones: [], urls: [], socials: {}, addresses: [] };
   }
 
   return data;
