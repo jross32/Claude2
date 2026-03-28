@@ -1,256 +1,611 @@
 /**
- * Extracts all meaningful data from a Playwright page and formats it as structured JSON.
+ * Extracts EVERYTHING from a Playwright page — the most comprehensive
+ * site capture possible without native browser internals.
  */
 const { extractEntities } = require('./entity-extractor');
 
 async function extractPageData(page, url) {
+  // ── 1. Core DOM + content extraction ──────────────────────────────────────
   const data = await page.evaluate((pageUrl) => {
     const origin = new URL(pageUrl).origin;
 
-    function absoluteUrl(src) {
+    function abs(src) {
       if (!src) return null;
-      try {
-        return new URL(src, pageUrl).href;
-      } catch {
-        return src;
-      }
+      try { return new URL(src, pageUrl).href; } catch { return src; }
     }
 
-    function getComputedStyles(el) {
-      try {
-        const cs = window.getComputedStyle(el);
-        return {
-          color: cs.color,
-          backgroundColor: cs.backgroundColor,
-          fontSize: cs.fontSize,
-          fontFamily: cs.fontFamily,
-          fontWeight: cs.fontWeight,
-        };
-      } catch {
-        return null;
-      }
-    }
-
-    // --- META ---
+    // ── META ──
     const meta = {
       title: document.title,
       url: pageUrl,
       charset: document.characterSet,
       lang: document.documentElement.lang,
+      dir: document.documentElement.dir,
       viewport: document.querySelector('meta[name="viewport"]')?.content,
       description: document.querySelector('meta[name="description"]')?.content,
       keywords: document.querySelector('meta[name="keywords"]')?.content,
       author: document.querySelector('meta[name="author"]')?.content,
       robots: document.querySelector('meta[name="robots"]')?.content,
+      themeColor: document.querySelector('meta[name="theme-color"]')?.content,
       canonical: document.querySelector('link[rel="canonical"]')?.href,
-      favicon:
-        document.querySelector('link[rel="icon"]')?.href ||
-        document.querySelector('link[rel="shortcut icon"]')?.href,
+      favicon: document.querySelector('link[rel="icon"]')?.href ||
+               document.querySelector('link[rel="shortcut icon"]')?.href,
+      appleTouchIcon: document.querySelector('link[rel="apple-touch-icon"]')?.href,
       ogTags: {},
       twitterTags: {},
       jsonLD: [],
+      allMeta: [],
     };
-
-    document.querySelectorAll('meta[property^="og:"]').forEach((el) => {
-      meta.ogTags[el.getAttribute('property')] = el.content;
+    document.querySelectorAll('meta').forEach(el => {
+      const name = el.name || el.getAttribute('property') || el.httpEquiv;
+      if (name) meta.allMeta.push({ name, content: el.content });
+      if (el.getAttribute('property')?.startsWith('og:')) meta.ogTags[el.getAttribute('property')] = el.content;
+      if (el.name?.startsWith('twitter:')) meta.twitterTags[el.name] = el.content;
     });
-    document.querySelectorAll('meta[name^="twitter:"]').forEach((el) => {
-      meta.twitterTags[el.getAttribute('name')] = el.content;
-    });
-    document.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
+    document.querySelectorAll('script[type="application/ld+json"]').forEach(el => {
       try { meta.jsonLD.push(JSON.parse(el.textContent)); } catch {}
     });
 
-    // --- HEADINGS ---
+    // ── HEADINGS ──
     const headings = {};
     for (let i = 1; i <= 6; i++) {
-      headings[`h${i}`] = Array.from(document.querySelectorAll(`h${i}`)).map((el) => ({
+      headings[`h${i}`] = Array.from(document.querySelectorAll(`h${i}`)).map(el => ({
         text: el.innerText.trim(),
         id: el.id || null,
         class: el.className || null,
+        html: el.innerHTML.trim().substring(0, 500),
       }));
     }
 
-    // --- PARAGRAPHS & TEXT BLOCKS ---
-    const textBlocks = Array.from(document.querySelectorAll('p, article, section, main'))
-      .filter((el) => el.innerText && el.innerText.trim().length > 20)
-      .slice(0, 200)
-      .map((el) => ({
+    // ── FULL TEXT ──
+    const fullText = document.body?.innerText?.replace(/\s+/g, ' ').trim().substring(0, 100000) || '';
+
+    // ── TEXT BLOCKS ──
+    const textBlocks = Array.from(document.querySelectorAll('p, article, section, blockquote, li, td, th, caption, figcaption, label, button, a'))
+      .filter(el => el.innerText?.trim().length > 5)
+      .slice(0, 500)
+      .map(el => ({
         tag: el.tagName.toLowerCase(),
-        text: el.innerText.trim().substring(0, 2000),
+        text: el.innerText.trim().substring(0, 1000),
         id: el.id || null,
-        class: el.className || null,
+        class: el.className?.toString().substring(0, 100) || null,
+        href: el.tagName === 'A' ? el.href : null,
       }));
 
-    // --- LINKS ---
-    const links = Array.from(document.querySelectorAll('a[href]')).map((el) => {
-      const href = el.href;
+    // ── ALL LINKS ──
+    const links = Array.from(document.querySelectorAll('a[href]')).map(el => {
       let isInternal = false;
-      try {
-        isInternal = new URL(href).origin === origin;
-      } catch {}
+      try { isInternal = new URL(el.href).origin === origin; } catch {}
       return {
-        text: el.innerText.trim() || el.title || null,
-        href,
+        text: el.innerText.trim() || el.title || el.getAttribute('aria-label') || null,
+        href: el.href,
         isInternal,
         rel: el.rel || null,
         target: el.target || null,
+        download: el.download || null,
+        type: el.type || null,
       };
     });
 
-    // --- IMAGES ---
-    const images = Array.from(document.querySelectorAll('img')).map((el) => ({
-      src: absoluteUrl(el.getAttribute('src')),
-      alt: el.alt || null,
-      title: el.title || null,
-      width: el.naturalWidth || el.width || null,
-      height: el.naturalHeight || el.height || null,
-      loading: el.loading || null,
-      class: el.className || null,
+    // ── ALL IMAGES (deep) ──
+    const images = Array.from(document.querySelectorAll('img, [style*="background-image"], picture source, [data-src], [data-lazy]')).map(el => {
+      const tag = el.tagName.toLowerCase();
+      let src = null;
+      if (tag === 'img') {
+        src = abs(el.currentSrc || el.src || el.getAttribute('data-src') || el.getAttribute('data-lazy'));
+      } else if (tag === 'source') {
+        src = abs(el.srcset?.split(' ')[0] || el.src);
+      } else {
+        const bg = window.getComputedStyle(el).backgroundImage;
+        const m = bg.match(/url\(["']?([^"')]+)["']?\)/);
+        if (m) src = abs(m[1]);
+      }
+      return {
+        src,
+        alt: el.alt || null,
+        title: el.title || null,
+        width: el.naturalWidth || el.width || parseInt(el.getAttribute('width')) || null,
+        height: el.naturalHeight || el.height || parseInt(el.getAttribute('height')) || null,
+        loading: el.loading || null,
+        srcset: el.srcset || el.getAttribute('srcset') || null,
+        dataSrc: el.getAttribute('data-src') || el.getAttribute('data-lazy') || null,
+        class: el.className?.toString().substring(0, 100) || null,
+        id: el.id || null,
+        isBackgroundImage: !['img', 'source'].includes(tag),
+        tag,
+      };
+    }).filter(img => img.src);
+
+    // ── SVGs ──
+    const svgs = Array.from(document.querySelectorAll('svg')).slice(0, 50).map(el => ({
+      outerHTML: el.outerHTML.substring(0, 5000),
+      width: el.getAttribute('width'),
+      height: el.getAttribute('height'),
+      viewBox: el.getAttribute('viewBox'),
+      id: el.id || null,
+      class: el.className?.baseVal || null,
     }));
 
-    // --- VIDEOS ---
-    const videos = Array.from(document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]')).map(
-      (el) => ({
-        tag: el.tagName.toLowerCase(),
-        src: absoluteUrl(el.getAttribute('src') || el.currentSrc),
-        type: el.type || null,
-        autoplay: el.autoplay || false,
-      })
-    );
+    // ── VIDEOS & AUDIO ──
+    const media = Array.from(document.querySelectorAll('video, audio, iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"]')).map(el => ({
+      tag: el.tagName.toLowerCase(),
+      src: abs(el.src || el.currentSrc || el.getAttribute('src')),
+      poster: el.poster ? abs(el.poster) : null,
+      autoplay: el.autoplay || false,
+      loop: el.loop || false,
+      muted: el.muted || false,
+      controls: el.controls || false,
+      duration: el.duration || null,
+      type: el.type || null,
+      sources: Array.from(el.querySelectorAll('source')).map(s => ({ src: abs(s.src), type: s.type })),
+    }));
 
-    // --- NAVIGATION ---
-    const navigation = Array.from(document.querySelectorAll('nav')).map((nav) => ({
+    // ── FONTS ──
+    const fontFaces = [];
+    try {
+      Array.from(document.fonts).forEach(f => {
+        fontFaces.push({ family: f.family, style: f.style, weight: f.weight, status: f.status });
+      });
+    } catch {}
+
+    // ── NAVIGATION ──
+    const navigation = Array.from(document.querySelectorAll('nav, [role="navigation"]')).map(nav => ({
       id: nav.id || null,
-      class: nav.className || null,
-      items: Array.from(nav.querySelectorAll('a')).map((a) => ({
+      class: nav.className?.toString().substring(0, 100) || null,
+      ariaLabel: nav.getAttribute('aria-label') || null,
+      items: Array.from(nav.querySelectorAll('a')).map(a => ({
         text: a.innerText.trim(),
         href: a.href,
+        active: a.classList.contains('active') || a.getAttribute('aria-current') === 'page',
       })),
     }));
 
-    // --- FORMS ---
-    const forms = Array.from(document.querySelectorAll('form')).map((form) => ({
+    // ── FORMS (deep) ──
+    const forms = Array.from(document.querySelectorAll('form')).map(form => ({
       id: form.id || null,
+      name: form.name || null,
       action: form.action || null,
       method: form.method || 'get',
-      fields: Array.from(form.querySelectorAll('input, select, textarea, button')).map((el) => ({
+      enctype: form.enctype || null,
+      novalidate: form.noValidate || false,
+      fields: Array.from(form.querySelectorAll('input, select, textarea, button')).map(el => ({
         tag: el.tagName.toLowerCase(),
         type: el.type || null,
         name: el.name || null,
         id: el.id || null,
         placeholder: el.placeholder || null,
+        label: document.querySelector(`label[for="${el.id}"]`)?.innerText?.trim() || null,
         required: el.required || false,
-        value: el.type === 'password' ? '[REDACTED]' : (el.type !== 'hidden' ? el.value || null : null),
+        disabled: el.disabled || false,
+        readonly: el.readOnly || false,
+        pattern: el.pattern || null,
+        min: el.min || null,
+        max: el.max || null,
+        maxlength: el.maxLength > 0 ? el.maxLength : null,
+        autocomplete: el.autocomplete || null,
+        options: el.tagName === 'SELECT'
+          ? Array.from(el.options).map(o => ({ value: o.value, text: o.text, selected: o.selected }))
+          : undefined,
+        value: el.type === 'password' ? '[REDACTED]' : (el.type === 'hidden' ? null : (el.value || null)),
       })),
     }));
 
-    // --- TABLES ---
-    const tables = Array.from(document.querySelectorAll('table')).slice(0, 20).map((table) => {
-      const headers = Array.from(table.querySelectorAll('th')).map((th) => th.innerText.trim());
-      const rows = Array.from(table.querySelectorAll('tr')).map((tr) =>
-        Array.from(tr.querySelectorAll('td')).map((td) => td.innerText.trim())
-      ).filter((r) => r.length > 0);
-      return { headers, rows };
-    });
-
-    // --- LISTS ---
-    const lists = Array.from(document.querySelectorAll('ul, ol')).slice(0, 30).map((list) => ({
-      type: list.tagName.toLowerCase(),
-      items: Array.from(list.querySelectorAll('li')).map((li) => li.innerText.trim()).filter(Boolean),
+    // ── TABLES ──
+    const tables = Array.from(document.querySelectorAll('table')).slice(0, 30).map(table => ({
+      id: table.id || null,
+      caption: table.querySelector('caption')?.innerText.trim() || null,
+      headers: Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim()),
+      rows: Array.from(table.querySelectorAll('tr'))
+        .map(tr => Array.from(tr.querySelectorAll('td, th')).map(td => td.innerText.trim()))
+        .filter(r => r.length > 0),
+      rowCount: table.rows.length,
+      colCount: table.rows[0]?.cells.length || 0,
     }));
 
-    // --- STYLES (CSS variables, theme colors) ---
+    // ── LISTS ──
+    const lists = Array.from(document.querySelectorAll('ul, ol, dl')).slice(0, 50).map(list => ({
+      type: list.tagName.toLowerCase(),
+      items: Array.from(list.querySelectorAll('li, dt, dd')).map(li => li.innerText.trim()).filter(Boolean).slice(0, 100),
+    }));
+
+    // ── BUTTONS ──
+    const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]')).map(el => ({
+      text: el.innerText?.trim() || el.value || el.getAttribute('aria-label') || null,
+      type: el.type || null,
+      id: el.id || null,
+      class: el.className?.toString().substring(0, 100) || null,
+      disabled: el.disabled || false,
+      dataAttrs: Object.fromEntries(Array.from(el.attributes).filter(a => a.name.startsWith('data-')).map(a => [a.name, a.value])),
+    }));
+
+    // ── IFRAMES ──
+    const iframes = Array.from(document.querySelectorAll('iframe')).map(el => ({
+      src: abs(el.src),
+      name: el.name || null,
+      id: el.id || null,
+      title: el.title || null,
+      width: el.width || null,
+      height: el.height || null,
+      sandbox: el.sandbox?.toString() || null,
+      allow: el.allow || null,
+    }));
+
+    // ── SCRIPTS ──
+    const scripts = Array.from(document.querySelectorAll('script')).map(el => ({
+      src: el.src ? abs(el.src) : null,
+      type: el.type || 'text/javascript',
+      async: el.async || false,
+      defer: el.defer || false,
+      module: el.type === 'module',
+      inline: !el.src,
+      inlineContent: !el.src ? el.textContent?.trim().substring(0, 2000) : null,
+      id: el.id || null,
+    }));
+
+    // ── STYLESHEETS ──
+    const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(el => ({
+      href: abs(el.href),
+      media: el.media || null,
+      crossorigin: el.crossOrigin || null,
+    }));
+
+    // ── INLINE STYLES ──
+    const inlineStyles = Array.from(document.querySelectorAll('[style]')).slice(0, 100).map(el => ({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: el.className?.toString().substring(0, 60) || null,
+      style: el.getAttribute('style'),
+    }));
+
+    // ── CSS VARIABLES (design tokens) ──
     const cssVariables = {};
     try {
       const rootStyles = window.getComputedStyle(document.documentElement);
-      const allProps = Array.from(document.styleSheets)
-        .flatMap((sheet) => {
-          try {
-            return Array.from(sheet.cssRules);
-          } catch {
-            return [];
-          }
-        })
-        .filter((rule) => rule.selectorText === ':root')
-        .flatMap((rule) => Array.from(rule.style))
-        .filter((prop) => prop.startsWith('--'));
-      allProps.forEach((prop) => {
-        cssVariables[prop] = rootStyles.getPropertyValue(prop).trim();
+      Array.from(document.styleSheets).forEach(sheet => {
+        try {
+          Array.from(sheet.cssRules).forEach(rule => {
+            if (rule.selectorText === ':root') {
+              Array.from(rule.style).forEach(prop => {
+                if (prop.startsWith('--')) {
+                  cssVariables[prop] = rootStyles.getPropertyValue(prop).trim();
+                }
+              });
+            }
+          });
+        } catch {}
       });
     } catch {}
 
-    // --- STYLESHEETS ---
-    const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map((el) => ({
-      href: el.href,
-      media: el.media || null,
+    // ── COLORS (unique computed colors on page) ──
+    const colorSet = new Set();
+    Array.from(document.querySelectorAll('*')).slice(0, 300).forEach(el => {
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs.color && cs.color !== 'rgba(0, 0, 0, 0)') colorSet.add(cs.color);
+        if (cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') colorSet.add(cs.backgroundColor);
+      } catch {}
+    });
+    const colors = Array.from(colorSet).slice(0, 100);
+
+    // ── TYPOGRAPHY ──
+    const fontSet = new Set();
+    Array.from(document.querySelectorAll('body, h1, h2, h3, p, a, button, input')).forEach(el => {
+      try {
+        const cs = window.getComputedStyle(el);
+        fontSet.add(JSON.stringify({
+          family: cs.fontFamily,
+          size: cs.fontSize,
+          weight: cs.fontWeight,
+          lineHeight: cs.lineHeight,
+          element: el.tagName.toLowerCase(),
+        }));
+      } catch {}
+    });
+    const typography = Array.from(fontSet).map(s => { try { return JSON.parse(s); } catch { return null; } }).filter(Boolean);
+
+    // ── CSS ANIMATIONS / KEYFRAMES ──
+    const animations = [];
+    try {
+      Array.from(document.styleSheets).forEach(sheet => {
+        try {
+          Array.from(sheet.cssRules).forEach(rule => {
+            if (rule instanceof CSSKeyframesRule) {
+              animations.push({ name: rule.name, cssText: rule.cssText.substring(0, 2000) });
+            }
+          });
+        } catch {}
+      });
+    } catch {}
+
+    // ── MEDIA QUERIES ──
+    const mediaQueries = [];
+    try {
+      Array.from(document.styleSheets).forEach(sheet => {
+        try {
+          Array.from(sheet.cssRules).forEach(rule => {
+            if (rule instanceof CSSMediaRule) {
+              mediaQueries.push({
+                conditionText: rule.conditionText || rule.media?.mediaText,
+                rules: Array.from(rule.cssRules).slice(0, 5).map(r => r.selectorText).filter(Boolean),
+              });
+            }
+          });
+        } catch {}
+      });
+    } catch {}
+
+    // ── ACCESSIBILITY (ARIA) ──
+    const ariaElements = Array.from(document.querySelectorAll('[role], [aria-label], [aria-labelledby], [aria-describedby], [aria-hidden], [tabindex]')).slice(0, 200).map(el => ({
+      tag: el.tagName.toLowerCase(),
+      role: el.getAttribute('role'),
+      ariaLabel: el.getAttribute('aria-label'),
+      ariaLabelledby: el.getAttribute('aria-labelledby'),
+      ariaDescribedby: el.getAttribute('aria-describedby'),
+      ariaHidden: el.getAttribute('aria-hidden'),
+      tabindex: el.getAttribute('tabindex'),
+      text: el.innerText?.trim().substring(0, 100) || null,
     }));
 
-    // --- SCRIPTS ---
-    const scripts = Array.from(document.querySelectorAll('script[src]')).map((el) => ({
-      src: el.src,
-      type: el.type || null,
-      async: el.async || false,
-      defer: el.defer || false,
-    }));
-
-    // --- STRUCTURED LAYOUT ---
+    // ── LAYOUT TREE (deep DOM snapshot) ──
     function getLayoutTree(el, depth) {
-      if (depth <= 0 || !el) return null;
-      const tag = el.tagName ? el.tagName.toLowerCase() : null;
-      if (!tag) return null;
-      const children = Array.from(el.children)
-        .slice(0, 20)
-        .map((child) => getLayoutTree(child, depth - 1))
-        .filter(Boolean);
+      if (depth <= 0 || !el || !el.tagName) return null;
+      const cs = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      const children = Array.from(el.children).slice(0, 30)
+        .map(child => getLayoutTree(child, depth - 1)).filter(Boolean);
       return {
-        tag,
+        tag: el.tagName.toLowerCase(),
         id: el.id || null,
-        class: el.className ? el.className.toString().trim().substring(0, 100) : null,
-        text: (el.children.length === 0 && el.innerText) ? el.innerText.trim().substring(0, 200) : null,
+        class: el.className?.toString().trim().substring(0, 150) || null,
+        text: el.children.length === 0 && el.innerText ? el.innerText.trim().substring(0, 300) : null,
+        rect: { top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width), height: Math.round(rect.height) },
+        display: cs.display,
+        position: cs.position !== 'static' ? cs.position : null,
+        zIndex: cs.zIndex !== 'auto' ? cs.zIndex : null,
+        visible: cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0',
+        dataAttrs: Object.fromEntries(Array.from(el.attributes).filter(a => a.name.startsWith('data-')).map(a => [a.name, a.value])),
+        ariaRole: el.getAttribute('role') || null,
         children: children.length > 0 ? children : undefined,
       };
     }
+    const layoutTree = getLayoutTree(document.body, 8);
 
-    const layoutTree = getLayoutTree(document.body, 5);
+    // ── LOCAL/SESSION STORAGE ──
+    const localStorage_ = {};
+    const sessionStorage_ = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        const v = localStorage.getItem(k);
+        localStorage_[k] = v?.substring(0, 500);
+      }
+    } catch {}
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        const v = sessionStorage.getItem(k);
+        sessionStorage_[k] = v?.substring(0, 500);
+      }
+    } catch {}
 
-    // --- FULL TEXT CONTENT ---
-    const fullText = document.body.innerText.replace(/\s+/g, ' ').trim().substring(0, 50000);
+    // ── TECHNOLOGY FINGERPRINTING ──
+    const tech = {
+      frameworks: [],
+      analytics: [],
+      cms: [],
+      cdn: [],
+      other: [],
+    };
+    const w = window;
+    const bodyHTML = document.documentElement.innerHTML;
 
-    // --- HTML SOURCE ---
-    const htmlSource = document.documentElement.outerHTML.substring(0, 200000);
+    // Frontend frameworks
+    if (w.React || w.__REACT_DEVTOOLS_GLOBAL_HOOK__ || document.querySelector('[data-reactroot], [data-reactid]')) tech.frameworks.push('React');
+    if (w.Vue || w.__vue_app__ || document.querySelector('[data-v-app]')) tech.frameworks.push('Vue.js');
+    if (w.angular || w.ng || document.querySelector('[ng-version], [_nghost]')) tech.frameworks.push('Angular');
+    if (w.__NUXT__) tech.frameworks.push('Nuxt.js');
+    if (w.__NEXT_DATA__ || document.querySelector('#__NEXT_DATA__')) tech.frameworks.push('Next.js');
+    if (w.Gatsby || document.querySelector('gatsby-announcer')) tech.frameworks.push('Gatsby');
+    if (w.Ember) tech.frameworks.push('Ember.js');
+    if (w.Backbone) tech.frameworks.push('Backbone.js');
+    if (w.Alpine) tech.frameworks.push('Alpine.js');
+    if (w.htmx) tech.frameworks.push('HTMX');
+    if (w.Svelte || bodyHTML.includes('svelte')) tech.frameworks.push('Svelte');
+    if (w.jQuery || w.$?.fn?.jquery) tech.frameworks.push(`jQuery ${w.jQuery?.fn?.jquery || ''}`);
+    if (w.Stimulus) tech.frameworks.push('Stimulus');
+    if (w.__REMIX_ROUTER__) tech.frameworks.push('Remix');
+
+    // Analytics
+    if (w.ga || w.gtag || w.GoogleAnalyticsObject || bodyHTML.includes('google-analytics')) tech.analytics.push('Google Analytics');
+    if (w.fbq || w._fbq) tech.analytics.push('Facebook Pixel');
+    if (w.mixpanel) tech.analytics.push('Mixpanel');
+    if (w.amplitude) tech.analytics.push('Amplitude');
+    if (w.heap) tech.analytics.push('Heap');
+    if (w.posthog) tech.analytics.push('PostHog');
+    if (w.dataLayer) tech.analytics.push('Google Tag Manager');
+    if (w._hsq || bodyHTML.includes('hubspot')) tech.analytics.push('HubSpot');
+    if (w.Intercom) tech.analytics.push('Intercom');
+    if (w.Hotjar || w.hj) tech.analytics.push('Hotjar');
+    if (w.FS || w._fs_namespace) tech.analytics.push('FullStory');
+    if (w.Segment || w.analytics?.user) tech.analytics.push('Segment');
+
+    // CMS
+    if (document.querySelector('meta[name="generator"]')) {
+      const gen = document.querySelector('meta[name="generator"]').content;
+      tech.cms.push(gen);
+    }
+    if (bodyHTML.includes('wp-content') || bodyHTML.includes('wp-includes')) tech.cms.push('WordPress');
+    if (bodyHTML.includes('Shopify.shop') || w.Shopify) tech.cms.push('Shopify');
+    if (w.__drupalSettings || bodyHTML.includes('drupal')) tech.cms.push('Drupal');
+    if (bodyHTML.includes('joomla')) tech.cms.push('Joomla');
+
+    // CDNs
+    if (bodyHTML.includes('cloudflare')) tech.cdn.push('Cloudflare');
+    if (bodyHTML.includes('cdn.shopify')) tech.cdn.push('Shopify CDN');
+    if (bodyHTML.includes('cdnjs')) tech.cdn.push('cdnjs');
+    if (bodyHTML.includes('jsdelivr')) tech.cdn.push('jsDelivr');
+    if (bodyHTML.includes('unpkg')) tech.cdn.push('unpkg');
+    if (bodyHTML.includes('bootstrapcdn') || w.bootstrap) { tech.other.push('Bootstrap'); }
+    if (bodyHTML.includes('tailwind') || bodyHTML.includes('tw-')) tech.other.push('Tailwind CSS');
+
+    // ── DOM STATS ──
+    const domStats = {
+      totalElements: document.querySelectorAll('*').length,
+      totalTextNodes: (() => {
+        let count = 0;
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) count++;
+        return count;
+      })(),
+      totalImages: document.images.length,
+      totalLinks: document.links.length,
+      totalForms: document.forms.length,
+      totalScripts: document.scripts.length,
+      totalStyleSheets: document.styleSheets.length,
+      totalIframes: document.querySelectorAll('iframe').length,
+      totalInputs: document.querySelectorAll('input').length,
+      totalButtons: document.querySelectorAll('button').length,
+      totalTables: document.querySelectorAll('table').length,
+      depth: (() => {
+        let maxDepth = 0;
+        const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_ELEMENT);
+        while (walker.nextNode()) {
+          let depth = 0, node = walker.currentNode;
+          while (node.parentNode) { depth++; node = node.parentNode; }
+          if (depth > maxDepth) maxDepth = depth;
+        }
+        return maxDepth;
+      })(),
+    };
+
+    // ── HTML SOURCE ──
+    const htmlSource = document.documentElement.outerHTML.substring(0, 500000);
+
+    // ── HEAD HTML ──
+    const headHTML = document.head.outerHTML;
+
+    // ── CUSTOM ELEMENTS ──
+    const customElements_ = Array.from(document.querySelectorAll('*'))
+      .filter(el => el.tagName.includes('-'))
+      .map(el => el.tagName.toLowerCase())
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .slice(0, 50);
 
     return {
       meta,
       headings,
+      fullText,
       textBlocks,
       links,
       images,
-      videos,
+      svgs,
+      media,
+      fontFaces,
       navigation,
       forms,
+      buttons,
       tables,
       lists,
-      cssVariables,
-      stylesheets,
+      iframes,
       scripts,
+      stylesheets,
+      inlineStyles,
+      cssVariables,
+      colors,
+      typography,
+      animations,
+      mediaQueries,
+      ariaElements,
       layoutTree,
-      fullText,
+      localStorage: localStorage_,
+      sessionStorage: sessionStorage_,
+      tech,
+      domStats,
+      headHTML,
       htmlSource,
+      customElements: customElements_,
     };
   }, url);
 
-  // Take screenshot
+  // ── 2. Screenshot (full page) ──────────────────────────────────────────────
   try {
-    const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 70 });
+    const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 80, fullPage: true });
     data.screenshot = `data:image/jpeg;base64,${screenshotBuf.toString('base64')}`;
   } catch {
     data.screenshot = null;
   }
 
-  // Extract entities from full text
+  // ── 3. Viewport screenshot ─────────────────────────────────────────────────
+  try {
+    const vpBuf = await page.screenshot({ type: 'jpeg', quality: 80, fullPage: false });
+    data.viewportScreenshot = `data:image/jpeg;base64,${vpBuf.toString('base64')}`;
+  } catch {
+    data.viewportScreenshot = null;
+  }
+
+  // ── 4. Fetch all stylesheet text ───────────────────────────────────────────
+  data.stylesheetContents = [];
+  for (const ss of (data.stylesheets || []).slice(0, 10)) {
+    try {
+      const resp = await page.evaluate(async (href) => {
+        try {
+          const r = await fetch(href);
+          return r.ok ? (await r.text()).substring(0, 50000) : null;
+        } catch { return null; }
+      }, ss.href);
+      if (resp) data.stylesheetContents.push({ href: ss.href, content: resp });
+    } catch {}
+  }
+
+  // ── 5. Performance metrics ─────────────────────────────────────────────────
+  try {
+    data.performance = await page.evaluate(() => {
+      const nav = performance.getEntriesByType('navigation')[0];
+      const paint = performance.getEntriesByType('paint');
+      const resources = performance.getEntriesByType('resource').slice(0, 100);
+      return {
+        navigation: nav ? {
+          domContentLoaded: Math.round(nav.domContentLoadedEventEnd - nav.startTime),
+          loadComplete: Math.round(nav.loadEventEnd - nav.startTime),
+          ttfb: Math.round(nav.responseStart - nav.requestStart),
+          domInteractive: Math.round(nav.domInteractive - nav.startTime),
+          transferSize: nav.transferSize,
+          encodedBodySize: nav.encodedBodySize,
+          decodedBodySize: nav.decodedBodySize,
+        } : null,
+        paint: Object.fromEntries(paint.map(p => [p.name, Math.round(p.startTime)])),
+        resources: resources.map(r => ({
+          name: r.name.substring(0, 200),
+          type: r.initiatorType,
+          duration: Math.round(r.duration),
+          transferSize: r.transferSize,
+          startTime: Math.round(r.startTime),
+        })),
+        memory: performance.memory ? {
+          usedJSHeapSize: performance.memory.usedJSHeapSize,
+          totalJSHeapSize: performance.memory.totalJSHeapSize,
+        } : null,
+      };
+    });
+  } catch {
+    data.performance = null;
+  }
+
+  // ── 6. Console logs (captured via page events before this) ────────────────
+  // Note: these are injected by scraper.js via page.on('console', ...)
+  // data.consoleLogs is filled by scraper.js
+
+  // ── 7. Entity extraction ───────────────────────────────────────────────────
   try {
     data.entities = extractEntities(data.fullText || '');
+    // Also scan all link hrefs, image srcs, script srcs for extra emails/phones
+    const allText = [
+      ...(data.links || []).map(l => l.href),
+      ...(data.textBlocks || []).map(t => t.text),
+    ].join(' ');
+    const extraEntities = extractEntities(allText);
+    data.entities.emails = [...new Set([...data.entities.emails, ...extraEntities.emails])];
+    data.entities.phones = [...new Set([...data.entities.phones, ...extraEntities.phones])];
   } catch {
     data.entities = { emails: [], phones: [], urls: [], socials: {}, addresses: [] };
   }

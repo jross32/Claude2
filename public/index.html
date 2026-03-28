@@ -109,12 +109,20 @@
                 <span>Capture REST API Calls</span>
               </label>
               <label class="checkbox-label">
-                <input type="checkbox" id="capture-assets" />
+                <input type="checkbox" id="capture-assets" checked />
                 <span>Capture Asset URLs (images, fonts, scripts)</span>
               </label>
               <label class="checkbox-label">
-                <input type="checkbox" id="auto-scroll" />
-                <span>Auto-scroll (infinite load)</span>
+                <input type="checkbox" id="capture-all-requests" />
+                <span>Capture ALL network requests (full HAR)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="capture-images" />
+                <span>Download images as base64 (first 30)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-scroll" checked />
+                <span>Auto-scroll (trigger lazy loads)</span>
               </label>
             </div>
           </div>
@@ -220,6 +228,42 @@
           <div class="entities-section" id="entities-section" style="display:none">
             <h3 class="section-heading">Extracted Entities</h3>
             <div class="entities-grid" id="entities-grid"></div>
+          </div>
+
+          <!-- Tech fingerprint -->
+          <div class="tech-section" id="tech-section" style="display:none">
+            <h3 class="section-heading">&#128187; Technology Stack</h3>
+            <div class="tech-grid" id="tech-grid"></div>
+          </div>
+
+          <!-- Security headers -->
+          <div class="security-section" id="security-section" style="display:none">
+            <h3 class="section-heading">&#128274; Security Headers</h3>
+            <div class="security-table-wrap" id="security-table-wrap"></div>
+          </div>
+
+          <!-- Cookies -->
+          <div class="cookies-section" id="cookies-section" style="display:none">
+            <h3 class="section-heading">&#127850; Cookies <span class="badge" id="cookies-badge">0</span></h3>
+            <div class="cookies-table-wrap" id="cookies-table-wrap"></div>
+          </div>
+
+          <!-- Performance -->
+          <div class="perf-section" id="perf-section" style="display:none">
+            <h3 class="section-heading">&#9889; Performance Metrics</h3>
+            <div class="perf-grid" id="perf-grid"></div>
+          </div>
+
+          <!-- Console logs -->
+          <div class="console-section" id="console-section" style="display:none">
+            <h3 class="section-heading">&#128187; Console Logs <span class="badge" id="console-badge">0</span></h3>
+            <div class="log-box" id="console-log-box" style="max-height:200px"></div>
+          </div>
+
+          <!-- Downloaded images -->
+          <div class="dl-images-section" id="dl-images-section" style="display:none">
+            <h3 class="section-heading">&#128444; Downloaded Images <span class="badge" id="dl-images-badge">0</span></h3>
+            <div class="dl-images-grid" id="dl-images-grid"></div>
           </div>
 
           <!-- Split view or normal -->

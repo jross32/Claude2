@@ -51,6 +51,8 @@ app.post('/api/scrape', async (req, res) => {
     captureGraphQL,
     captureREST,
     captureAssets,
+    captureAllRequests,
+    captureImages,
     clickSequence,
     autoScroll,
   } = req.body;
@@ -77,7 +79,9 @@ app.post('/api/scrape', async (req, res) => {
       scrapeDepth: scrapeDepth || 1,
       captureGraphQL: captureGraphQL !== false,
       captureREST: captureREST !== false,
-      captureAssets: captureAssets || false,
+      captureAssets: captureAssets !== false,
+      captureAllRequests: captureAllRequests || false,
+      captureImages: captureImages || false,
       clickSequence: clickSequence || [],
       autoScroll: autoScroll || false,
     })

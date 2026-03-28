@@ -123,6 +123,8 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     captureGraphQL: document.getElementById('capture-graphql').checked,
     captureREST: document.getElementById('capture-rest').checked,
     captureAssets: document.getElementById('capture-assets').checked,
+    captureAllRequests: document.getElementById('capture-all-requests').checked,
+    captureImages: document.getElementById('capture-images').checked,
   };
 
   try {
@@ -267,38 +269,174 @@ function renderResults(data) {
   grid.innerHTML = '';
 
   const cards = [
-    { label: 'Pages Scraped', value: data.pages?.length || 0, sub: '' },
-    { label: 'GraphQL Calls', value: data.apiCalls?.graphql?.length || 0, sub: '' },
-    { label: 'REST Calls', value: data.apiCalls?.rest?.length || 0, sub: '' },
-    { label: 'Images', value: firstPage?.images?.length || 0, sub: 'on first page' },
-    { label: 'Links', value: firstPage?.links?.length || 0, sub: 'on first page' },
-    { label: 'Forms', value: firstPage?.forms?.length || 0, sub: 'detected' },
-    { label: 'Assets', value: data.assets?.length || 0, sub: 'captured' },
-    { label: 'Errors', value: data.errors?.length || 0, sub: '' },
+    { label: 'Pages Scraped', value: data.pages?.length || 0 },
+    { label: 'DOM Elements', value: firstPage?.domStats?.totalElements || 0 },
+    { label: 'Images', value: firstPage?.images?.length || 0 },
+    { label: 'Links', value: firstPage?.links?.length || 0 },
+    { label: 'GraphQL Calls', value: data.apiCalls?.graphql?.length || 0 },
+    { label: 'REST Calls', value: data.apiCalls?.rest?.length || 0 },
+    { label: 'All Requests', value: data.apiCalls?.all?.length || 0 },
+    { label: 'WebSockets', value: data.websockets?.length || 0 },
+    { label: 'Assets', value: data.assets?.length || 0 },
+    { label: 'Dl. Images', value: data.downloadedImages?.length || 0 },
+    { label: 'Cookies', value: data.cookies?.length || 0 },
+    { label: 'Console Logs', value: data.consoleLogs?.length || 0 },
+    { label: 'Scripts', value: firstPage?.scripts?.length || 0 },
+    { label: 'Forms', value: firstPage?.forms?.length || 0 },
+    { label: 'Errors', value: data.errors?.length || 0 },
   ];
 
   cards.forEach((c) => {
     const card = document.createElement('div');
     card.className = 'summary-card';
-    card.innerHTML = `<span class="s-label">${c.label}</span><span class="s-value">${c.value}</span>${c.sub ? `<span class="s-sub">${c.sub}</span>` : ''}`;
+    card.innerHTML = `<span class="s-label">${c.label}</span><span class="s-value">${c.value}</span>`;
     grid.appendChild(card);
   });
 
-  // Screenshot
+  // ── Tech fingerprint ──
+  const tech = firstPage?.tech;
+  if (tech) {
+    const techSec = document.getElementById('tech-section');
+    const techGrid = document.getElementById('tech-grid');
+    techGrid.innerHTML = '';
+    const categories = { 'Frameworks': tech.frameworks, 'Analytics': tech.analytics, 'CMS': tech.cms, 'CDN': tech.cdn, 'Other': tech.other };
+    let hasTech = false;
+    Object.entries(categories).forEach(([cat, items]) => {
+      if (!items?.length) return;
+      hasTech = true;
+      const group = document.createElement('div');
+      group.className = 'tech-group';
+      group.innerHTML = `<span class="tech-category">${cat}</span>` +
+        items.map(t => `<span class="tech-badge">${escapeHTML(t)}</span>`).join('');
+      techGrid.appendChild(group);
+    });
+    techSec.style.display = hasTech ? 'block' : 'none';
+  }
+
+  // ── Security headers ──
+  if (data.securityHeaders && Object.keys(data.securityHeaders).length > 0) {
+    const secSec = document.getElementById('security-section');
+    const wrap = document.getElementById('security-table-wrap');
+    const headers = data.securityHeaders;
+    const important = ['content-security-policy','strict-transport-security','x-frame-options','x-content-type-options','referrer-policy','permissions-policy','server','x-powered-by'];
+    const rows = important.map(h => {
+      const val = headers[h];
+      const present = !!val;
+      const isGood = present && !['server','x-powered-by'].includes(h);
+      return `<tr>
+        <td class="header-name">${h}</td>
+        <td class="header-status ${isGood ? 'hdr-good' : (present ? 'hdr-info' : 'hdr-missing')}">${present ? '✓' : '✗'}</td>
+        <td class="header-value">${escapeHTML(val || 'Not set')}</td>
+      </tr>`;
+    }).join('');
+    wrap.innerHTML = `<table class="sec-table"><thead><tr><th>Header</th><th>Set</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table>`;
+    secSec.style.display = 'block';
+  }
+
+  // ── Cookies ──
+  if (data.cookies?.length) {
+    document.getElementById('cookies-section').style.display = 'block';
+    document.getElementById('cookies-badge').textContent = data.cookies.length;
+    const wrap = document.getElementById('cookies-table-wrap');
+    const rows = data.cookies.map(c => `<tr>
+      <td class="cookie-name">${escapeHTML(c.name)}</td>
+      <td>${escapeHTML(c.domain || '')}</td>
+      <td>${escapeHTML(c.path || '/')}</td>
+      <td class="${c.secure ? 'flag-yes' : 'flag-no'}">${c.secure ? '✓' : '✗'}</td>
+      <td class="${c.httpOnly ? 'flag-yes' : 'flag-no'}">${c.httpOnly ? '✓' : '✗'}</td>
+      <td>${escapeHTML(c.sameSite || '-')}</td>
+      <td class="cookie-val">${escapeHTML(String(c.value || '').substring(0, 60))}</td>
+    </tr>`).join('');
+    wrap.innerHTML = `<table class="sec-table"><thead><tr><th>Name</th><th>Domain</th><th>Path</th><th>Secure</th><th>HttpOnly</th><th>SameSite</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  // ── Performance ──
+  const perf = firstPage?.performance;
+  if (perf?.navigation) {
+    document.getElementById('perf-section').style.display = 'block';
+    const pg = document.getElementById('perf-grid');
+    pg.innerHTML = '';
+    const metrics = [
+      { label: 'TTFB', value: `${perf.navigation.ttfb}ms` },
+      { label: 'DOM Interactive', value: `${perf.navigation.domInteractive}ms` },
+      { label: 'DOM Content Loaded', value: `${perf.navigation.domContentLoaded}ms` },
+      { label: 'Load Complete', value: `${perf.navigation.loadComplete}ms` },
+      { label: 'Transfer Size', value: formatBytes(perf.navigation.transferSize) },
+      { label: 'Decoded Size', value: formatBytes(perf.navigation.decodedBodySize) },
+      { label: 'FCP', value: perf.paint?.['first-contentful-paint'] ? `${perf.paint['first-contentful-paint']}ms` : '-' },
+      { label: 'Resources', value: perf.resources?.length || 0 },
+    ];
+    metrics.forEach(m => {
+      const card = document.createElement('div');
+      card.className = 'summary-card';
+      card.innerHTML = `<span class="s-label">${m.label}</span><span class="s-value" style="font-size:18px">${m.value}</span>`;
+      pg.appendChild(card);
+    });
+  }
+
+  // ── Console logs ──
+  if (data.consoleLogs?.length) {
+    document.getElementById('console-section').style.display = 'block';
+    document.getElementById('console-badge').textContent = data.consoleLogs.length;
+    const box = document.getElementById('console-log-box');
+    box.innerHTML = '';
+    data.consoleLogs.slice(0, 100).forEach(log => {
+      const el = document.createElement('div');
+      el.className = 'log-entry';
+      const level = log.type === 'error' ? 'error' : log.type === 'warning' ? 'warn' : 'info';
+      el.innerHTML = `<span class="log-time">${formatTime(log.timestamp)}</span><span class="log-msg ${level}">[${log.type}] ${escapeHTML(log.text)}</span>`;
+      box.appendChild(el);
+    });
+  }
+
+  // ── Downloaded images ──
+  if (data.downloadedImages?.length) {
+    document.getElementById('dl-images-section').style.display = 'block';
+    document.getElementById('dl-images-badge').textContent = data.downloadedImages.length;
+    const grid2 = document.getElementById('dl-images-grid');
+    grid2.innerHTML = '';
+    data.downloadedImages.forEach(img => {
+      const card = document.createElement('div');
+      card.className = 'dl-image-card';
+      card.innerHTML = `
+        <img src="${img.dataUrl}" alt="${escapeHTML(img.alt || '')}" class="dl-image-preview" loading="lazy" />
+        <span class="dl-image-meta">${img.width || '?'}×${img.height || '?'} · ${formatBytes(img.size || 0)}</span>
+        <a class="dl-image-link" href="${img.dataUrl}" download="${escapeHTML(img.src?.split('/').pop() || 'image')}">&#8659; Save</a>`;
+      grid2.appendChild(card);
+    });
+  }
+
+  // ── Screenshot ──
   if (firstPage?.screenshot) {
     document.getElementById('screenshot-wrap').style.display = 'block';
     document.getElementById('page-screenshot').src = firstPage.screenshot;
   }
 
-  // JSON viewer (exclude screenshot from display for readability)
+  // ── JSON viewer (strip large binary fields for performance) ──
   const displayData = JSON.parse(JSON.stringify(data));
   if (displayData.pages) {
-    displayData.pages.forEach((p) => { delete p.screenshot; });
+    displayData.pages.forEach(p => {
+      delete p.screenshot;
+      delete p.viewportScreenshot;
+      delete p.htmlSource;
+      delete p.headHTML;
+      delete p.layoutTree;     // shown separately if needed
+    });
+  }
+  if (displayData.downloadedImages) {
+    displayData.downloadedImages = displayData.downloadedImages.map(i => ({ ...i, dataUrl: '[base64 omitted]' }));
   }
 
   const viewer = document.getElementById('json-viewer');
   viewer.innerHTML = '';
   viewer.appendChild(renderJSONNode(displayData));
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
 // ---- JSON Tree Viewer ----
