@@ -23,7 +23,7 @@
 })();
 
 let ws = null;
-let currentSessionId = null;
+const activeSessions = new Map(); // sessionId -> { name, faviconUrl, liveView, expanded }
 let scrapedData = null;
 
 // ---- WebSocket ----
@@ -34,8 +34,8 @@ function connectWS() {
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
-      if (msg.sessionId !== currentSessionId) return;
-      handleWSMessage(msg);
+      if (!activeSessions.has(msg.sessionId)) return;
+      handleSessionMessage(msg.sessionId, msg);
     } catch {}
   };
 
@@ -43,36 +43,20 @@ function connectWS() {
   ws.onerror = () => ws.close();
 }
 
-function handleWSMessage(msg) {
+function handleSessionMessage(sessionId, msg) {
   switch (msg.type) {
-    case 'log':
-      appendLog(msg.message, msg.level);
-      break;
-    case 'progress':
-      updateProgress(msg.step, msg.percent);
-      break;
-    case 'siteInfo':
-      updateSitePreview(msg.data);
-      break;
-    case 'needsAuth':
-      showMidAuthPrompt();
-      break;
-    case 'needVerification':
-      showVerificationPrompt();
-      break;
-    case 'liveFrame':
-      updateLiveFrame(msg.dataUrl);
-      break;
+    case 'log':             appendSessionLog(sessionId, msg.message, msg.level); break;
+    case 'progress':        updateSessionProgress(sessionId, msg.step, msg.percent); break;
+    case 'siteInfo':        updateSessionSitePreview(sessionId, msg.data); break;
+    case 'needsAuth':       showSessionCredsPrompt(sessionId); break;
+    case 'needVerification':showSessionVerifyPrompt(sessionId); break;
+    case 'liveFrame':       updateSessionLiveFrame(sessionId, msg.dataUrl); break;
     case 'sessionSaved':
       document.getElementById('session-badge').style.display = 'flex';
       showToast(`Session saved for ${msg.hostname}`);
       break;
-    case 'complete':
-      onScrapeComplete(msg.data);
-      break;
-    case 'error':
-      onScrapeError(msg.message);
-      break;
+    case 'complete':        onSessionComplete(sessionId, msg.data); break;
+    case 'error':           onSessionError(sessionId, msg.message); break;
   }
 }
 
@@ -313,7 +297,9 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   document.getElementById('live-view-btn').classList.toggle('active', liveOn);
   document.getElementById('live-view-label').textContent = liveOn ? 'ON' : 'OFF';
   // Start the scrape
-  document.getElementById('btn-scrape').click();
+  const faviconSrc = preset.iconUrl || preset.url || '';
+  const faviconUrl = faviconSrc ? `/api/favicon?url=${encodeURIComponent(faviconSrc)}` : '';
+  startScrapeSession(preset.name, faviconUrl);
 });
 
 // Init presets on load
@@ -476,13 +462,11 @@ document.getElementById('btn-detect').addEventListener('click', async () => {
 });
 
 // ---- Start scrape ----
-document.getElementById('btn-scrape').addEventListener('click', async () => {
+async function startScrapeSession(name, faviconUrl) {
   const url = document.getElementById('url').value.trim();
-  if (!url) {
-    alert('Please enter a URL to scrape.');
-    return;
-  }
+  if (!url) { alert('Please enter a URL to scrape.'); return; }
 
+  const liveView = document.getElementById('live-view').value === 'true';
   const payload = {
     url,
     scrapeDepth: document.getElementById('limit-depth').checked ? parseInt(document.getElementById('scrape-depth').value, 10) : 99,
@@ -494,91 +478,138 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     imageLimit: parseInt(document.getElementById('image-limit').value, 10) || 0,
     autoScroll: document.getElementById('auto-scroll').checked,
     showBrowser: false,
-    liveView: document.getElementById('live-view').value === 'true',
+    liveView,
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
     fullCrawl: document.getElementById('full-crawl').checked,
     maxPages: document.getElementById('full-crawl').checked ? 0 : (parseInt(document.getElementById('max-pages').value, 10) || 100),
   };
 
   try {
-    clearLog();
-    showProgress();
-    document.getElementById('btn-scrape').style.display = 'none';
-    document.getElementById('btn-stop').style.display = 'inline-flex';
-
     const res = await fetch('/api/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-
     if (!res.ok) throw new Error(await res.text());
     const { sessionId } = await res.json();
-    currentSessionId = sessionId;
     saveRecentUrl(url);
-    appendLog(`Session started: ${sessionId}`, 'info');
+    const displayName = name || (() => { try { return new URL(url).hostname; } catch { return url; } })();
+    const favicon = faviconUrl || `/api/favicon?url=${encodeURIComponent(url)}`;
+    createSessionPanel(sessionId, displayName, favicon, liveView);
+    activeSessions.set(sessionId, { name: displayName, faviconUrl: favicon, liveView, expanded: true });
+    appendSessionLog(sessionId, `Session started: ${sessionId}`, 'info');
   } catch (err) {
-    onScrapeError(err.message);
+    alert(`Failed to start scrape: ${err.message}`);
   }
-});
+}
 
-// ---- Stop ----
-document.getElementById('btn-stop').addEventListener('click', async () => {
-  if (!currentSessionId) return;
-  await fetch(`/api/scrape/${currentSessionId}/stop`, { method: 'POST' }).catch(() => {});
-  appendLog('Scrape stopped by user.', 'warn');
-  resetScrapeUI();
-});
+document.getElementById('btn-scrape').addEventListener('click', () => startScrapeSession());
 
 
-// ---- Live credential submit (mid-scrape prompt) ----
-document.getElementById('btn-submit-creds').addEventListener('click', async () => {
-  const username = document.getElementById('live-username').value.trim();
-  const password = document.getElementById('live-password').value;
-  if (!username || !password || !currentSessionId) return;
-  await fetch(`/api/scrape/${currentSessionId}/credentials`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+// ======= MULTI-SESSION PANEL MANAGEMENT =======
+
+function createSessionPanel(sessionId, name, faviconUrl, liveView) {
+  const sid = sessionId;
+  const panel = document.createElement('div');
+  panel.className = 'session-panel';
+  panel.id = `sp-${sid}`;
+  panel.innerHTML = `
+    <div class="session-header">
+      <img class="session-hdr-icon" src="${escapeHTML(faviconUrl)}" alt="" onerror="this.style.display='none'" />
+      <div class="session-hdr-main">
+        <span class="session-hdr-name">${escapeHTML(name)}</span>
+        <div class="session-mini-bar-wrap"><div class="session-mini-bar" id="smb-${sid}" style="width:0%"></div></div>
+      </div>
+      <span class="session-hdr-step" id="shs-${sid}">Starting...</span>
+      <span class="session-hdr-pct" id="shp-${sid}">0%</span>
+      <button class="btn-xs session-collapse-btn" id="scb-${sid}" title="Collapse">&#9650;</button>
+      <button class="btn-xs session-stop-btn" id="ssb-${sid}">&#9632; Stop</button>
+    </div>
+    <div class="session-body" id="sbody-${sid}">
+      <div class="session-site-preview" id="ssp-${sid}" style="display:none">
+        <img class="session-site-favicon" id="ssf-${sid}" src="" alt="" onerror="this.style.display='none'" />
+        <div>
+          <span class="session-site-title" id="sst-${sid}"></span>
+          <span class="session-site-url" id="ssu-${sid}"></span>
+          <div class="session-site-badges" id="ssbd-${sid}"></div>
+        </div>
+      </div>
+      <div class="log-box session-log-box" id="slb-${sid}"></div>
+      <div class="live-browser-panel" id="slp-${sid}" style="${liveView ? 'display:block' : 'display:none'}">
+        <div class="live-browser-header">
+          <span>&#128247; Live Browser View</span>
+        </div>
+        <div class="live-browser-body">
+          <img class="live-frame-img" id="slf-${sid}" src="" alt="Live view" />
+        </div>
+        <div class="live-creds-prompt" id="scp-${sid}" style="display:none">
+          <span class="live-creds-icon">&#128274;</span>
+          <strong>Login required</strong>
+          <div class="live-creds-fields">
+            <input type="text" id="scu-${sid}" placeholder="Username / Email" autocomplete="new-password" data-lpignore="true" />
+            <input type="password" id="scpw-${sid}" placeholder="Password" autocomplete="new-password" data-lpignore="true" />
+            <button class="btn-primary session-submit-creds">Continue</button>
+          </div>
+        </div>
+        <div class="live-creds-prompt" id="svp-${sid}" style="display:none">
+          <span class="live-creds-icon">&#128273;</span>
+          <strong>Verification code required</strong>
+          <div class="live-creds-fields">
+            <input type="text" id="svc-${sid}" placeholder="Enter code..." maxlength="10" />
+            <button class="btn-primary session-submit-verify">Submit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Collapse toggle
+  panel.querySelector(`#scb-${sid}`).addEventListener('click', () => {
+    const body = document.getElementById(`sbody-${sid}`);
+    const btn  = document.getElementById(`scb-${sid}`);
+    const collapsed = body.style.display === 'none';
+    body.style.display = collapsed ? 'block' : 'none';
+    btn.innerHTML = collapsed ? '&#9650;' : '&#9660;';
   });
-  document.getElementById('live-creds-prompt').style.display = 'none';
-  appendLog('Credentials submitted — continuing scrape...', 'info');
-});
 
-// ---- Verification submit ----
-document.getElementById('btn-submit-code').addEventListener('click', async () => {
-  const code = document.getElementById('live-code').value.trim();
-  if (!code || !currentSessionId) return;
-  await fetch(`/api/scrape/${currentSessionId}/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
+  // Stop
+  panel.querySelector(`#ssb-${sid}`).addEventListener('click', async () => {
+    await fetch(`/api/scrape/${sid}/stop`, { method: 'POST' }).catch(() => {});
+    appendSessionLog(sid, 'Scrape stopped by user.', 'warn');
+    finalizeSession(sid, false);
   });
-  document.getElementById('verification-prompt').style.display = 'none';
-  appendLog('Verification code submitted.', 'info');
-});
 
-// ---- Progress helpers ----
-function showProgress() {
-  document.getElementById('progress-card').style.display = 'flex';
-  document.getElementById('progress-card').classList.add('scraping');
-  const liveView = document.getElementById('live-view').value === 'true';
-  document.getElementById('live-browser-panel').style.display = liveView ? 'block' : 'none';
+  // Credentials
+  panel.querySelector('.session-submit-creds').addEventListener('click', async () => {
+    const user = document.getElementById(`scu-${sid}`).value.trim();
+    const pass = document.getElementById(`scpw-${sid}`).value;
+    if (!user || !pass) return;
+    await fetch(`/api/scrape/${sid}/credentials`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass }),
+    });
+    document.getElementById(`scp-${sid}`).style.display = 'none';
+    appendSessionLog(sid, 'Credentials submitted — continuing scrape...', 'info');
+  });
+
+  // Verification
+  panel.querySelector('.session-submit-verify').addEventListener('click', async () => {
+    const code = document.getElementById(`svc-${sid}`).value.trim();
+    if (!code) return;
+    await fetch(`/api/scrape/${sid}/verify`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    document.getElementById(`svp-${sid}`).style.display = 'none';
+    appendSessionLog(sid, 'Verification code submitted.', 'info');
+  });
+
+  document.getElementById('sessions-container').prepend(panel);
 }
 
-function updateProgress(step, percent) {
-  document.getElementById('progress-step').textContent = step;
-  document.getElementById('progress-pct').textContent = `${percent}%`;
-  document.getElementById('progress-bar').style.width = `${percent}%`;
-}
-
-function showVerificationPrompt() {
-  document.getElementById('verification-prompt').style.display = 'block';
-  document.getElementById('live-code').focus();
-}
-
-function appendLog(message, level = 'info') {
-  const box = document.getElementById('log-box');
+function appendSessionLog(sessionId, message, level = 'info') {
+  const box = document.getElementById(`slb-${sessionId}`);
+  if (!box) return;
   const time = new Date().toLocaleTimeString('en-US', { hour12: false });
   const line = document.createElement('div');
   line.className = 'log-entry';
@@ -587,34 +618,131 @@ function appendLog(message, level = 'info') {
   box.scrollTop = box.scrollHeight;
 }
 
-function clearLog() {
-  document.getElementById('log-box').innerHTML = '';
-  document.getElementById('live-creds-prompt').style.display = 'none';
-  document.getElementById('site-preview').style.display = 'none';
-  const errBox = document.getElementById('scrape-error-box');
-  if (errBox) errBox.style.display = 'none';
+// Keep legacy appendLog for Detect button
+function appendLog(message, level = 'info') {
+  // Find the most recent active session to log to, or do nothing
+  const ids = [...activeSessions.keys()];
+  if (ids.length > 0) appendSessionLog(ids[ids.length - 1], message, level);
 }
 
-function resetScrapeUI() {
-  document.getElementById('btn-scrape').style.display = 'inline-flex';
-  document.getElementById('btn-stop').style.display = 'none';
-  document.getElementById('progress-card').classList.remove('scraping');
-  document.getElementById('verification-prompt').style.display = 'none';
-  document.getElementById('live-browser-panel').style.display = 'none';
-  document.getElementById('live-frame').src = '';
-  currentSessionId = null;
+function updateSessionProgress(sessionId, step, percent) {
+  const stepEl = document.getElementById(`shs-${sessionId}`);
+  const pctEl  = document.getElementById(`shp-${sessionId}`);
+  const barEl  = document.getElementById(`smb-${sessionId}`);
+  if (stepEl) stepEl.textContent = step;
+  if (pctEl)  pctEl.textContent = `${percent}%`;
+  if (barEl)  barEl.style.width = `${percent}%`;
 }
 
-function updateLiveFrame(dataUrl) {
-  if (document.getElementById('live-view').value !== 'true') return;
-  const panel = document.getElementById('live-browser-panel');
-  if (panel.style.display === 'none') panel.style.display = 'block';
-  document.getElementById('live-frame').src = dataUrl;
+function updateSessionSitePreview(sessionId, info) {
+  const preview = document.getElementById(`ssp-${sessionId}`);
+  if (!preview) return;
+  document.getElementById(`ssf-${sessionId}`).src = info.favicon || info.logoUrl || '';
+  document.getElementById(`sst-${sessionId}`).textContent = info.title || info.origin;
+  document.getElementById(`ssu-${sessionId}`).textContent = info.origin;
+  const badges = document.getElementById(`ssbd-${sessionId}`);
+  badges.innerHTML = '';
+  if (info.hasLoginForm) badges.innerHTML += `<span class="site-badge login">Login Required</span>`;
+  if (info.has2FA) badges.innerHTML += `<span class="site-badge fa">2FA</span>`;
+  if (info.hasCaptcha) badges.innerHTML += `<span class="site-badge captcha">CAPTCHA</span>`;
+  preview.style.display = 'flex';
+  if (info.hasLoginForm) appendSessionLog(sessionId, 'Login form detected — will authenticate automatically.', 'info');
 }
 
-// ---- Site preview ----
+function showSessionCredsPrompt(sessionId) {
+  const el = document.getElementById(`scp-${sessionId}`);
+  if (el) { el.style.display = 'block'; document.getElementById(`scu-${sessionId}`)?.focus(); }
+  // Expand session if collapsed
+  const body = document.getElementById(`sbody-${sessionId}`);
+  if (body && body.style.display === 'none') {
+    body.style.display = 'block';
+    const btn = document.getElementById(`scb-${sessionId}`);
+    if (btn) btn.innerHTML = '&#9650;';
+  }
+}
+
+function showSessionVerifyPrompt(sessionId) {
+  const el = document.getElementById(`svp-${sessionId}`);
+  if (el) { el.style.display = 'block'; document.getElementById(`svc-${sessionId}`)?.focus(); }
+  const body = document.getElementById(`sbody-${sessionId}`);
+  if (body && body.style.display === 'none') {
+    body.style.display = 'block';
+    const btn = document.getElementById(`scb-${sessionId}`);
+    if (btn) btn.innerHTML = '&#9650;';
+  }
+}
+
+function updateSessionLiveFrame(sessionId, dataUrl) {
+  const sess = activeSessions.get(sessionId);
+  if (sess && !sess.liveView) return;
+  const panel = document.getElementById(`slp-${sessionId}`);
+  if (panel && panel.style.display === 'none') panel.style.display = 'block';
+  const frame = document.getElementById(`slf-${sessionId}`);
+  if (frame) frame.src = dataUrl;
+}
+
+function finalizeSession(sessionId, success) {
+  const stopBtn = document.getElementById(`ssb-${sessionId}`);
+  if (stopBtn) { stopBtn.style.display = 'none'; }
+  activeSessions.delete(sessionId);
+  // Mark panel as done
+  const panel = document.getElementById(`sp-${sessionId}`);
+  if (panel) panel.classList.add(success ? 'session-done' : 'session-stopped');
+}
+
+function onSessionComplete(sessionId, data) {
+  scrapedData = data;
+  updateSessionProgress(sessionId, 'Complete ✓', 100);
+  appendSessionLog(sessionId, 'Scraping complete!', 'success');
+  finalizeSession(sessionId, true);
+
+  renderResults(data);
+  renderAPICalls(data.apiCalls);
+  renderAssets(data.assets);
+  enableRefactor(data);
+
+  const totalAPIs = (data.apiCalls?.graphql?.length || 0) + (data.apiCalls?.rest?.length || 0);
+  if (totalAPIs > 0) {
+    const badge = document.getElementById('api-badge');
+    badge.textContent = totalAPIs;
+    badge.style.display = 'inline-block';
+  }
+  const resultsBadge = document.getElementById('results-badge');
+  resultsBadge.textContent = data.pages?.length || 1;
+  resultsBadge.style.display = 'inline-block';
+
+  document.querySelector('[data-panel="results"]').click();
+}
+
+function onSessionError(sessionId, message) {
+  appendSessionLog(sessionId, `Error: ${message}`, 'error');
+  updateSessionProgress(sessionId, 'Error', 0);
+  finalizeSession(sessionId, false);
+
+  // Show error box inside the session
+  const body = document.getElementById(`sbody-${sessionId}`);
+  if (!body) return;
+  const logLines = [...body.querySelectorAll('.log-entry')].map(el => el.textContent).join('\n');
+  const full = `=== ERROR ===\n${message}\n\n=== FULL LOG ===\n${logLines}`;
+  const box = document.createElement('div');
+  box.className = 'scrape-error-box';
+  box.innerHTML = `
+    <div class="scrape-error-header">
+      <span>&#9888; Error — copy log and send to support</span>
+      <button class="btn-xs btn-copy-err">&#128203; Copy</button>
+    </div>
+    <pre class="scrape-error-pre">${escapeHTML(full)}</pre>
+  `;
+  box.querySelector('.btn-copy-err').addEventListener('click', () => {
+    navigator.clipboard.writeText(full).then(() => showToast('Copied!'));
+  });
+  body.appendChild(box);
+}
+
+// ============================================
+
+// ---- Site preview (used by Detect button) ----
 function updateSitePreview(info) {
-  // Site info strip
   const preview = document.getElementById('site-preview');
   document.getElementById('site-favicon').src = info.favicon || info.logoUrl || '';
   document.getElementById('site-title-preview').textContent = info.title || info.origin;
@@ -626,76 +754,6 @@ function updateSitePreview(info) {
   if (info.has2FA) badges.innerHTML += `<span class="site-badge fa">2FA</span>`;
   if (info.hasCaptcha) badges.innerHTML += `<span class="site-badge captcha">CAPTCHA</span>`;
   preview.style.display = 'flex';
-
-  if (info.hasLoginForm) {
-    appendLog('Login form detected — will authenticate automatically.', 'info');
-  }
-}
-
-function showMidAuthPrompt() {
-  // Shown mid-scrape when login wall is hit without pre-supplied credentials
-  document.getElementById('live-creds-prompt').style.display = 'block';
-  document.getElementById('live-creds-prompt').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  document.getElementById('live-username').focus();
-}
-
-// ---- Scrape complete ----
-function onScrapeComplete(data) {
-  scrapedData = data;
-  resetScrapeUI();
-  updateProgress('Complete', 100);
-  appendLog('Scraping complete!', 'success');
-
-  renderResults(data);
-  renderAPICalls(data.apiCalls);
-  renderAssets(data.assets);
-  enableRefactor(data);
-
-  // Update badges
-  const totalAPIs = (data.apiCalls?.graphql?.length || 0) + (data.apiCalls?.rest?.length || 0);
-  if (totalAPIs > 0) {
-    const badge = document.getElementById('api-badge');
-    badge.textContent = totalAPIs;
-    badge.style.display = 'inline-block';
-  }
-
-  const resultsBadge = document.getElementById('results-badge');
-  resultsBadge.textContent = data.pages?.length || 1;
-  resultsBadge.style.display = 'inline-block';
-
-  // Auto-switch to results
-  document.querySelector('[data-panel="results"]').click();
-}
-
-function onScrapeError(message) {
-  appendLog(`Error: ${message}`, 'error');
-  resetScrapeUI();
-  updateProgress('Error', 0);
-  showErrorBox(message);
-}
-
-function showErrorBox(message) {
-  let box = document.getElementById('scrape-error-box');
-  if (!box) {
-    box = document.createElement('div');
-    box.id = 'scrape-error-box';
-    box.className = 'scrape-error-box';
-    document.getElementById('progress-card').appendChild(box);
-  }
-  const logLines = [...document.querySelectorAll('#log-box .log-entry')]
-    .map(el => el.textContent).join('\n');
-  const full = `=== ERROR ===\n${message}\n\n=== FULL LOG ===\n${logLines}`;
-  box.innerHTML = `
-    <div class="scrape-error-header">
-      <span>&#9888; Error — copy log and send to support</span>
-      <button class="btn-xs" id="btn-copy-error-log">&#128203; Copy</button>
-    </div>
-    <pre class="scrape-error-pre" id="scrape-error-pre">${escapeHTML(full)}</pre>
-  `;
-  box.style.display = 'block';
-  document.getElementById('btn-copy-error-log').addEventListener('click', () => {
-    navigator.clipboard.writeText(full).then(() => showToast('Copied to clipboard!'));
-  });
 }
 
 // ---- Results rendering ----
@@ -1409,15 +1467,6 @@ function renderBySection(pages) {
 
 document.getElementById('slow-motion').addEventListener('input', function () {
   document.getElementById('slowmo-value').textContent = `${this.value}ms`;
-});
-
-// ---- Live browser collapse toggle ----
-document.getElementById('live-browser-toggle').addEventListener('click', () => {
-  const body = document.getElementById('live-browser-body');
-  const chevron = document.getElementById('live-browser-chevron');
-  const collapsed = body.style.display === 'none';
-  body.style.display = collapsed ? 'block' : 'none';
-  chevron.textContent = collapsed ? '▲' : '▼';
 });
 
 // ---- Crawl sort tabs ----

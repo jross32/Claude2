@@ -185,9 +185,6 @@
             <button class="btn-primary" id="btn-scrape">
               <span class="btn-icon">&#9654;</span> Start Scraping
             </button>
-            <button class="btn-danger" id="btn-stop" style="display:none">
-              <span class="btn-icon">&#9632;</span> Stop
-            </button>
           </div>
         </div>
 
@@ -275,49 +272,8 @@
           </div>
         </div>
 
-        <!-- Progress -->
-        <div class="progress-card" id="progress-card" style="display:none">
-          <div class="progress-header">
-            <span id="progress-step">Starting...</span>
-            <span id="progress-pct">0%</span>
-          </div>
-          <div class="progress-bar-wrap">
-            <div class="progress-bar" id="progress-bar" style="width:0%"></div>
-          </div>
-          <div class="log-box" id="log-box"></div>
-
-          <!-- Live browser view -->
-          <div class="live-browser-panel" id="live-browser-panel" style="display:none">
-            <div class="live-browser-header" id="live-browser-toggle">
-              <span>&#128247; Live Browser View</span>
-              <span class="live-browser-chevron" id="live-browser-chevron">&#9650;</span>
-            </div>
-            <div class="live-browser-body" id="live-browser-body">
-              <img id="live-frame" class="live-frame-img" src="" alt="Live browser view" />
-            </div>
-
-            <!-- Credentials prompt — shown inline when login wall detected -->
-            <div class="live-creds-prompt" id="live-creds-prompt" style="display:none">
-              <span class="live-creds-icon">&#128274;</span>
-              <strong>Login required</strong>
-              <div class="live-creds-fields">
-                <input type="text" id="live-username" placeholder="Username / Email" autocomplete="new-password" data-lpignore="true" />
-                <input type="password" id="live-password" placeholder="Password" autocomplete="new-password" data-lpignore="true" />
-                <button class="btn-primary" id="btn-submit-creds">Continue</button>
-              </div>
-            </div>
-
-            <!-- Verification code prompt -->
-            <div class="live-creds-prompt" id="verification-prompt" style="display:none">
-              <span class="live-creds-icon">&#128273;</span>
-              <strong>Verification code required</strong>
-              <div class="live-creds-fields">
-                <input type="text" id="live-code" placeholder="Enter code..." maxlength="10" />
-                <button class="btn-primary" id="btn-submit-code">Submit</button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- Sessions -->
+        <div id="sessions-container"></div>
       </section>
 
       <!-- ===== RESULTS PANEL ===== -->
