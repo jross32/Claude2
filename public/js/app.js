@@ -119,6 +119,16 @@ function clearKnownSiteBadge() {
 // ---- Password visibility ----
 
 
+// ---- Live view toggle ----
+document.getElementById('live-view-btn').addEventListener('click', function () {
+  const isActive = this.dataset.active === 'true';
+  const next = !isActive;
+  this.dataset.active = String(next);
+  this.classList.toggle('active', next);
+  document.getElementById('live-view-label').textContent = next ? 'ON' : 'OFF';
+  document.getElementById('live-view').value = String(next);
+});
+
 // ---- Depth slider ----
 document.getElementById('scrape-depth').addEventListener('input', function () {
   document.getElementById('depth-value').textContent = this.value;
@@ -161,7 +171,7 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     captureImages: document.getElementById('capture-images').checked,
     autoScroll: document.getElementById('auto-scroll').checked,
     showBrowser: false,
-    liveView: document.getElementById('live-view').checked,
+    liveView: document.getElementById('live-view').value === 'true',
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
     fullCrawl: document.getElementById('full-crawl').checked,
     maxPages: parseInt(document.getElementById('max-pages').value, 10) || 100,
@@ -228,7 +238,7 @@ document.getElementById('btn-submit-code').addEventListener('click', async () =>
 function showProgress() {
   document.getElementById('progress-card').style.display = 'flex';
   document.getElementById('progress-card').classList.add('scraping');
-  const liveView = document.getElementById('live-view').checked;
+  const liveView = document.getElementById('live-view').value === 'true';
   document.getElementById('live-browser-panel').style.display = liveView ? 'block' : 'none';
 }
 
@@ -270,7 +280,7 @@ function resetScrapeUI() {
 }
 
 function updateLiveFrame(dataUrl) {
-  if (!document.getElementById('live-view').checked) return;
+  if (document.getElementById('live-view').value !== 'true') return;
   const panel = document.getElementById('live-browser-panel');
   if (panel.style.display === 'none') panel.style.display = 'block';
   document.getElementById('live-frame').src = dataUrl;

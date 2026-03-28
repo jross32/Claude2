@@ -842,6 +842,34 @@ body.light .json-bool { color: #b45309; }
 }
 .live-creds-fields .btn-primary { flex-shrink: 0; padding: 6px 16px; font-size: 13px; }
 
+/* Live view toggle */
+.live-view-toggle-label {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; cursor: default;
+}
+.live-view-toggle-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 12px 4px 6px;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  color: var(--text-muted); transition: background 0.2s, color 0.2s, border-color 0.2s;
+  margin-left: 10px;
+}
+.live-view-toggle-btn .toggle-track {
+  width: 32px; height: 18px; background: var(--border);
+  border-radius: 9px; position: relative; transition: background 0.2s;
+  flex-shrink: 0;
+}
+.live-view-toggle-btn .toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; transition: transform 0.2s, background 0.2s;
+}
+.live-view-toggle-btn.active {
+  border-color: var(--accent); color: var(--accent);
+}
+.live-view-toggle-btn.active .toggle-track { background: var(--accent); }
+.live-view-toggle-btn.active .toggle-thumb { transform: translateX(14px); }
+
 /* Live browser panel */
 .live-browser-panel {
   margin-top: 14px; border: 1px solid var(--border);
