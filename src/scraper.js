@@ -183,20 +183,26 @@ class ScraperSession {
   }
 
   async _dismissPopups(page, waitMs = 8000) {
-    // Matches "No Thanks", "No, Thanks", "No thank you", "Not Now", etc.
-    const dismissRe = /no[\s,]*thanks?|not\s+now|maybe\s+later|skip|dismiss|close|don.t\s+(ask|show|notify)/i;
-    const tryDismiss = async () => {
+    // Matches "No Thanks", "No, Thanks", "Not Now", "Maybe Later", etc.
+    const dismissRe = /no[\s,]*thanks?|not\s+now|maybe\s+later|skip|dismiss|don.t\s+(ask|show|notify)/i;
+
+    const tryDismissEval = async () => {
       try {
         const clicked = await page.evaluate((reStr) => {
           const re = new RegExp(reStr, 'i');
-          const els = [...document.querySelectorAll('button, a[role="button"], [role="button"]')];
+          const els = [...document.querySelectorAll('button, a[role="button"], [role="button"], [role="dialog"] button')];
           for (const el of els) {
             const rect = el.getBoundingClientRect();
             if (rect.width === 0 && rect.height === 0) continue;
             const style = window.getComputedStyle(el);
             if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
             const text = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
-            if (re.test(text)) { el.click(); return text; }
+            if (re.test(text)) {
+              // Dispatch bubbled event so React/Vue synthetic handlers fire
+              el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              el.click();
+              return text;
+            }
           }
           return null;
         }, dismissRe.source);
@@ -205,13 +211,28 @@ class ScraperSession {
       return false;
     };
 
+    // Playwright-native click fallback — handles overlays and synthetic event frameworks
+    const tryDismissNative = async () => {
+      try {
+        const btn = page.locator('button, [role="button"]').filter({ hasText: dismissRe });
+        if (await btn.first().isVisible({ timeout: 300 })) {
+          await btn.first().click({ timeout: 1500, force: false });
+          this.log('Dismissed popup (native click)');
+          return true;
+        }
+      } catch {}
+      return false;
+    };
+
+    const tryDismiss = async () => (await tryDismissEval()) || (await tryDismissNative());
+
     // Try immediately
     if (await tryDismiss()) return;
 
-    // Then poll every 800ms until waitMs expires — covers delayed JS modals
+    // Then poll every 600ms until waitMs expires — covers delayed JS modals
     const start = Date.now();
     while (Date.now() - start < waitMs) {
-      await page.waitForTimeout(800);
+      await page.waitForTimeout(600);
       if (this.stopped) return;
       if (await tryDismiss()) return;
     }
@@ -219,28 +240,42 @@ class ScraperSession {
 
   // Register a persistent popup watcher for the whole page lifetime
   _registerPopupWatcher(page) {
-    const reStr = 'no[\\s,]*thanks?|not\\s+now|maybe\\s+later|skip|dismiss|close|don.t\\s+(ask|show|notify)';
+    const reStr = 'no[\\s,]*thanks?|not\\s+now|maybe\\s+later|skip|dismiss|don.t\\s+(ask|show|notify)';
     page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
-    // Poll every 1.5s for any dismiss-able popup button
+    // Poll every 1.2s for any dismiss-able popup button
     const interval = setInterval(async () => {
       if (this.stopped) { clearInterval(interval); return; }
       try {
+        // 1. evaluate-based (fast)
         const clicked = await page.evaluate((rs) => {
           const re = new RegExp(rs, 'i');
-          const els = [...document.querySelectorAll('button, a[role="button"], [role="button"]')];
+          const els = [...document.querySelectorAll('button, a[role="button"], [role="button"], [role="dialog"] button')];
           for (const el of els) {
             const rect = el.getBoundingClientRect();
             if (rect.width === 0 && rect.height === 0) continue;
             const style = window.getComputedStyle(el);
             if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
             const text = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
-            if (re.test(text)) { el.click(); return text; }
+            if (re.test(text)) {
+              el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              el.click();
+              return text;
+            }
           }
           return null;
         }, reStr);
-        if (clicked) this.log(`Auto-dismissed popup: "${clicked}"`);
+        if (clicked) { this.log(`Auto-dismissed popup: "${clicked}"`); return; }
       } catch {}
-    }, 1500);
+      // 2. Playwright-native fallback
+      try {
+        const re = new RegExp(reStr, 'i');
+        const btn = page.locator('button, [role="button"]').filter({ hasText: re });
+        if (await btn.first().isVisible({ timeout: 200 }).catch(() => false)) {
+          await btn.first().click({ timeout: 1000, force: false }).catch(() => {});
+          this.log('Auto-dismissed popup (native click)');
+        }
+      } catch {}
+    }, 1200);
     return interval;
   }
 
@@ -945,7 +980,7 @@ class ScraperSession {
         }
         await page.waitForTimeout(600);
 
-        await this._dismissPopups(page);
+        await this._dismissPopups(page, 2000);  // short per-page window
         if (autoScroll) await this._autoScroll(page);
         const pageData = await extractPageData(page, url);
 

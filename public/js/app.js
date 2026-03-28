@@ -786,6 +786,239 @@ function updateSitePreview(info) {
   preview.style.display = 'flex';
 }
 
+// ---- Card detail builder ----
+function buildCardDetail(key, data) {
+  const esc = escapeHTML;
+  const allPages = data.pages || [];
+  const firstPage = allPages[0];
+
+  const urlRow = (u, i) =>
+    `<div class="cd-row"><span class="cd-num">${i + 1}</span><a class="cd-url" href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></div>`;
+
+  switch (key) {
+    case 'pages':
+      if (!allPages.length) return '<p class="cd-empty">No pages scraped.</p>';
+      return allPages.map((p, i) =>
+        `<div class="cd-row">
+          <span class="cd-num">${i + 1}</span>
+          <div class="cd-main">
+            <div class="cd-title">${esc(p.meta?.title || '(no title)')}</div>
+            <a class="cd-url" href="${esc(p.meta?.url || '')}" target="_blank" rel="noopener">${esc(p.meta?.url || '')}</a>
+          </div>
+          <div class="cd-chips">
+            <span class="cd-chip">${p.links?.length || 0} links</span>
+            <span class="cd-chip">${p.images?.length || 0} imgs</span>
+            <span class="cd-chip">${p.forms?.length || 0} forms</span>
+          </div>
+        </div>`).join('');
+
+    case 'dom': {
+      const s = firstPage?.domStats || {};
+      const entries = Object.entries(s);
+      if (!entries.length) return '<p class="cd-empty">No DOM stats available.</p>';
+      return `<div class="cd-kv-grid">${entries.map(([k, v]) =>
+        `<div class="cd-kv-row"><span class="cd-kv-key">${esc(k)}</span><span class="cd-kv-val">${v}</span></div>`).join('')}</div>`;
+    }
+
+    case 'images': {
+      const imgs = allPages.flatMap(p => p.images || []);
+      if (!imgs.length) return '<p class="cd-empty">No images found.</p>';
+      return `<div class="cd-img-grid">${imgs.slice(0, 120).map(img =>
+        `<div class="cd-img-card">
+          <img src="${esc(img.src)}" alt="${esc(img.alt || '')}" loading="lazy" onerror="this.style.display='none'">
+          <div class="cd-img-info">
+            <span class="cd-img-alt">${esc(img.alt || '(no alt)')}</span>
+            ${img.width ? `<span class="cd-chip">${img.width}×${img.height}</span>` : ''}
+          </div>
+        </div>`).join('')}</div>`;
+    }
+
+    case 'links': {
+      const links = allPages.flatMap(p => p.links || []);
+      if (!links.length) return '<p class="cd-empty">No links found.</p>';
+      return links.slice(0, 300).map(l =>
+        `<div class="cd-row">
+          <span class="cd-chip ${l.isInternal ? 'chip-int' : 'chip-ext'}">${l.isInternal ? 'INT' : 'EXT'}</span>
+          <div class="cd-main">
+            ${l.text ? `<div class="cd-title">${esc(l.text)}</div>` : ''}
+            <a class="cd-url" href="${esc(l.href || '')}" target="_blank" rel="noopener">${esc(l.href || '')}</a>
+          </div>
+        </div>`).join('');
+    }
+
+    case 'graphql': {
+      const calls = data.apiCalls?.graphql || [];
+      if (!calls.length) return '<p class="cd-empty">No GraphQL calls captured.</p>';
+      return calls.map((c, i) => {
+        const opName = c.body?.operationName ||
+          (typeof c.body?.query === 'string' ? (c.body.query.match(/(?:query|mutation|subscription)\s+(\w+)/)?.[1]) : null) ||
+          `Call ${i + 1}`;
+        const st = c.response?.status;
+        return `<div class="cd-row">
+          <span class="cd-chip chip-gql">${c.method}</span>
+          <div class="cd-main">
+            <div class="cd-title">${esc(opName)}</div>
+            <span class="cd-url">${esc(c.url)}</span>
+          </div>
+          ${st ? `<span class="cd-chip ${st < 300 ? 'chip-ok' : 'chip-err'}">${st}</span>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    case 'rest': {
+      const calls = data.apiCalls?.rest || [];
+      if (!calls.length) return '<p class="cd-empty">No REST calls captured.</p>';
+      return calls.map(c => {
+        const path = (() => { try { return new URL(c.url).pathname; } catch { return c.url; } })();
+        const st = c.response?.status;
+        return `<div class="cd-row">
+          <span class="cd-chip chip-method">${c.method}</span>
+          <div class="cd-main">
+            <div class="cd-title">${esc(path)}</div>
+            <span class="cd-url">${esc(c.url)}</span>
+          </div>
+          ${st ? `<span class="cd-chip ${st < 300 ? 'chip-ok' : 'chip-err'}">${st}</span>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    case 'all': {
+      const reqs = data.apiCalls?.all || [];
+      if (!reqs.length) return '<p class="cd-empty">No requests captured. Enable "Capture All Requests" in options.</p>';
+      return reqs.slice(0, 500).map(c => {
+        const st = c.response?.status;
+        return `<div class="cd-row">
+          <span class="cd-chip chip-method">${c.method}</span>
+          <span class="cd-chip">${c.resourceType}</span>
+          <a class="cd-url" href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a>
+          ${st ? `<span class="cd-chip ${st < 300 ? 'chip-ok' : 'chip-err'}">${st}</span>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    case 'websockets': {
+      const ws = data.websockets || [];
+      if (!ws.length) return '<p class="cd-empty">No WebSockets captured.</p>';
+      return ws.map((w, i) =>
+        `<div class="cd-row">
+          <span class="cd-chip chip-ws">WS</span>
+          <div class="cd-main">
+            <span class="cd-url">${esc(w.url)}</span>
+            <div class="cd-chips">
+              <span class="cd-chip">${w.frames?.length || 0} frames</span>
+              ${(w.frames || []).slice(0, 2).map(f =>
+                `<span class="cd-frame-preview">${esc(String(f.payload).substring(0, 100))}</span>`).join('')}
+            </div>
+          </div>
+        </div>`).join('');
+    }
+
+    case 'assets': {
+      const assets = data.assets || [];
+      if (!assets.length) return '<p class="cd-empty">No assets captured.</p>';
+      return assets.slice(0, 300).map(a =>
+        `<div class="cd-row">
+          <span class="cd-chip">${esc(a.type)}</span>
+          <a class="cd-url" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a>
+        </div>`).join('');
+    }
+
+    case 'dl-images': {
+      const imgs = data.downloadedImages || [];
+      if (!imgs.length) return '<p class="cd-empty">No images downloaded.</p>';
+      return `<div class="cd-img-grid">${imgs.map(img =>
+        `<div class="cd-img-card">
+          <img src="${img.dataUrl}" alt="${esc(img.alt || '')}" loading="lazy">
+          <div class="cd-img-info">
+            <span class="cd-img-alt">${esc(img.alt || '(no alt)')}</span>
+            ${img.width ? `<span class="cd-chip">${img.width}×${img.height}</span>` : ''}
+            <span class="cd-chip">${formatBytes(img.size || 0)}</span>
+          </div>
+        </div>`).join('')}</div>`;
+    }
+
+    case 'cookies': {
+      const c = data.cookies || [];
+      if (!c.length) return '<p class="cd-empty">No cookies captured.</p>';
+      return `<table class="cd-table"><thead><tr><th>Name</th><th>Domain</th><th>Value</th><th>Secure</th><th>HttpOnly</th><th>SameSite</th></tr></thead><tbody>
+        ${c.map(ck => `<tr>
+          <td class="cd-name">${esc(ck.name)}</td>
+          <td>${esc(ck.domain || '')}</td>
+          <td class="cd-val">${esc(String(ck.value || '').substring(0, 80))}</td>
+          <td class="${ck.secure ? 'flag-yes' : 'flag-no'}">${ck.secure ? '✓' : '✗'}</td>
+          <td class="${ck.httpOnly ? 'flag-yes' : 'flag-no'}">${ck.httpOnly ? '✓' : '✗'}</td>
+          <td>${esc(ck.sameSite || '-')}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+    case 'consolelogs': {
+      const logs = data.consoleLogs || [];
+      if (!logs.length) return '<p class="cd-empty">No console logs captured.</p>';
+      const typeColor = { error: 'chip-err', warning: 'chip-warn', warn: 'chip-warn', log: 'chip-log', info: 'chip-info' };
+      return logs.slice(0, 500).map(l =>
+        `<div class="cd-row">
+          <span class="cd-chip ${typeColor[l.type] || 'chip-log'}">${esc(l.type)}</span>
+          <span class="cd-log-msg">${esc(l.text)}</span>
+        </div>`).join('');
+    }
+
+    case 'scripts': {
+      const scripts = allPages.flatMap(p => p.scripts || []);
+      if (!scripts.length) return '<p class="cd-empty">No scripts found.</p>';
+      return scripts.map((s, i) =>
+        `<div class="cd-row">
+          <span class="cd-num">${i + 1}</span>
+          ${s.src
+            ? `<a class="cd-url" href="${esc(s.src)}" target="_blank" rel="noopener">${esc(s.src)}</a>`
+            : `<span class="cd-url cd-inline">(inline, ${s.content?.length || 0} chars)</span>`}
+        </div>`).join('');
+    }
+
+    case 'forms': {
+      const forms = allPages.flatMap(p => p.forms || []);
+      if (!forms.length) return '<p class="cd-empty">No forms found.</p>';
+      return forms.map((f, i) =>
+        `<div class="cd-row">
+          <span class="cd-num">${i + 1}</span>
+          <div class="cd-main">
+            <div class="cd-title">${esc(f.action || '(no action)')}</div>
+            <div class="cd-chips">${(f.inputs || []).map(inp =>
+              `<span class="cd-chip">${esc(inp.type || 'text')}:${esc(inp.name || inp.id || '?')}</span>`).join('')}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    case 'errors': {
+      const errs = data.errors || [];
+      if (!errs.length) return '<p class="cd-empty">No errors.</p>';
+      return errs.slice(0, 300).map(e =>
+        `<div class="cd-row">
+          <span class="cd-chip chip-err">${esc(e.type || 'error')}</span>
+          <div class="cd-main">
+            ${e.url ? `<a class="cd-url" href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.url)}</a>` : ''}
+            <div class="cd-error-msg">${esc(e.message || e.failure || '')}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    case 'auth-redirects':
+      return (data.authRedirectedPages || []).map(urlRow).join('') || '<p class="cd-empty">No auth redirects.</p>';
+
+    case 'failed-pages':
+      return (data.failedPages || []).map((p, i) =>
+        `<div class="cd-row">
+          <span class="cd-num">${i + 1}</span>
+          <div class="cd-main">
+            <a class="cd-url" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.url)}</a>
+            <span class="cd-error-msg">${esc(p.reason || '')}</span>
+          </div>
+        </div>`).join('') || '<p class="cd-empty">No failed pages.</p>';
+
+    default:
+      return '<p class="cd-empty">No details available.</p>';
+  }
+}
+
 // ---- Results rendering ----
 function renderResults(data) {
   document.getElementById('results-empty').style.display = 'none';
@@ -796,30 +1029,62 @@ function renderResults(data) {
   const firstPage = data.pages?.[0];
   grid.innerHTML = '';
 
+  // Store for card detail popups
+  window._scraperResult = data;
+
   const cards = [
-    { label: 'Pages Scraped', value: data.pages?.length || 0 },
-    { label: 'DOM Elements', value: firstPage?.domStats?.totalElements || 0 },
-    { label: 'Images', value: firstPage?.images?.length || 0 },
-    { label: 'Links', value: firstPage?.links?.length || 0 },
-    { label: 'GraphQL Calls', value: data.apiCalls?.graphql?.length || 0 },
-    { label: 'REST Calls', value: data.apiCalls?.rest?.length || 0 },
-    { label: 'All Requests', value: data.apiCalls?.all?.length || 0 },
-    { label: 'WebSockets', value: data.websockets?.length || 0 },
-    { label: 'Assets', value: data.assets?.length || 0 },
-    { label: 'Dl. Images', value: data.downloadedImages?.length || 0 },
-    { label: 'Cookies', value: data.cookies?.length || 0 },
-    { label: 'Console Logs', value: data.consoleLogs?.length || 0 },
-    { label: 'Scripts', value: firstPage?.scripts?.length || 0 },
-    { label: 'Forms', value: firstPage?.forms?.length || 0 },
-    { label: 'Errors', value: data.errors?.length || 0 },
-    ...(data.authRedirectedPages?.length ? [{ label: 'Auth Redirects', value: data.authRedirectedPages.length, warn: true }] : []),
-    ...(data.failedPages?.length ? [{ label: 'Failed Pages', value: data.failedPages.length, err: true }] : []),
+    { label: 'Pages Scraped', key: 'pages', value: data.pages?.length || 0 },
+    { label: 'DOM Elements', key: 'dom', value: firstPage?.domStats?.totalElements || 0 },
+    { label: 'Images', key: 'images', value: (data.pages?.flatMap(p => p.images || []).length) || 0 },
+    { label: 'Links', key: 'links', value: (data.pages?.flatMap(p => p.links || []).length) || 0 },
+    { label: 'GraphQL Calls', key: 'graphql', value: data.apiCalls?.graphql?.length || 0 },
+    { label: 'REST Calls', key: 'rest', value: data.apiCalls?.rest?.length || 0 },
+    { label: 'All Requests', key: 'all', value: data.apiCalls?.all?.length || 0 },
+    { label: 'WebSockets', key: 'websockets', value: data.websockets?.length || 0 },
+    { label: 'Assets', key: 'assets', value: data.assets?.length || 0 },
+    { label: 'Dl. Images', key: 'dl-images', value: data.downloadedImages?.length || 0 },
+    { label: 'Cookies', key: 'cookies', value: data.cookies?.length || 0 },
+    { label: 'Console Logs', key: 'consolelogs', value: data.consoleLogs?.length || 0 },
+    { label: 'Scripts', key: 'scripts', value: (data.pages?.flatMap(p => p.scripts || []).length) || 0 },
+    { label: 'Forms', key: 'forms', value: (data.pages?.flatMap(p => p.forms || []).length) || 0 },
+    { label: 'Errors', key: 'errors', value: data.errors?.length || 0, err: (data.errors?.length > 0) },
+    ...(data.authRedirectedPages?.length ? [{ label: 'Auth Redirects', key: 'auth-redirects', value: data.authRedirectedPages.length, warn: true }] : []),
+    ...(data.failedPages?.length ? [{ label: 'Failed Pages', key: 'failed-pages', value: data.failedPages.length, err: true }] : []),
   ];
+
+  let activeCardKey = null;
+  const detailPanel = document.getElementById('card-detail-panel');
+  const detailTitle = document.getElementById('card-detail-title');
+  const detailBody = document.getElementById('card-detail-body');
+  document.getElementById('card-detail-close').onclick = () => {
+    detailPanel.style.display = 'none';
+    activeCardKey = null;
+    grid.querySelectorAll('.summary-card.active').forEach(el => el.classList.remove('active'));
+  };
 
   cards.forEach((c) => {
     const card = document.createElement('div');
     card.className = 'summary-card' + (c.warn ? ' s-warn' : '') + (c.err ? ' s-err' : '');
-    card.innerHTML = `<span class="s-label">${c.label}</span><span class="s-value">${c.value}</span>`;
+    if (c.value > 0 || c.key === 'dom') card.classList.add('s-clickable');
+    card.dataset.key = c.key;
+    card.innerHTML = `<span class="s-label">${c.label}</span><span class="s-value">${c.value}</span>${(c.value > 0 || c.key === 'dom') ? '<span class="s-expand-hint">▾</span>' : ''}`;
+    if (c.value > 0 || c.key === 'dom') {
+      card.addEventListener('click', () => {
+        if (activeCardKey === c.key) {
+          detailPanel.style.display = 'none';
+          activeCardKey = null;
+          card.classList.remove('active');
+          return;
+        }
+        grid.querySelectorAll('.summary-card.active').forEach(el => el.classList.remove('active'));
+        card.classList.add('active');
+        activeCardKey = c.key;
+        detailTitle.textContent = c.label;
+        detailBody.innerHTML = buildCardDetail(c.key, window._scraperResult);
+        detailPanel.style.display = 'block';
+        detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
     grid.appendChild(card);
   });
 
