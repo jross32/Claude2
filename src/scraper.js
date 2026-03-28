@@ -78,6 +78,49 @@ function clearSession(url) {
 
 module.exports.clearSession = clearSession;
 
+// ── SPA route memory ─────────────────────────────────────────────────────────
+// URLs that 504 on direct server access but work via client-side SPA navigation
+function spaRoutesFile(url) {
+  try {
+    const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+    if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    return path.join(SESSIONS_DIR, `${hostname}.spa-routes.json`);
+  } catch { return null; }
+}
+
+function loadSpaRoutes(url) {
+  try {
+    const file = spaRoutesFile(url);
+    if (file && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {}
+  return [];
+}
+
+function saveSpaRoute(url) {
+  try {
+    const parsed = new URL(url);
+    const file = spaRoutesFile(url);
+    if (!file) return;
+    const routes = loadSpaRoutes(url);
+    // Store the path prefix up to the second segment so siblings are also covered
+    // e.g. /RioGrandeValley/divisions/ → /RioGrandeValley/
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    const prefix = '/' + (segments[0] || '');
+    if (prefix !== '/' && !routes.includes(prefix)) {
+      routes.push(prefix);
+      fs.writeFileSync(file, JSON.stringify(routes, null, 2));
+    }
+  } catch {}
+}
+
+function isSpaRoute(url, routes) {
+  if (!routes?.length) return false;
+  try {
+    const { pathname } = new URL(url);
+    return routes.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
+  } catch { return false; }
+}
+
 
 class ScraperSession {
   constructor(sessionId, broadcast) {
@@ -381,6 +424,8 @@ class ScraperSession {
     if (targetUrls.length === 0) throw new Error('No URL(s) provided');
 
     const primaryUrl = targetUrls[0];
+    // Load remembered SPA-only routes for this domain
+    this._spaRoutes = loadSpaRoutes(primaryUrl);
     this.log(`Starting scrape of ${primaryUrl}`);
     this.progress('Launching browser', 5);
 
@@ -1133,40 +1178,69 @@ class ScraperSession {
     }
   }
 
-  // SPA navigation via the browser's history API — avoids a server round-trip.
-  // Works for React Router / Vue Router routes that 504 on direct server access.
-  async _spaNavigate(page, url) {
+  // Ensure we are on a page with the SPA framework loaded (not an error page).
+  // If currently on a non-origin page or error page, navigate to origin first.
+  async _ensureReactPage(page, origin) {
     try {
+      const cur = page.url();
+      if (cur.startsWith(origin)) return true;
+      await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      return true;
+    } catch { return false; }
+  }
+
+  // SPA navigation via the browser's history API — avoids a server round-trip.
+  // MUST be called while on a page that has the SPA framework loaded.
+  async _spaNavigate(page, url, origin) {
+    try {
+      // Make sure React/Vue is loaded before pushing state
+      await this._ensureReactPage(page, origin);
+
       const targetPath = (() => {
         try { const u = new URL(url); return u.pathname + u.search + u.hash; }
         catch { return url; }
       })();
-      await page.evaluate((path) => {
-        window.history.pushState({}, '', path);
+      this.log(`SPA navigate → ${targetPath}`, 'info');
+      await page.evaluate((p) => {
+        window.history.pushState({}, '', p);
         window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
-        // Some routers listen for hashchange or a custom event
         window.dispatchEvent(new Event('locationchange'));
       }, targetPath);
       // Give React/Vue time to re-render the new route
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(2500);
       const landed = page.url();
       this.log(`SPA nav landed: ${landed}`, 'info');
-      return !this._isLoginRedirect(landed, url, (() => { try { return new URL(url).origin; } catch { return ''; } })());
+      return !this._isLoginRedirect(landed, url, origin);
     } catch { return false; }
   }
 
-  // Navigate to a URL with retry-on-failure, SPA fallback, and session recovery
+  // Navigate to a URL with SPA pre-check, retry-on-failure, and session recovery
   async _navigateWithRetry(page, url, origin) {
+    // ── Pre-check: known SPA route — skip page.goto() entirely ──────────────
+    if (isSpaRoute(url, this._spaRoutes)) {
+      this.log(`Known SPA route: ${url} — skipping server request`, 'info');
+      const ok = await this._spaNavigate(page, url, origin);
+      if (ok) return { success: true, spa: true };
+      this.log(`SPA navigation failed for known route ${url}`, 'warn');
+      this.failedPages.push({ url, reason: 'spa-nav-failed' });
+      return { success: false, reason: 'spa-nav-failed' };
+    }
+
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-        // Server returned 5xx (e.g. 504 Gateway Timeout on direct SSR hit) — try SPA nav
+        // Server returned 5xx — remember it, go back to a React page, then SPA nav
         if (response && response.status() >= 500) {
-          this.log(`${response.status()} on ${url} — trying SPA navigation...`, 'warn');
-          const ok = await this._spaNavigate(page, url);
-          if (ok) { this.log(`SPA navigation succeeded for ${url}`, 'info'); return { success: true, spa: true }; }
-          this.log(`SPA navigation also failed for ${url}`, 'warn');
+          this.log(`HTTP ${response.status()} on ${url} — saving as SPA route and retrying...`, 'warn');
+          saveSpaRoute(url);
+          this._spaRoutes = loadSpaRoutes(url); // refresh in-memory list
+          // We're now on the error page (React not loaded) — navigate back first
+          await page.goBack({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(async () => {
+            await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+          });
+          const ok = await this._spaNavigate(page, url, origin);
+          if (ok) return { success: true, spa: true };
           this.errors.push({ type: 'serverError', url, status: response.status() });
           this.failedPages.push({ url, reason: `HTTP ${response.status()}` });
           return { success: false, reason: `HTTP ${response.status()}` };
@@ -1184,14 +1258,7 @@ class ScraperSession {
 
         return { success: true };
       } catch (err) {
-        // Timeout or network error — try SPA nav on first failure before giving up
         if (attempt === 0) {
-          const isTimeout = /timeout|time.out/i.test(err.message);
-          if (isTimeout) {
-            this.log(`Timeout on ${url} — trying SPA navigation...`, 'warn');
-            const ok = await this._spaNavigate(page, url);
-            if (ok) { this.log(`SPA navigation succeeded for ${url}`, 'info'); return { success: true, spa: true }; }
-          }
           this.log(`Load failed for ${url} — retrying in 1s... (${err.message})`, 'warn');
           await page.waitForTimeout(1000);
         } else {
