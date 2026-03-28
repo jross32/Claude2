@@ -368,7 +368,7 @@ class ScraperSession {
       try {
         await page.goto(primaryUrl, { waitUntil: 'networkidle', timeout: 60000 });
       } catch (navErr) {
-        const isNetworkErr = /ERR_INVALID_AUTH_CREDENTIALS|ERR_PROXY|ERR_TUNNEL|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED/i.test(navErr.message);
+        const isNetworkErr = /ERR_INVALID_AUTH_CREDENTIALS|ERR_PROXY|ERR_TUNNEL|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED|context or browser has been closed|browser has been closed|Target closed/i.test(navErr.message);
         if (isNetworkErr) {
           this.log('Playwright navigation blocked (proxy/network). Switching to static HTTP fallback...', 'warn');
           await this.browser.close().catch(() => {});
