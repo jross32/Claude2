@@ -71,7 +71,9 @@
               <label for="url">Website URL</label>
               <div class="url-input-wrap" id="url-input-wrap">
                 <input type="text" id="url" placeholder="https://example.com"
-                  autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                  autocomplete="off" data-lpignore="true" data-form-type="other"
+                  data-1p-ignore="true" autocorrect="off" autocapitalize="off" spellcheck="false"
+                  readonly onfocus="this.removeAttribute('readonly')" />
                 <button class="btn-detect" id="btn-detect" title="Auto-detect site info">Detect</button>
                 <!-- Recent URLs dropdown -->
                 <div class="url-recent-dropdown" id="url-recent-dropdown" style="display:none"></div>
