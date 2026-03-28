@@ -179,6 +179,26 @@ class ScraperSession {
     }
   }
 
+  async _dismissPopups(page) {
+    // Click "No Thanks" / "Close" / "Dismiss" / "Skip" buttons on modal overlays
+    const dismissTexts = /^(no thanks|no,? thanks|close|dismiss|skip|not now|maybe later|cancel|×|✕)$/i;
+    try {
+      const els = await page.$$('button, a[role="button"], [role="dialog"] button, .modal button');
+      for (const el of els) {
+        try {
+          if (!await el.isVisible()) continue;
+          const text = ((await el.textContent()) || '').trim();
+          if (dismissTexts.test(text)) {
+            this.log(`Dismissed popup: "${text}"`);
+            await el.click();
+            await page.waitForTimeout(400);
+            return;
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
   async _autoScroll(page) {
     await page.evaluate(async () => {
       await new Promise((resolve) => {
@@ -469,7 +489,7 @@ class ScraperSession {
       this.progress('Navigating to page', 15);
       this.log(`Navigating to ${primaryUrl}`);
       try {
-        await page.goto(primaryUrl, { waitUntil: 'networkidle', timeout: 60000 });
+        await page.goto(primaryUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       } catch (navErr) {
         const isNetworkErr = /ERR_INVALID_AUTH_CREDENTIALS|ERR_PROXY|ERR_TUNNEL|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED|context or browser has been closed|browser has been closed|Target closed/i.test(navErr.message);
         if (isNetworkErr) {
@@ -565,6 +585,8 @@ class ScraperSession {
           await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
           await page.waitForTimeout(1500);
           this.log(`Settled URL: ${page.url()}`);
+          // Dismiss any post-login notification/permission popups
+          await this._dismissPopups(page);
           this.log('Authentication complete', 'success');
 
           // Save session keyed to the post-login URL (may differ from login URL)
@@ -626,7 +648,7 @@ class ScraperSession {
           if (this.stopped) break;
           this.progress(`Batch: scraping ${i + 1}/${targetUrls.length}`, 50 + Math.floor((i / targetUrls.length) * 30));
           try {
-            await page.goto(targetUrls[i], { waitUntil: 'networkidle', timeout: 60000 });
+            await page.goto(targetUrls[i], { waitUntil: 'domcontentloaded', timeout: 60000 });
             if (autoScroll) await this._autoScroll(page);
             const visited = new Set();
             allResults.push(...await this._scrapePage(page, targetUrls[i], scrapeDepth || 1, visited));
@@ -763,7 +785,7 @@ class ScraperSession {
       for (const link of links) {
         if (this.stopped) break;
         try {
-          await page.goto(link.href, { waitUntil: 'networkidle', timeout: 30000 });
+          await page.goto(link.href, { waitUntil: 'domcontentloaded', timeout: 30000 });
           if (autoScroll) await this._autoScroll(page);
           results.push(...await this._scrapePage(page, link.href, depth - 1, visited));
         } catch (err) {
@@ -809,7 +831,8 @@ class ScraperSession {
       );
 
       try {
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(600);
 
         // Detect mid-crawl logout — if we landed on a login page, restore session and retry
         if (this._isLoginRedirect(page.url(), url, origin)) {
@@ -821,6 +844,7 @@ class ScraperSession {
           }
         }
 
+        await this._dismissPopups(page);
         if (autoScroll) await this._autoScroll(page);
         const pageData = await extractPageData(page, url);
 
@@ -920,7 +944,7 @@ class ScraperSession {
           }
         }
       }
-      await page.goto(retryUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.goto(retryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       return !this._isLoginRedirect(page.url(), retryUrl, new URL(retryUrl).origin);
     } catch { return false; }
   }
