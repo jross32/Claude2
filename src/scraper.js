@@ -365,7 +365,47 @@ class ScraperSession {
       // ── Navigate ─────────────────────────────────────────────────────────
       this.progress('Navigating to page', 15);
       this.log(`Navigating to ${primaryUrl}`);
-      await page.goto(primaryUrl, { waitUntil: 'networkidle', timeout: 60000 });
+      try {
+        await page.goto(primaryUrl, { waitUntil: 'networkidle', timeout: 60000 });
+      } catch (navErr) {
+        const isNetworkErr = /ERR_INVALID_AUTH_CREDENTIALS|ERR_PROXY|ERR_TUNNEL|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED/i.test(navErr.message);
+        if (isNetworkErr) {
+          this.log('Playwright navigation blocked (proxy/network). Switching to static HTTP fallback...', 'warn');
+          await this.browser.close().catch(() => {});
+          this.browser = null;
+          const pageData = await this._staticScrape(primaryUrl);
+          this.progress('Done (static fallback)', 100);
+          this.log('Static scrape complete.', 'success');
+          return {
+            meta: {
+              scrapedAt: new Date().toISOString(),
+              targetUrl: primaryUrl,
+              totalPages: 1,
+              totalGraphQLCalls: 0,
+              totalRESTCalls: 0,
+              totalAllRequests: 0,
+              totalAssets: 0,
+              totalWebSockets: 0,
+              totalImages: pageData.images?.length || 0,
+              totalDownloadedImages: 0,
+              totalConsoleLogs: 0,
+              totalErrors: 0,
+              _scrapeMode: 'static-fallback',
+            },
+            siteInfo: { title: pageData.meta?.title || primaryUrl, origin: primaryUrl, hasLoginForm: false },
+            pages: [pageData],
+            apiCalls: { graphql: [], rest: [], all: [] },
+            assets: [],
+            downloadedImages: [],
+            websockets: [],
+            cookies: [],
+            securityHeaders: pageData._responseHeaders || {},
+            consoleLogs: [],
+            errors: [],
+          };
+        }
+        throw navErr;
+      }
 
       // ── Detect site info ─────────────────────────────────────────────────
       this.progress('Detecting site info', 22);
@@ -625,6 +665,133 @@ class ScraperSession {
         origin,
       };
     }, url);
+  }
+
+  // ── Static HTTP fallback (no browser, no JS execution) ──────────────────
+  async _staticScrape(url) {
+    this.log('Fetching HTML via Node.js https...', 'info');
+    const https = require('https');
+    const http = require('http');
+
+    const fetchHTML = (targetUrl, redirects = 0) => new Promise((resolve, reject) => {
+      if (redirects > 5) return reject(new Error('Too many redirects'));
+      const client = targetUrl.startsWith('https') ? https : http;
+      const req = client.get(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'identity',
+        },
+        timeout: 15000,
+      }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, targetUrl).href;
+          return fetchHTML(next, redirects + 1).then(resolve).catch(reject);
+        }
+        let data = '';
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => resolve({ html: data, status: res.statusCode, headers: res.headers }));
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+    });
+
+    const { html, status, headers } = await fetchHTML(url);
+    this.log(`Static fetch: HTTP ${status}, ${html.length} bytes`, 'info');
+
+    const getFirst = (re) => { const m = html.match(re); return m ? (m[1] || m[0]).trim() : null; };
+    const getAll = (re) => { const out = []; let m; const g = new RegExp(re.source, 'gi'); while ((m = g.exec(html)) !== null) out.push(m[1]?.trim()); return out.filter(Boolean); };
+    const decodeEntities = (s) => s ? s.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'") : s;
+
+    const origin = new URL(url).origin;
+    const title = decodeEntities(getFirst(/<title[^>]*>([^<]{1,300})<\/title>/i));
+    const description = decodeEntities(getFirst(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{1,500})["']/i) ||
+                        getFirst(/<meta[^>]+content=["']([^"']{1,500})["'][^>]+name=["']description["']/i));
+    const charset = getFirst(/<meta[^>]+charset=["']?([^"'\s>]+)/i);
+    const viewport = getFirst(/<meta[^>]+name=["']viewport["'][^>]+content=["']([^"']+)["']/i);
+    const canonical = getFirst(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
+    const favicon = getFirst(/<link[^>]+rel=["'](?:icon|shortcut icon)["'][^>]+href=["']([^"']+)["']/i);
+
+    const ogTags = {};
+    [...html.matchAll(/<meta[^>]+property=["'](og:[^"']+)["'][^>]+content=["']([^"']*)["']/gi)]
+      .forEach(m => { ogTags[m[1]] = decodeEntities(m[2]); });
+
+    const headings = {};
+    for (let i = 1; i <= 6; i++) {
+      headings[`h${i}`] = getAll(new RegExp(`<h${i}[^>]*>([^<]{1,300})<\\/h${i}>`, 'i')).map(t => ({ text: decodeEntities(t) }));
+    }
+
+    const links = [...html.matchAll(/href=["']([^"'#][^"']*?)["']/gi)]
+      .map(m => m[1]).filter(l => l.startsWith('http') || l.startsWith('/'))
+      .map(href => {
+        const abs = href.startsWith('http') ? href : `${origin}${href}`;
+        let isInternal = false;
+        try { isInternal = new URL(abs).origin === origin; } catch {}
+        return { href: abs, isInternal, text: null };
+      });
+
+    const images = [...html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*/gi)].map(m => ({
+      src: m[1].startsWith('http') ? m[1] : `${origin}${m[1]}`,
+      alt: m[0].match(/alt=["']([^"']*)["']/i)?.[1] || null,
+      isBackgroundImage: false,
+    }));
+
+    const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)]
+      .map(m => ({ src: m[1], inline: false, type: 'text/javascript' }));
+
+    const stylesheets = [...html.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["']/gi)]
+      .map(m => ({ href: m[1].startsWith('http') ? m[1] : `${origin}${m[1]}` }));
+
+    const fullText = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 100000);
+
+    const { extractEntities } = require('./entity-extractor');
+
+    return {
+      meta: { title, url, description, charset, viewport, canonical, favicon, ogTags, allMeta: [], jsonLD: [], twitterTags: {} },
+      headings,
+      fullText,
+      textBlocks: fullText.split('. ').slice(0, 50).map(t => ({ tag: 'p', text: t.trim() })).filter(b => b.text.length > 10),
+      links,
+      images,
+      svgs: [],
+      media: [],
+      fontFaces: [],
+      navigation: [],
+      forms: [],
+      buttons: [],
+      tables: [],
+      lists: [],
+      iframes: [],
+      scripts,
+      stylesheets,
+      inlineStyles: [],
+      cssVariables: {},
+      colors: [],
+      typography: [],
+      animations: [],
+      mediaQueries: [],
+      ariaElements: [],
+      layoutTree: null,
+      localStorage: {},
+      sessionStorage: {},
+      tech: { frameworks: [], analytics: [], cms: [], cdn: [], other: [] },
+      domStats: { totalElements: 0, totalImages: images.length, totalLinks: links.length, totalForms: 0, totalScripts: scripts.length, totalStyleSheets: stylesheets.length, totalIframes: 0, totalInputs: 0, totalButtons: 0, totalTables: 0 },
+      headHTML: null,
+      htmlSource: html.substring(0, 500000),
+      customElements: [],
+      screenshot: null,
+      viewportScreenshot: null,
+      stylesheetContents: [],
+      performance: null,
+      entities: extractEntities(fullText),
+      _responseHeaders: headers,
+      _httpStatus: status,
+      _scrapeMode: 'static',
+      _staticNote: 'JavaScript was not executed. Dynamic content, cookies, API calls, and tech fingerprinting are unavailable in static mode.',
+    };
   }
 
   _sanitizeHeaders(headers) {
