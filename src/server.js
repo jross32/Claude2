@@ -270,12 +270,6 @@ app.post('/api/schema', (req, res) => {
   }
 });
 
-// Life RPG API (preserved)
-try {
-  const rpgRoutes = require('./rpg/routes');
-  app.use('/api/rpg', rpgRoutes);
-} catch {}
-
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
