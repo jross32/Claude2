@@ -2,6 +2,26 @@
    WebScraper Pro — Frontend Application
    ===================================================== */
 
+// Inject URL input dynamically so Chrome's autofill scanner never registers it
+(function () {
+  const slot = document.getElementById('url-input-slot');
+  if (!slot) return;
+  const inp = document.createElement('input');
+  inp.id = 'url';
+  inp.type = 'text';
+  inp.placeholder = 'https://example.com';
+  inp.style.width = '100%';
+  // All known autofill-blocking attributes
+  inp.setAttribute('autocomplete', 'off');
+  inp.setAttribute('data-lpignore', 'true');
+  inp.setAttribute('data-form-type', 'other');
+  inp.setAttribute('data-1p-ignore', 'true');
+  inp.setAttribute('autocorrect', 'off');
+  inp.setAttribute('autocapitalize', 'off');
+  inp.setAttribute('spellcheck', 'false');
+  slot.appendChild(inp);
+})();
+
 let ws = null;
 let currentSessionId = null;
 let scrapedData = null;
