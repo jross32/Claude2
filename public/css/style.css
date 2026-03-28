@@ -220,8 +220,29 @@ input:focus, select:focus, textarea:focus {
 }
 select option { background: var(--bg3); }
 
-.url-input-wrap { display: flex; gap: 8px; }
+.url-input-wrap { display: flex; gap: 8px; position: relative; }
 .url-input-wrap input { flex: 1; }
+.url-recent-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow);
+  z-index: 200; overflow: hidden; max-height: 280px; overflow-y: auto;
+}
+.url-recent-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; cursor: pointer; font-size: 13px;
+  color: var(--text2); transition: background 0.12s;
+}
+.url-recent-item:hover { background: var(--bg4); color: var(--text); }
+.url-recent-icon { font-size: 12px; flex-shrink: 0; opacity: 0.5; }
+.url-recent-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.url-recent-delete {
+  background: none; border: none; color: var(--text3); cursor: pointer;
+  font-size: 11px; padding: 2px 4px; border-radius: 3px; flex-shrink: 0;
+  opacity: 0; transition: opacity 0.1s, color 0.1s;
+}
+.url-recent-item:hover .url-recent-delete { opacity: 1; }
+.url-recent-delete:hover { color: var(--danger); }
 
 .password-wrap { position: relative; }
 .password-wrap input { padding-right: 40px; }

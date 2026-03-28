@@ -70,6 +70,63 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 // ---- Auth toggle ----
 // Auth section is shown automatically when a login form is detected — no manual toggle
 
+// ---- Recent URLs ----
+const RECENT_URLS_KEY = 'wsp_recent_urls';
+const MAX_RECENT = 10;
+
+function getRecentUrls() {
+  try { return JSON.parse(localStorage.getItem(RECENT_URLS_KEY) || '[]'); } catch { return []; }
+}
+
+function saveRecentUrl(url) {
+  if (!url || !url.startsWith('http')) return;
+  let list = getRecentUrls().filter(u => u !== url);
+  list.unshift(url);
+  if (list.length > MAX_RECENT) list = list.slice(0, MAX_RECENT);
+  localStorage.setItem(RECENT_URLS_KEY, JSON.stringify(list));
+}
+
+function showRecentUrls(filter) {
+  const dropdown = document.getElementById('url-recent-dropdown');
+  let list = getRecentUrls();
+  if (filter) list = list.filter(u => u.toLowerCase().includes(filter.toLowerCase()));
+  if (list.length === 0) { dropdown.style.display = 'none'; return; }
+
+  dropdown.innerHTML = list.map(u => `
+    <div class="url-recent-item" data-url="${escapeHTML(u)}">
+      <span class="url-recent-icon">&#128339;</span>
+      <span class="url-recent-text">${escapeHTML(u)}</span>
+      <button class="url-recent-delete" data-url="${escapeHTML(u)}" title="Remove">&#10005;</button>
+    </div>
+  `).join('');
+
+  dropdown.querySelectorAll('.url-recent-item').forEach(item => {
+    item.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('url-recent-delete')) return;
+      document.getElementById('url').value = item.dataset.url;
+      dropdown.style.display = 'none';
+      checkSavedSession(item.dataset.url);
+    });
+  });
+  dropdown.querySelectorAll('.url-recent-delete').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      let list = getRecentUrls().filter(u => u !== btn.dataset.url);
+      localStorage.setItem(RECENT_URLS_KEY, JSON.stringify(list));
+      showRecentUrls(document.getElementById('url').value.trim());
+    });
+  });
+
+  dropdown.style.display = 'block';
+}
+
+const urlInput = document.getElementById('url');
+urlInput.addEventListener('focus', () => showRecentUrls(urlInput.value.trim()));
+urlInput.addEventListener('input', () => showRecentUrls(urlInput.value.trim()));
+urlInput.addEventListener('blur', () => setTimeout(() => {
+  document.getElementById('url-recent-dropdown').style.display = 'none';
+}, 150));
+
 // Auto-fill credentials from .env + check for saved session when URL changes
 document.getElementById('url').addEventListener('blur', async () => {
   const url = document.getElementById('url').value.trim();
@@ -193,6 +250,7 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     if (!res.ok) throw new Error(await res.text());
     const { sessionId } = await res.json();
     currentSessionId = sessionId;
+    saveRecentUrl(url);
     appendLog(`Session started: ${sessionId}`, 'info');
   } catch (err) {
     onScrapeError(err.message);

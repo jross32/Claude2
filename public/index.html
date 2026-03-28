@@ -69,9 +69,12 @@
             </h2>
             <div class="field">
               <label for="url">Website URL</label>
-              <div class="url-input-wrap">
-                <input type="url" id="url" placeholder="https://example.com" autocomplete="off" />
+              <div class="url-input-wrap" id="url-input-wrap">
+                <input type="text" id="url" placeholder="https://example.com"
+                  autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" />
                 <button class="btn-detect" id="btn-detect" title="Auto-detect site info">Detect</button>
+                <!-- Recent URLs dropdown -->
+                <div class="url-recent-dropdown" id="url-recent-dropdown" style="display:none"></div>
               </div>
               <!-- Saved session badge -->
               <div class="session-badge" id="session-badge" style="display:none">
