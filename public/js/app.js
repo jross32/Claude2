@@ -33,10 +33,9 @@ function handleWSMessage(msg) {
       break;
     case 'siteInfo':
       updateSitePreview(msg.data);
-      // Auto-toggle auth if login form detected
-      if (msg.data.hasLoginForm) {
-        appendLog('Login form detected on site', 'warn');
-      }
+      break;
+    case 'needsAuth':
+      showMidAuthPrompt();
       break;
     case 'needVerification':
       showVerificationPrompt();
@@ -62,11 +61,7 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 });
 
 // ---- Auth toggle ----
-const toggleAuth = document.getElementById('toggle-auth');
-const authFields = document.getElementById('auth-fields');
-toggleAuth.addEventListener('change', () => {
-  authFields.style.display = toggleAuth.checked ? 'flex' : 'none';
-});
+// Auth section is shown automatically when a login form is detected — no manual toggle
 
 // ---- Password visibility ----
 document.getElementById('btn-eye').addEventListener('click', () => {
@@ -114,7 +109,6 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
 
   const payload = {
     url,
-    hasAuth: toggleAuth.checked,
     username: document.getElementById('username').value.trim(),
     password: document.getElementById('password').value,
     verificationType: document.getElementById('verification-type').value,
@@ -159,6 +153,28 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
   resetScrapeUI();
 });
 
+// ---- Skip auth ----
+document.getElementById('btn-skip-auth').addEventListener('click', () => {
+  document.getElementById('auth-detected-banner').style.display = 'none';
+  document.getElementById('auth-section').style.display = 'none';
+  document.getElementById('username').value = '';
+  document.getElementById('password').value = '';
+});
+
+// ---- Live credential submit (mid-scrape prompt) ----
+document.getElementById('btn-submit-creds').addEventListener('click', async () => {
+  const username = document.getElementById('live-username').value.trim();
+  const password = document.getElementById('live-password').value;
+  if (!username || !password || !currentSessionId) return;
+  await fetch(`/api/scrape/${currentSessionId}/credentials`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  document.getElementById('mid-auth-prompt').style.display = 'none';
+  appendLog('Credentials submitted — continuing scrape...', 'info');
+});
+
 // ---- Verification submit ----
 document.getElementById('btn-submit-code').addEventListener('click', async () => {
   const code = document.getElementById('live-code').value.trim();
@@ -201,6 +217,11 @@ function appendLog(message, level = 'info') {
 
 function clearLog() {
   document.getElementById('log-box').innerHTML = '';
+  // Reset auth/prompt state for a fresh scrape
+  document.getElementById('auth-detected-banner').style.display = 'none';
+  document.getElementById('auth-section').style.display = 'none';
+  document.getElementById('mid-auth-prompt').style.display = 'none';
+  document.getElementById('site-preview').style.display = 'none';
 }
 
 function resetScrapeUI() {
@@ -213,6 +234,7 @@ function resetScrapeUI() {
 
 // ---- Site preview ----
 function updateSitePreview(info) {
+  // Site info strip
   const preview = document.getElementById('site-preview');
   document.getElementById('site-favicon').src = info.favicon || info.logoUrl || '';
   document.getElementById('site-title-preview').textContent = info.title || info.origin;
@@ -223,8 +245,24 @@ function updateSitePreview(info) {
   if (info.hasLoginForm) badges.innerHTML += `<span class="site-badge login">Login Required</span>`;
   if (info.has2FA) badges.innerHTML += `<span class="site-badge fa">2FA</span>`;
   if (info.hasCaptcha) badges.innerHTML += `<span class="site-badge captcha">CAPTCHA</span>`;
-
   preview.style.display = 'flex';
+
+  // Auto-show auth section when login form detected
+  if (info.hasLoginForm) {
+    document.getElementById('auth-detected-banner').style.display = 'flex';
+    document.getElementById('auth-section').style.display = 'block';
+    appendLog('Login form detected — credentials section shown.', 'warn');
+    // Scroll auth section into view
+    document.getElementById('auth-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('username').focus();
+  }
+}
+
+function showMidAuthPrompt() {
+  // Shown mid-scrape when login wall is hit without pre-supplied credentials
+  document.getElementById('mid-auth-prompt').style.display = 'block';
+  document.getElementById('mid-auth-prompt').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('live-username').focus();
 }
 
 // ---- Scrape complete ----

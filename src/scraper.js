@@ -23,6 +23,7 @@ class ScraperSession {
     this.consoleLogs = [];
     this.securityHeaders = {};
     this.downloadedImages = [];
+    this.credentialsResolver = null;
   }
 
   log(message, type = 'info') {
@@ -52,6 +53,27 @@ class ScraperSession {
         }
       }, 300000);
     });
+  }
+
+  async waitForCredentials() {
+    this.broadcast(this.sessionId, { type: 'needsAuth' });
+    return new Promise((resolve) => {
+      this.credentialsResolver = resolve;
+      // 10 minute timeout
+      setTimeout(() => {
+        if (this.credentialsResolver) {
+          this.credentialsResolver(null);
+          this.credentialsResolver = null;
+        }
+      }, 600000);
+    });
+  }
+
+  submitCredentials(username, password) {
+    if (this.credentialsResolver) {
+      this.credentialsResolver({ username, password });
+      this.credentialsResolver = null;
+    }
   }
 
   stop() {
@@ -351,19 +373,42 @@ class ScraperSession {
       this.log(`Site detected: ${siteInfo.title}`);
       this.broadcast(this.sessionId, { type: 'siteInfo', data: siteInfo });
 
-      // ── Authentication ───────────────────────────────────────────────────
-      if (hasAuth && siteInfo.hasLoginForm) {
-        this.progress('Authenticating', 30);
-        this.log('Starting authentication...');
-        await handleAuth(page, {
-          username, password, verificationType, verificationCode,
-          waitForVerification: this.waitForVerification.bind(this),
-          log: this.log.bind(this),
-          sessionId: this.sessionId,
-          broadcast: this.broadcast,
-        });
-        await page.waitForLoadState('networkidle').catch(() => {});
-        this.log('Authentication complete');
+      // ── Authentication (auto-detected) ──────────────────────────────────
+      if (siteInfo.hasLoginForm) {
+        let authUser = username;
+        let authPass = password;
+
+        // If credentials weren't pre-supplied, pause and ask the user
+        if (!authUser || !authPass) {
+          this.log('Login form detected — waiting for credentials...', 'warn');
+          this.progress('Waiting for credentials', 28);
+          const creds = await this.waitForCredentials();
+          if (creds) {
+            authUser = creds.username;
+            authPass = creds.password;
+          } else {
+            this.log('No credentials provided — skipping login, scraping public page only.', 'warn');
+          }
+        }
+
+        if (authUser && authPass) {
+          this.progress('Authenticating', 32);
+          this.log(`Logging in as ${authUser}...`);
+          await handleAuth(page, {
+            username: authUser,
+            password: authPass,
+            verificationType,
+            verificationCode,
+            waitForVerification: this.waitForVerification.bind(this),
+            log: this.log.bind(this),
+            sessionId: this.sessionId,
+            broadcast: this.broadcast,
+          });
+          await page.waitForLoadState('networkidle').catch(() => {});
+          this.log('Authentication complete', 'success');
+        }
+      } else {
+        this.log('No login form detected — proceeding without authentication.');
       }
 
       // Always capture cookies

@@ -132,15 +132,18 @@
           </div>
 
           <!-- Auth Section -->
-          <div class="form-section">
+          <!-- Auth section — hidden until auto-detected or login wall hit -->
+          <div class="auth-detected-banner" id="auth-detected-banner" style="display:none">
+            <span class="auth-banner-icon">&#128274;</span>
+            <span class="auth-banner-text">Login form detected — enter your credentials below to scrape behind the login.</span>
+            <button class="btn-xs" id="btn-skip-auth">Skip (scrape public page only)</button>
+          </div>
+
+          <div class="form-section auth-section" id="auth-section" style="display:none">
             <h2 class="section-title">
-              <span class="section-icon">&#128274;</span> Authentication
-              <label class="toggle-switch">
-                <input type="checkbox" id="toggle-auth" />
-                <span class="slider"></span>
-              </label>
+              <span class="section-icon">&#128274;</span> Login Credentials
             </h2>
-            <div class="auth-fields" id="auth-fields" style="display:none">
+            <div class="auth-fields" id="auth-fields">
               <div class="field-row">
                 <div class="field">
                   <label for="username">Username / Email</label>
@@ -157,9 +160,9 @@
 
               <!-- Verification -->
               <div class="field">
-                <label for="verification-type">Verification / 2FA Type</label>
+                <label for="verification-type">Verification / 2FA</label>
                 <select id="verification-type">
-                  <option value="none">None</option>
+                  <option value="none">None / Not required</option>
                   <option value="totp">TOTP / Authenticator App</option>
                   <option value="email">Email Code</option>
                   <option value="sms">SMS Code</option>
@@ -168,11 +171,26 @@
               </div>
 
               <div class="field" id="code-field" style="display:none">
-                <label for="verification-code">Verification Code (if already known)</label>
+                <label for="verification-code">Verification Code (optional — leave blank to be prompted live)</label>
                 <input type="text" id="verification-code" placeholder="123456" maxlength="10" />
-                <span class="hint">Leave blank to enter the code during scraping</span>
               </div>
             </div>
+          </div>
+
+          <!-- Mid-scrape credential prompt (shown if login wall hit unexpectedly) -->
+          <div class="mid-auth-prompt" id="mid-auth-prompt" style="display:none">
+            <div class="mid-auth-icon">&#128274;</div>
+            <p><strong>Login wall detected.</strong> Enter credentials to continue:</p>
+            <div class="field-row" style="max-width:500px;margin:10px auto 0">
+              <div class="field">
+                <input type="text" id="live-username" placeholder="Username / Email" autocomplete="off" />
+              </div>
+              <div class="field">
+                <input type="password" id="live-password" placeholder="Password" />
+              </div>
+            </div>
+            <button class="btn-primary" id="btn-submit-creds" style="margin-top:10px">Submit &amp; Continue</button>
+          </div>
           </div>
 
           <!-- Browser window options -->

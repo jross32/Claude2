@@ -124,6 +124,17 @@ app.post('/api/scrape/:sessionId/verify', (req, res) => {
   }
 });
 
+// Credentials submission during scrape (when login wall auto-detected)
+app.post('/api/scrape/:sessionId/credentials', (req, res) => {
+  const scraper = sessions.get(req.params.sessionId);
+  if (scraper) {
+    scraper.submitCredentials(req.body.username, req.body.password);
+    res.json({ message: 'Credentials submitted' });
+  } else {
+    res.status(404).json({ error: 'Session not found' });
+  }
+});
+
 // ---- Diff ----
 app.post('/api/diff', (req, res) => {
   const { resultA, resultB } = req.body;

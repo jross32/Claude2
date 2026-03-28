@@ -778,3 +778,25 @@ body.light .json-bool { color: #b45309; }
 .show-browser-label:hover { border-color: var(--accent); }
 .show-browser-label.active-opt { border-color: var(--accent); background: var(--accent-glow); color: var(--accent); }
 .browser-window-opts { background: var(--bg3); border: 1px solid var(--accent); border-radius: var(--radius); padding: 16px 20px; margin-top: -8px; }
+
+/* ============================
+   Auto-detected auth banner
+   ============================ */
+.auth-detected-banner {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning);
+  border-radius: var(--radius-sm); padding: 12px 16px;
+  font-size: 13px; color: var(--warning);
+  animation: fadeIn 0.3s ease;
+}
+.auth-banner-icon { font-size: 20px; flex-shrink: 0; }
+.auth-banner-text { flex: 1; line-height: 1.4; }
+.auth-section { animation: fadeIn 0.3s ease; }
+
+/* Mid-scrape credential prompt */
+.mid-auth-prompt {
+  background: rgba(245, 158, 11, 0.08); border: 1px solid var(--warning);
+  border-radius: var(--radius-sm); padding: 18px; text-align: center;
+  animation: fadeIn 0.2s ease;
+}
+.mid-auth-icon { font-size: 32px; margin-bottom: 8px; }
