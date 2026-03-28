@@ -112,7 +112,8 @@ function renderPresets() {
     const card = document.createElement('div');
     card.className = 'preset-item';
     card.dataset.idx = idx;
-    const faviconUrl = preset.url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(preset.url).hostname)}` : '';
+    const faviconDomain = (() => { try { return new URL(preset.iconUrl || preset.url || '').hostname; } catch { return ''; } })();
+    const faviconUrl = preset.favicon || (faviconDomain ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(faviconDomain)}` : '');
     card.innerHTML = `
       <div class="preset-item-main" data-idx="${idx}">
         ${faviconUrl ? `<img class="preset-favicon" src="${escapeHTML(faviconUrl)}" alt="" onerror="this.style.display='none'" />` : '<span class="preset-favicon-placeholder">&#127760;</span>'}
@@ -172,6 +173,7 @@ function openPresetModal(editIdx = -1) {
     title.textContent = '✎ Edit Preset';
     document.getElementById('preset-name').value = p.name || '';
     document.getElementById('preset-url').value = p.url || '';
+    document.getElementById('preset-icon-url').value = p.iconUrl || '';
     document.getElementById('preset-graphql').checked = p.captureGraphQL !== false;
     document.getElementById('preset-rest').checked = p.captureREST !== false;
     document.getElementById('preset-assets').checked = !!p.captureAssets;
@@ -185,6 +187,7 @@ function openPresetModal(editIdx = -1) {
     title.textContent = '★ Save Scrape Preset';
     document.getElementById('preset-name').value = '';
     document.getElementById('preset-url').value = document.getElementById('url').value || '';
+    document.getElementById('preset-icon-url').value = '';
     document.getElementById('preset-graphql').checked = document.getElementById('capture-graphql').checked;
     document.getElementById('preset-rest').checked = document.getElementById('capture-rest').checked;
     document.getElementById('preset-assets').checked = document.getElementById('capture-assets').checked;
@@ -223,12 +226,15 @@ document.getElementById('preset-depth').addEventListener('mousedown', e => e.sto
 document.getElementById('btn-preset-save').addEventListener('click', () => {
   const name = document.getElementById('preset-name').value.trim();
   const url  = document.getElementById('preset-url').value.trim();
+  const iconUrl = document.getElementById('preset-icon-url').value.trim();
   if (!name) { document.getElementById('preset-name').focus(); return; }
   if (!url)  { document.getElementById('preset-url').focus(); return; }
   const limitDepth = document.getElementById('preset-limitdepth').checked;
   const fullCrawl  = document.getElementById('preset-fullcrawl').checked;
+  const faviconDomain = (() => { try { return new URL(iconUrl || url).hostname; } catch { return ''; } })();
   const preset = {
     name, url,
+    iconUrl: iconUrl || '',
     limitDepth,
     scrapeDepth: limitDepth ? (parseInt(document.getElementById('preset-depth').value) || 3) : 99,
     captureGraphQL: document.getElementById('preset-graphql').checked,
@@ -238,7 +244,7 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
     fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
     maxPages: fullCrawl ? 0 : (parseInt(document.getElementById('preset-maxpages').value) || 100),
-    favicon: url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(url).hostname)}` : '',
+    favicon: faviconDomain ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(faviconDomain)}` : '',
   };
   const list = getPresets();
   const editIdx = document.getElementById('btn-preset-save').dataset.editIdx;
