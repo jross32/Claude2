@@ -190,6 +190,11 @@ function openPresetModal(editIdx = -1) {
     setImagesUI(!!p.captureImages, p.imageLimit);
     setAvoidTags(p.avoidTags || ['logout', 'cart']);
     document.getElementById('preset-scroll').checked = p.autoScroll !== false;
+    document.getElementById('preset-dropdowns').checked = !!p.captureDropdowns;
+    document.getElementById('preset-screenshots').checked = !!p.captureScreenshots;
+    document.getElementById('preset-capture-speed').value = p.captureSpeed || 1;
+    document.getElementById('preset-capture-speed-val').textContent = p.captureSpeed || 1;
+    document.getElementById('preset-slow-motion').value = p.slowMotion || 0;
     document.getElementById('preset-liveview').checked = p.liveView !== false;
     document.getElementById('preset-maxpages').value = p.maxPages || 100;
     setFullCrawlUI(!!p.fullCrawl);
@@ -209,6 +214,12 @@ function openPresetModal(editIdx = -1) {
     setImagesUI(captImgOn, document.getElementById('image-limit').value);
     setAvoidTags([...document.querySelectorAll('.avoid-tag:checked')].map(el => el.value));
     document.getElementById('preset-scroll').checked = document.getElementById('auto-scroll').checked;
+    document.getElementById('preset-dropdowns').checked = document.getElementById('capture-dropdowns').checked;
+    document.getElementById('preset-screenshots').checked = document.getElementById('capture-screenshots').checked;
+    const csVal = document.getElementById('capture-speed').value || 1;
+    document.getElementById('preset-capture-speed').value = csVal;
+    document.getElementById('preset-capture-speed-val').textContent = csVal;
+    document.getElementById('preset-slow-motion').value = document.getElementById('slow-motion').value || 0;
     document.getElementById('preset-liveview').checked = document.getElementById('live-view').value === 'true';
     document.getElementById('preset-maxpages').value = document.getElementById('max-pages').value || 100;
     setFullCrawlUI(document.getElementById('full-crawl').checked);
@@ -242,6 +253,9 @@ document.getElementById('preset-depth').addEventListener('mousedown', e => e.sto
 document.getElementById('preset-images').addEventListener('change', function () {
   document.getElementById('preset-images-wrap').style.display = this.checked ? 'inline' : 'none';
 });
+document.getElementById('preset-capture-speed').addEventListener('input', function () {
+  document.getElementById('preset-capture-speed-val').textContent = this.value;
+});
 document.getElementById('preset-image-limit').addEventListener('click', e => e.stopPropagation());
 document.getElementById('preset-image-limit').addEventListener('mousedown', e => e.stopPropagation());
 
@@ -273,6 +287,10 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
     imageLimit: captureImages ? (parseInt(document.getElementById('preset-image-limit').value) || 0) : 0,
     avoidTags: [...document.querySelectorAll('.preset-avoid-tag:checked')].map(el => el.value),
     autoScroll: document.getElementById('preset-scroll').checked,
+    captureDropdowns: document.getElementById('preset-dropdowns').checked,
+    captureScreenshots: document.getElementById('preset-screenshots').checked,
+    captureSpeed: parseInt(document.getElementById('preset-capture-speed').value, 10) || 1,
+    slowMotion: parseInt(document.getElementById('preset-slow-motion').value, 10) || 0,
     fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
     maxPages: fullCrawl ? 0 : (parseInt(document.getElementById('preset-maxpages').value) || 100),
@@ -339,6 +357,12 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   document.querySelectorAll('.avoid-tag').forEach(cb => { cb.checked = avoidTags.includes(cb.value); });
   renderAvoidPills('avoid-links-pills', '.avoid-tag');
   document.getElementById('auto-scroll').checked = preset.autoScroll !== false;
+  document.getElementById('capture-dropdowns').checked = !!preset.captureDropdowns;
+  document.getElementById('capture-screenshots').checked = !!preset.captureScreenshots;
+  const presetCsVal = preset.captureSpeed || 1;
+  document.getElementById('capture-speed').value = presetCsVal;
+  document.getElementById('capture-speed-badge').textContent = _captureSpeedLabels[presetCsVal] || `${presetCsVal}`;
+  document.getElementById('slow-motion').value = preset.slowMotion || 0;
   // Full crawl + max pages
   const fc = !!preset.fullCrawl;
   document.getElementById('full-crawl').checked = fc;
@@ -566,6 +590,7 @@ async function startScrapeSession(name, faviconUrl) {
     imageLimit: parseInt(document.getElementById('image-limit').value, 10) || 0,
     autoScroll: document.getElementById('auto-scroll').checked,
     captureDropdowns: document.getElementById('capture-dropdowns').checked,
+    captureScreenshots: document.getElementById('capture-screenshots').checked,
     captureSpeed: parseInt(document.getElementById('capture-speed').value, 10) || 1,
     showBrowser: false,
     liveView,
@@ -887,14 +912,19 @@ function buildCardDetail(key, data) {
     `<div class="cd-row"><span class="cd-num">${i + 1}</span><a class="cd-url" href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></div>`;
 
   switch (key) {
-    case 'pages':
+    case 'pages': {
       if (!allPages.length) return '<p class="cd-empty">No pages scraped.</p>';
-      return allPages.map((p, i) =>
+      const dropdownCount = allPages.filter(p => p._dropdownState).length;
+      const dropdownSummary = dropdownCount > 0
+        ? `<div class="cd-dropdown-summary">&#9660; ${dropdownCount} dropdown state${dropdownCount !== 1 ? 's' : ''} captured</div>`
+        : '';
+      return dropdownSummary + allPages.map((p, i) =>
         `<div class="cd-row">
           <span class="cd-num">${i + 1}</span>
           <div class="cd-main">
             <div class="cd-title">${esc(p.meta?.title || '(no title)')}</div>
             <a class="cd-url" href="${esc(p.meta?.url || '')}" target="_blank" rel="noopener">${esc(p.meta?.url || '')}</a>
+            ${p._dropdownState ? `<div class="cd-dropdown-badge">&#9660; Dropdown: <strong>${esc(p._dropdownState.label)}</strong> &rarr; ${esc(p._dropdownState.option)}</div>` : ''}
           </div>
           <div class="cd-chips">
             <span class="cd-chip">${p.links?.length || 0} links</span>
@@ -902,6 +932,7 @@ function buildCardDetail(key, data) {
             <span class="cd-chip">${p.forms?.length || 0} forms</span>
           </div>
         </div>`).join('');
+    }
 
     case 'dom': {
       const s = firstPage?.domStats || {};

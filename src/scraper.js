@@ -371,7 +371,7 @@ class ScraperSession {
         }, 80);
       });
     });
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(300);
   }
 
   // Detect and interact with all <select> dropdowns on the page; capture page data per option
@@ -414,10 +414,10 @@ class ScraperSession {
               }, si);
 
               await selHandle.asElement().selectOption({ index: option.index });
-              await page.waitForTimeout(1200);
+              await page.waitForTimeout(400);
               await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
 
-              const stateData = await extractPageData(page, url);
+              const stateData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
               stateData._dropdownState = { label: selectInfo.label, option: option.text, value: option.value };
               results.push(stateData);
               this.log(`  Captured: "${selectInfo.label}" = "${option.text}"`);
@@ -527,14 +527,16 @@ class ScraperSession {
       imageLimit,
       autoScroll,
       captureDropdowns,
+      captureScreenshots,
       captureSpeed,
       clickSequence,
-      showBrowser,
       liveView,
       slowMotion,
       fullCrawl,
       maxPages,
     } = options;
+
+    this._captureScreenshots = captureScreenshots || false;
 
     const targetUrls = urls && urls.length > 0 ? urls : (url ? [url] : []);
     if (targetUrls.length === 0) throw new Error('No URL(s) provided');
@@ -579,7 +581,7 @@ class ScraperSession {
       // ── Live screenshot stream ────────────────────────────────────────────
       if (liveView !== false) this._startLiveStream(page);
 
-      const captureOptions = { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureImages, imageLimit };
+      const captureOptions = { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureImages, imageLimit, captureScreenshots: captureScreenshots || false };
 
       // ── Request/Response/Console/Error interception ──────────────────────
       await this._setupPageCapture(page, this, captureOptions);
@@ -907,7 +909,7 @@ class ScraperSession {
     }
 
     if (autoScroll && depth >= 1) await this._autoScroll(page);
-    const pageData = await extractPageData(page, url);
+    const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
     const results = [pageData];
 
     // Interact with dropdowns and capture each state
@@ -986,7 +988,7 @@ class ScraperSession {
         }
 
         if (autoScroll) await this._autoScroll(page);
-        const pageData = await extractPageData(page, url);
+        const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
 
         // Interact with dropdowns and capture each state
         if (captureDropdowns) {
@@ -1038,17 +1040,17 @@ class ScraperSession {
           return true;
         });
 
-        // Sort new links by path depth (shallow first) before adding to queue
+        // Sort new links by depth then binary-insert into already-sorted queue (avoids O(n log n) full re-sort)
         toQueue.sort((a, b) => pathDepth(a) - pathDepth(b));
         toQueue.forEach(href => {
           const n = normalize(href);
-          queue.push(href);
           queued.add(n);
           discoveryOrder.set(n, discoveryCounter++);
+          const depth = pathDepth(href);
+          let lo = 0, hi = queue.length;
+          while (lo < hi) { const mid = (lo + hi) >> 1; pathDepth(queue[mid]) <= depth ? lo = mid + 1 : hi = mid; }
+          queue.splice(lo, 0, href);
         });
-
-        // Re-sort entire queue by path depth to always process shallowest next
-        queue.sort((a, b) => pathDepth(a) - pathDepth(b));
 
         this.log(`  +${toQueue.length} new links queued (${queue.length} total in queue)`, 'info');
       } catch (err) {
@@ -1199,7 +1201,6 @@ class ScraperSession {
       }, variants);
 
       if (clicked) {
-        await page.waitForTimeout(2200);
         await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
         return true;
       }
@@ -1250,7 +1251,7 @@ class ScraperSession {
         window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
         window.dispatchEvent(new Event('locationchange'));
       }, targetPath);
-      await page.waitForTimeout(2500);
+      await page.waitForTimeout(1000);
       const landed = page.url();
       this.log(`SPA nav (pushState) landed: ${landed}`, 'info');
       return !this._isLoginRedirect(landed, url, origin);
@@ -1344,6 +1345,11 @@ class ScraperSession {
   async _setupPageCapture(page, captures, opts) {
     const { captureGraphQL, captureREST, captureAssets, captureAllRequests } = opts;
 
+    // O(1) pending-request lookup maps (replace O(n) findLastIndex on every response)
+    const pendingGql  = new Map();
+    const pendingRest = new Map();
+    const pendingAll  = new Map();
+
     page.on('console', (msg) => {
       captures.consoleLogs.push({
         type: msg.type(),
@@ -1378,6 +1384,7 @@ class ScraperSession {
             body: parsedBody || postData,
             timestamp: new Date().toISOString(), response: null,
           });
+          pendingGql.set(reqUrl, captures.graphqlCalls.length - 1);
           this.log(`GraphQL: ${reqUrl}`, 'graphql');
         }
       }
@@ -1396,6 +1403,7 @@ class ScraperSession {
             body: parsedBody || postData || null,
             resourceType, timestamp: new Date().toISOString(), response: null,
           });
+          pendingRest.set(reqUrl, captures.restCalls.length - 1);
           this.log(`REST: ${method} ${reqUrl}`, 'api');
         }
       }
@@ -1407,6 +1415,7 @@ class ScraperSession {
           postData: postData ? postData.substring(0, 2000) : null,
           timestamp: new Date().toISOString(), response: null,
         });
+        pendingAll.set(reqUrl, captures.allRequests.length - 1);
       }
 
       if (captureAssets) {
@@ -1423,8 +1432,9 @@ class ScraperSession {
       const status = response.status();
       const respHeaders = response.headers();
 
+      // Security headers — write to captures (not this) so workers populate correctly
       if (response.request().resourceType() === 'document') {
-        this.securityHeaders = {
+        captures.securityHeaders = {
           url: respUrl, status,
           'content-security-policy': respHeaders['content-security-policy'],
           'strict-transport-security': respHeaders['strict-transport-security'],
@@ -1442,17 +1452,19 @@ class ScraperSession {
         };
       }
 
-      const gqlIdx = captures.graphqlCalls.findLastIndex(c => c.url === respUrl && c.response === null);
-      if (gqlIdx !== -1) {
+      // O(1) response matching via pending maps
+      const gqlIdx = pendingGql.get(respUrl);
+      if (gqlIdx !== undefined) {
         try {
           const text = await response.text();
           let parsed = null; try { parsed = JSON.parse(text); } catch {}
           captures.graphqlCalls[gqlIdx].response = { status, headers: respHeaders, body: parsed || text };
         } catch {}
+        pendingGql.delete(respUrl);
       }
 
-      const restIdx = captures.restCalls.findLastIndex(c => c.url === respUrl && c.response === null);
-      if (restIdx !== -1) {
+      const restIdx = pendingRest.get(respUrl);
+      if (restIdx !== undefined) {
         try {
           const ct = respHeaders['content-type'] || '';
           if (ct.includes('application/json')) {
@@ -1463,11 +1475,12 @@ class ScraperSession {
             captures.restCalls[restIdx].response = { status, headers: respHeaders, body: null };
           }
         } catch {}
+        pendingRest.delete(respUrl);
       }
 
       if (captureAllRequests) {
-        const idx = captures.allRequests.findLastIndex(c => c.url === respUrl && c.response === null);
-        if (idx !== -1) {
+        const allIdx = pendingAll.get(respUrl);
+        if (allIdx !== undefined) {
           try {
             const ct = respHeaders['content-type'] || '';
             const isText = ct.includes('json') || ct.includes('text') || ct.includes('xml');
@@ -1477,8 +1490,9 @@ class ScraperSession {
               if (ct.includes('json')) { try { body = JSON.parse(text); } catch { body = text.substring(0, 2000); } }
               else { body = text.substring(0, 2000); }
             }
-            captures.allRequests[idx].response = { status, contentType: ct, headers: respHeaders, body };
+            captures.allRequests[allIdx].response = { status, contentType: ct, headers: respHeaders, body };
           } catch {}
+          pendingAll.delete(respUrl);
         }
       }
     });
@@ -1515,6 +1529,7 @@ class ScraperSession {
     const captures = {
       graphqlCalls: [], restCalls: [], assets: [], allRequests: [],
       consoleLogs: [], errors: [], websockets: [], downloadedImages: [],
+      securityHeaders: {},
     };
     await this._setupPageCapture(page, captures, captureOptions);
     return { context, page, captures };
@@ -1561,7 +1576,8 @@ class ScraperSession {
         }
 
         if (autoScroll) await this._autoScroll(page);
-        const pageData = await extractPageData(page, url);
+        const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
+        if (!pageData) continue;
 
         if (captureDropdowns) {
           const dr = await this._interactDropdowns(page, url);
@@ -1611,12 +1627,15 @@ class ScraperSession {
           })
           .sort((a, b) => pathDepth(a) - pathDepth(b))
           .forEach(href => {
-            queue.push(href);
-            queued.add(normalize(href));
-            shared.discoveryOrder.set(normalize(href), shared.discoveryCounter++);
+            const n = normalize(href);
+            queued.add(n);
+            shared.discoveryOrder.set(n, shared.discoveryCounter++);
+            // Binary-insert into already-sorted queue instead of full re-sort
+            const depth = pathDepth(href);
+            let lo = 0, hi = queue.length;
+            while (lo < hi) { const mid = (lo + hi) >> 1; pathDepth(queue[mid]) <= depth ? lo = mid + 1 : hi = mid; }
+            queue.splice(lo, 0, href);
           });
-
-        queue.sort((a, b) => pathDepth(a) - pathDepth(b));
 
       } catch (err) {
         if (this._isPageClosed(err)) {
@@ -1649,17 +1668,18 @@ class ScraperSession {
 
     this.log(`Parallel crawl: ${numWorkers} workers, max ${maxPages === Infinity ? '∞' : maxPages} pages`, 'info');
 
-    // Create worker contexts (each with saved session cookies)
-    const workers = [];
-    for (let i = 0; i < numWorkers; i++) {
-      try {
-        const w = await this._createWorkerContext(startUrl, captureOptions);
-        w.id = i + 1;
-        workers.push(w);
-      } catch (err) {
-        this.log(`Failed to create worker ${i + 1}: ${err.message}`, 'warn');
-      }
-    }
+    // Create worker contexts in parallel (each with saved session cookies)
+    const workerResults = await Promise.allSettled(
+      Array.from({ length: numWorkers }, (_, i) =>
+        this._createWorkerContext(startUrl, captureOptions).then(w => { w.id = i + 1; return w; })
+      )
+    );
+    const workers = workerResults
+      .filter(r => r.status === 'fulfilled')
+      .map(r => r.value);
+    workerResults
+      .filter(r => r.status === 'rejected')
+      .forEach((r, i) => this.log(`Failed to create worker ${i + 1}: ${r.reason?.message}`, 'warn'));
     if (workers.length === 0) throw new Error('Could not create any worker contexts');
     this.log(`${workers.length} worker context(s) ready`, 'info');
 
@@ -1686,6 +1706,10 @@ class ScraperSession {
       this.consoleLogs.push(...w.captures.consoleLogs);
       this.errors.push(...w.captures.errors);
       this.websockets.push(...w.captures.websockets);
+      // Merge securityHeaders — last worker with data wins
+      if (w.captures.securityHeaders && w.captures.securityHeaders.url) {
+        this.securityHeaders = w.captures.securityHeaders;
+      }
     }
 
     // Close worker contexts (browser stays open — closed by run())

@@ -228,6 +228,7 @@ app.post('/api/scrape', async (req, res) => {
     clickSequence,
     autoScroll,
     captureDropdowns,
+    captureScreenshots,
     captureSpeed,
     showBrowser,
     slowMotion,
@@ -257,6 +258,17 @@ app.post('/api/scrape', async (req, res) => {
   const scraper = new ScraperSession(sessionId, broadcast);
   sessions.set(sessionId, scraper);
 
+  // Auto-cleanup: remove session after 45 minutes to prevent memory/browser leaks
+  const CLEANUP_MS = 45 * 60 * 1000;
+  const cleanupTimer = setTimeout(() => {
+    if (sessions.has(sessionId)) {
+      const s = sessions.get(sessionId);
+      try { s.stop(); } catch {}
+      sessions.delete(sessionId);
+      broadcast(sessionId, { type: 'error', message: 'Session auto-cleaned after 45 minute timeout' });
+    }
+  }, CLEANUP_MS);
+
   scraper
     .run({
       url,
@@ -278,6 +290,7 @@ app.post('/api/scrape', async (req, res) => {
       clickSequence: clickSequence || [],
       autoScroll: autoScroll || false,
       captureDropdowns: captureDropdowns || false,
+      captureScreenshots: captureScreenshots || false,
       captureSpeed: captureSpeed || 1,
       showBrowser: showBrowser || false,
       slowMotion: slowMotion || 0,
@@ -285,12 +298,14 @@ app.post('/api/scrape', async (req, res) => {
       maxPages: maxPages || 100,
     })
     .then((result) => {
+      clearTimeout(cleanupTimer);
       // Auto-attach HAR to result
       try { result.har = exportHAR(result); } catch {}
       broadcast(sessionId, { type: 'complete', data: result });
       sessions.delete(sessionId);
     })
     .catch((err) => {
+      clearTimeout(cleanupTimer);
       broadcast(sessionId, { type: 'error', message: err.message });
       sessions.delete(sessionId);
     });

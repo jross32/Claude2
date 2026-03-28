@@ -4,7 +4,7 @@
  */
 const { extractEntities } = require('./entity-extractor');
 
-async function extractPageData(page, url) {
+async function extractPageData(page, url, opts = {}) {
   // ── 1. Core DOM + content extraction ──────────────────────────────────────
   const data = await page.evaluate((pageUrl) => {
     const origin = new URL(pageUrl).origin;
@@ -527,35 +527,38 @@ async function extractPageData(page, url) {
     };
   }, url);
 
-  // ── 2. Screenshot (full page) ──────────────────────────────────────────────
-  try {
-    const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 80, fullPage: true });
-    data.screenshot = `data:image/jpeg;base64,${screenshotBuf.toString('base64')}`;
-  } catch {
-    data.screenshot = null;
-  }
+  // ── 2. Screenshot (full page) — only when captureScreenshots is enabled ────
+  if (opts.captureScreenshots) {
+    try {
+      const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 80, fullPage: true });
+      data.screenshot = `data:image/jpeg;base64,${screenshotBuf.toString('base64')}`;
+    } catch {
+      data.screenshot = null;
+    }
 
-  // ── 3. Viewport screenshot ─────────────────────────────────────────────────
-  try {
-    const vpBuf = await page.screenshot({ type: 'jpeg', quality: 80, fullPage: false });
-    data.viewportScreenshot = `data:image/jpeg;base64,${vpBuf.toString('base64')}`;
-  } catch {
+    // ── 3. Viewport screenshot ───────────────────────────────────────────────
+    try {
+      const vpBuf = await page.screenshot({ type: 'jpeg', quality: 80, fullPage: false });
+      data.viewportScreenshot = `data:image/jpeg;base64,${vpBuf.toString('base64')}`;
+    } catch {
+      data.viewportScreenshot = null;
+    }
+  } else {
+    data.screenshot = null;
     data.viewportScreenshot = null;
   }
 
-  // ── 4. Fetch all stylesheet text ───────────────────────────────────────────
-  data.stylesheetContents = [];
-  for (const ss of (data.stylesheets || []).slice(0, 10)) {
-    try {
-      const resp = await page.evaluate(async (href) => {
+  // ── 4. Fetch all stylesheet text (parallel) ───────────────────────────────
+  data.stylesheetContents = (await Promise.all(
+    (data.stylesheets || []).slice(0, 10).map(ss =>
+      page.evaluate(async (href) => {
         try {
           const r = await fetch(href);
-          return r.ok ? (await r.text()).substring(0, 50000) : null;
+          return r.ok ? { href, content: (await r.text()).substring(0, 50000) } : null;
         } catch { return null; }
-      }, ss.href);
-      if (resp) data.stylesheetContents.push({ href: ss.href, content: resp });
-    } catch {}
-  }
+      }, ss.href).catch(() => null)
+    )
+  )).filter(Boolean);
 
   // ── 5. Performance metrics ─────────────────────────────────────────────────
   try {
