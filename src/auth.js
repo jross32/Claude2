@@ -99,10 +99,27 @@ async function handleAuth(page, options) {
   // ── Submit ──────────────────────────────────────────────────────────────────
   log('Submitting login form...');
   await clickSubmit();
-  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(1500); // let JS render the next page
   log(`Post-login URL: ${page.url()}`);
 
-  // ── Handle "Continue to …" confirmation page ────────────────────────────────
+  // ── Forgot-password failsafe ─────────────────────────────────────────────────
+  const loginUrl = page.url();
+  if (/forgot|reset.?password|password.?reset/i.test(loginUrl)) {
+    log('Landed on forgot-password page — navigating back to login and retrying...', 'warn');
+    await page.goBack().catch(() => {});
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(800);
+    // re-fill and submit
+    if (emailSel) await fill(emailSel, username);
+    if (passSel) await fill(passSel, password);
+    await clickSubmit();
+    await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    log(`Retry post-login URL: ${page.url()}`);
+  }
+
+  // ── Handle "Continue" confirmation page ──────────────────────────────────────
   log('Checking for continue/confirmation page...');
   await clickContinueIfPresent(page, log);
   log(`Post-continue URL: ${page.url()}`);
@@ -116,23 +133,28 @@ async function handleAuth(page, options) {
 }
 
 async function clickContinueIfPresent(page, log) {
-  // Text patterns that indicate a "continue forward" button
-  const continueTexts = ['continue', 'proceed', 'allow', 'accept', 'go to', 'member services', 'continue to'];
+  // Exact-match patterns for "move forward" buttons only
+  const continueRe = /^(continue|proceed|allow|accept|yes|ok|confirm)$/i;
+  // Never click these even if they match
+  const skipRe = /forgot|reset|cancel|back|sign.?up|register|someone else|log.?in.?as/i;
 
   try {
-    // Get all visible buttons and links
-    const clickables = await page.$$('button, a, input[type="submit"], input[type="button"]');
+    // Wait up to 4 seconds for any button/submit to appear on page
+    await page.waitForSelector('button, input[type="submit"]', { timeout: 4000, state: 'visible' }).catch(() => {});
+
+    const clickables = await page.$$('button, input[type="submit"], input[type="button"]');
     for (const el of clickables) {
       try {
         if (!await el.isVisible()) continue;
-        const text = ((await el.textContent()) || '').toLowerCase().trim();
-        const val  = ((await el.getAttribute('value')) || '').toLowerCase().trim();
-        const combined = text + ' ' + val;
-        if (continueTexts.some(t => combined.includes(t))) {
-          log(`Clicking continue button: "${text || val}"`);
+        const text = ((await el.textContent()) || '').trim();
+        const val  = ((await el.getAttribute('value')) || '').trim();
+        const label = (text || val);
+        if (skipRe.test(label)) continue;
+        if (continueRe.test(label.toLowerCase())) {
+          log(`Clicking continue button: "${label}"`);
           await el.click();
-          await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-          // Recurse to handle chained continue pages
+          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+          await page.waitForTimeout(1000);
           await clickContinueIfPresent(page, log);
           return;
         }
