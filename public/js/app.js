@@ -326,6 +326,8 @@ function clearLog() {
   document.getElementById('log-box').innerHTML = '';
   document.getElementById('live-creds-prompt').style.display = 'none';
   document.getElementById('site-preview').style.display = 'none';
+  const errBox = document.getElementById('scrape-error-box');
+  if (errBox) errBox.style.display = 'none';
 }
 
 function resetScrapeUI() {
@@ -404,6 +406,31 @@ function onScrapeError(message) {
   appendLog(`Error: ${message}`, 'error');
   resetScrapeUI();
   updateProgress('Error', 0);
+  showErrorBox(message);
+}
+
+function showErrorBox(message) {
+  let box = document.getElementById('scrape-error-box');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'scrape-error-box';
+    box.className = 'scrape-error-box';
+    document.getElementById('progress-card').appendChild(box);
+  }
+  const logLines = [...document.querySelectorAll('#log-box .log-entry')]
+    .map(el => el.textContent).join('\n');
+  const full = `=== ERROR ===\n${message}\n\n=== FULL LOG ===\n${logLines}`;
+  box.innerHTML = `
+    <div class="scrape-error-header">
+      <span>&#9888; Error — copy log and send to support</span>
+      <button class="btn-xs" id="btn-copy-error-log">&#128203; Copy</button>
+    </div>
+    <pre class="scrape-error-pre" id="scrape-error-pre">${escapeHTML(full)}</pre>
+  `;
+  box.style.display = 'block';
+  document.getElementById('btn-copy-error-log').addEventListener('click', () => {
+    navigator.clipboard.writeText(full).then(() => showToast('Copied to clipboard!'));
+  });
 }
 
 // ---- Results rendering ----

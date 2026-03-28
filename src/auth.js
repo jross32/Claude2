@@ -97,11 +97,15 @@ async function handleAuth(page, options) {
   }
 
   // ── Submit ──────────────────────────────────────────────────────────────────
+  log('Submitting login form...');
   await clickSubmit();
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  log(`Post-login URL: ${page.url()}`);
 
   // ── Handle "Continue to …" confirmation page ────────────────────────────────
+  log('Checking for continue/confirmation page...');
   await clickContinueIfPresent(page, log);
+  log(`Post-continue URL: ${page.url()}`);
 
   // ── Auto-detect 2FA ─────────────────────────────────────────────────────────
   const twoFA = await detectVerificationType(page);
@@ -112,25 +116,29 @@ async function handleAuth(page, options) {
 }
 
 async function clickContinueIfPresent(page, log) {
-  const selectors = [
-    'button:has-text("Continue")',
-    'button:has-text("Proceed")',
-    'button:has-text("Allow")',
-    'a:has-text("Continue")',
-    'input[value*="Continue" i]',
-  ];
-  for (const sel of selectors) {
-    try {
-      const el = await page.waitForSelector(sel, { timeout: 2000, state: 'visible' });
-      if (el) {
-        await el.click();
-        log(`Clicked: ${sel}`);
-        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-        await clickContinueIfPresent(page, log);
-        return;
-      }
-    } catch {}
-  }
+  // Text patterns that indicate a "continue forward" button
+  const continueTexts = ['continue', 'proceed', 'allow', 'accept', 'go to', 'member services', 'continue to'];
+
+  try {
+    // Get all visible buttons and links
+    const clickables = await page.$$('button, a, input[type="submit"], input[type="button"]');
+    for (const el of clickables) {
+      try {
+        if (!await el.isVisible()) continue;
+        const text = ((await el.textContent()) || '').toLowerCase().trim();
+        const val  = ((await el.getAttribute('value')) || '').toLowerCase().trim();
+        const combined = text + ' ' + val;
+        if (continueTexts.some(t => combined.includes(t))) {
+          log(`Clicking continue button: "${text || val}"`);
+          await el.click();
+          await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+          // Recurse to handle chained continue pages
+          await clickContinueIfPresent(page, log);
+          return;
+        }
+      } catch {}
+    }
+  } catch {}
 }
 
 async function detectVerificationType(page) {
