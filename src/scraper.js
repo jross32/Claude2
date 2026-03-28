@@ -129,6 +129,8 @@ class ScraperSession {
       captureImages,
       autoScroll,
       clickSequence,
+      showBrowser,
+      slowMotion,
     } = options;
 
     const targetUrls = urls && urls.length > 0 ? urls : (url ? [url] : []);
@@ -138,15 +140,20 @@ class ScraperSession {
     this.log(`Starting scrape of ${primaryUrl}`);
     this.progress('Launching browser', 5);
 
+    const isHeadless = !showBrowser;
+    this.log(showBrowser ? 'Launching visible browser window...' : 'Launching headless browser...');
+
     this.browser = await chromium.launch({
       executablePath: CHROMIUM_PATH,
-      headless: true,
+      headless: isHeadless,
+      slowMo: showBrowser && slowMotion ? parseInt(slowMotion) : 0,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
         '--allow-running-insecure-content',
+        ...(showBrowser ? ['--start-maximized'] : []),
       ],
     });
 

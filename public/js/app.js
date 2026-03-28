@@ -125,6 +125,9 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     captureAssets: document.getElementById('capture-assets').checked,
     captureAllRequests: document.getElementById('capture-all-requests').checked,
     captureImages: document.getElementById('capture-images').checked,
+    autoScroll: document.getElementById('auto-scroll').checked,
+    showBrowser: document.getElementById('show-browser').checked,
+    slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
   };
 
   try {
@@ -836,6 +839,17 @@ function showToast(msg) {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
 }
+
+// ---- Show browser toggle ----
+document.getElementById('show-browser').addEventListener('change', function () {
+  document.getElementById('browser-window-opts').style.display = this.checked ? 'block' : 'none';
+  const label = this.closest('.show-browser-label');
+  if (label) label.classList.toggle('active-opt', this.checked);
+});
+
+document.getElementById('slow-motion').addEventListener('input', function () {
+  document.getElementById('slowmo-value').textContent = `${this.value}ms`;
+});
 
 // ---- Init ----
 connectWS();

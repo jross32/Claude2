@@ -772,3 +772,9 @@ body.light .json-bool { color: #b45309; }
 .dl-image-meta { font-size: 11px; color: var(--text3); }
 .dl-image-link { font-size: 12px; color: var(--accent); text-decoration: none; }
 .dl-image-link:hover { text-decoration: underline; }
+
+/* Show browser window option */
+.show-browser-label { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; transition: border-color 0.15s, background 0.15s; }
+.show-browser-label:hover { border-color: var(--accent); }
+.show-browser-label.active-opt { border-color: var(--accent); background: var(--accent-glow); color: var(--accent); }
+.browser-window-opts { background: var(--bg3); border: 1px solid var(--accent); border-radius: var(--radius); padding: 16px 20px; margin-top: -8px; }

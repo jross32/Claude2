@@ -55,6 +55,8 @@ app.post('/api/scrape', async (req, res) => {
     captureImages,
     clickSequence,
     autoScroll,
+    showBrowser,
+    slowMotion,
   } = req.body;
 
   if (!url && (!urls || urls.length === 0)) {
@@ -84,6 +86,8 @@ app.post('/api/scrape', async (req, res) => {
       captureImages: captureImages || false,
       clickSequence: clickSequence || [],
       autoScroll: autoScroll || false,
+      showBrowser: showBrowser || false,
+      slowMotion: slowMotion || 0,
     })
     .then((result) => {
       // Auto-attach HAR to result
