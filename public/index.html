@@ -135,10 +135,6 @@
                 <input type="checkbox" id="full-crawl" />
                 <span>&#127760; Full site crawl (every internal link)</span>
               </label>
-              <label class="checkbox-label show-browser-label" title="Opens a real visible Chromium window so you can watch the scraper work live">
-                <input type="checkbox" id="show-browser" />
-                <span>&#128064; Show live browser window</span>
-              </label>
             </div>
           </div>
 
@@ -204,19 +200,17 @@
           </div>
           </div>
 
-          <!-- Browser window options -->
-          <div class="browser-window-opts" id="browser-window-opts" style="display:none">
-            <div class="form-section">
-              <h2 class="section-title"><span class="section-icon">&#128064;</span> Live Browser Options</h2>
-              <div class="field">
-                <label for="slow-motion">
-                  Slow Motion
-                  <span class="hint">(delay between actions — helps you follow along)</span>
-                </label>
-                <div style="display:flex;align-items:center;gap:12px">
-                  <input type="range" id="slow-motion" min="0" max="2000" step="100" value="300" style="width:200px" />
-                  <span class="range-value" id="slowmo-value">300ms</span>
-                </div>
+          <!-- Browser options -->
+          <div class="form-section">
+            <h2 class="section-title"><span class="section-icon">&#128064;</span> Browser Options</h2>
+            <div class="field">
+              <label for="slow-motion">
+                Slow Motion
+                <span class="hint">(delay between actions in the live view)</span>
+              </label>
+              <div style="display:flex;align-items:center;gap:12px">
+                <input type="range" id="slow-motion" min="0" max="2000" step="100" value="0" style="width:200px" />
+                <span class="range-value" id="slowmo-value">0ms</span>
               </div>
             </div>
           </div>

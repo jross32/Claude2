@@ -155,7 +155,7 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     captureAllRequests: document.getElementById('capture-all-requests').checked,
     captureImages: document.getElementById('capture-images').checked,
     autoScroll: document.getElementById('auto-scroll').checked,
-    showBrowser: document.getElementById('show-browser').checked,
+    showBrowser: false,
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
     fullCrawl: document.getElementById('full-crawl').checked,
     maxPages: parseInt(document.getElementById('max-pages').value, 10) || 100,
@@ -936,12 +936,6 @@ function showToast(msg) {
   setTimeout(() => t.remove(), 2500);
 }
 
-// ---- Show browser toggle ----
-document.getElementById('show-browser').addEventListener('change', function () {
-  document.getElementById('browser-window-opts').style.display = this.checked ? 'block' : 'none';
-  const label = this.closest('.show-browser-label');
-  if (label) label.classList.toggle('active-opt', this.checked);
-});
 
 // ---- Full crawl toggle ----
 document.getElementById('full-crawl').addEventListener('change', function () {

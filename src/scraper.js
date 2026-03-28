@@ -184,19 +184,17 @@ class ScraperSession {
     this.log(`Starting scrape of ${primaryUrl}`);
     this.progress('Launching browser', 5);
 
-    const isHeadless = !showBrowser;
-    this.log(showBrowser ? 'Launching visible browser window...' : 'Launching headless browser...');
+    this.log('Launching browser...');
 
     this.browser = await chromium.launch({
-      headless: isHeadless,
-      slowMo: showBrowser && slowMotion ? parseInt(slowMotion) : 0,
+      headless: true,
+      slowMo: slowMotion ? parseInt(slowMotion) : 0,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
         '--allow-running-insecure-content',
-        ...(showBrowser ? ['--start-maximized'] : []),
       ],
     });
 
