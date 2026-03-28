@@ -55,6 +55,17 @@ function handleSessionMessage(sessionId, msg) {
       document.getElementById('session-badge').style.display = 'flex';
       showToast(`Session saved for ${msg.hostname}`);
       break;
+    case 'paused': {
+      const pb = document.getElementById(`spb-${sessionId}`);
+      if (pb) { pb.innerHTML = '&#9654; Resume'; pb.classList.add('session-pause-btn--paused'); }
+      updateSessionProgress(sessionId, 'Paused', null);
+      break;
+    }
+    case 'resumed': {
+      const pb = document.getElementById(`spb-${sessionId}`);
+      if (pb) { pb.innerHTML = '&#9646;&#9646; Pause'; pb.classList.remove('session-pause-btn--paused'); }
+      break;
+    }
     case 'complete':        onSessionComplete(sessionId, msg.data); break;
     case 'error':           onSessionError(sessionId, msg.message); break;
   }
@@ -602,6 +613,7 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
       <span class="session-hdr-pct" id="shp-${sid}">0%</span>
       <button class="btn-xs session-log-toggle" id="slt-${sid}" title="Hide/show console">&#128221; Console</button>
       <button class="btn-xs session-collapse-btn" id="scb-${sid}" title="Collapse">&#9650;</button>
+      <button class="btn-xs session-pause-btn" id="spb-${sid}" title="Pause scrape">&#9646;&#9646; Pause</button>
       <button class="btn-xs session-stop-btn" id="ssb-${sid}">&#9632; Stop</button>
     </div>
     <div class="session-body" id="sbody-${sid}">
@@ -659,6 +671,23 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
     const collapsed = body.style.display === 'none';
     body.style.display = collapsed ? 'block' : 'none';
     btn.innerHTML = collapsed ? '&#9650;' : '&#9660;';
+  });
+
+  // Pause / Resume
+  let _sessionPaused = false;
+  panel.querySelector(`#spb-${sid}`).addEventListener('click', async () => {
+    const btn = document.getElementById(`spb-${sid}`);
+    if (!_sessionPaused) {
+      await fetch(`/api/scrape/${sid}/pause`, { method: 'POST' }).catch(() => {});
+      _sessionPaused = true;
+      btn.innerHTML = '&#9654; Resume';
+      btn.classList.add('session-pause-btn--paused');
+    } else {
+      await fetch(`/api/scrape/${sid}/resume`, { method: 'POST' }).catch(() => {});
+      _sessionPaused = false;
+      btn.innerHTML = '&#9646;&#9646; Pause';
+      btn.classList.remove('session-pause-btn--paused');
+    }
   });
 
   // Stop
@@ -773,6 +802,8 @@ function updateSessionLiveFrame(sessionId, dataUrl) {
 function finalizeSession(sessionId, success) {
   const stopBtn = document.getElementById(`ssb-${sessionId}`);
   if (stopBtn) { stopBtn.style.display = 'none'; }
+  const pauseBtn = document.getElementById(`spb-${sessionId}`);
+  if (pauseBtn) { pauseBtn.style.display = 'none'; }
   activeSessions.delete(sessionId);
   // Mark panel as done
   const panel = document.getElementById(`sp-${sessionId}`);

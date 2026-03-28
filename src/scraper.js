@@ -128,6 +128,8 @@ class ScraperSession {
     this.broadcast = broadcast;
     this.browser = null;
     this.stopped = false;
+    this.paused = false;
+    this._resumeResolve = null;
     this.verificationResolver = null;
 
     // Captured network data
@@ -218,11 +220,36 @@ class ScraperSession {
 
   stop() {
     this.stopped = true;
+    // Wake any paused wait before closing so the loop can exit cleanly
+    if (this._resumeResolve) { this._resumeResolve(); this._resumeResolve = null; }
     this._stopLiveStream();
     if (this._popupWatcherInterval) { clearInterval(this._popupWatcherInterval); this._popupWatcherInterval = null; }
     if (this.browser) {
       this.browser.close().catch(() => {});
     }
+  }
+
+  pause() {
+    if (this.stopped || this.paused) return;
+    this.paused = true;
+    this._resumePromise = new Promise(resolve => { this._resumeResolve = resolve; });
+    this.log('Scrape paused by user.', 'warn');
+    this.broadcast(this.sessionId, { type: 'paused' });
+  }
+
+  resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    if (this._resumeResolve) { this._resumeResolve(); this._resumeResolve = null; }
+    this._resumePromise = null;
+    this.log('Scrape resumed.', 'success');
+    this.broadcast(this.sessionId, { type: 'resumed' });
+  }
+
+  // Suspend execution at the next checkpoint until resumed (or stopped)
+  async _checkPause() {
+    if (!this.paused || this.stopped) return;
+    await this._resumePromise;
   }
 
   // Find a dismiss button and return its center coordinates via DOM
@@ -1055,6 +1082,7 @@ class ScraperSession {
         .slice(0, 8);
 
       for (const link of links) {
+        await this._checkPause();
         if (this.stopped || visited.size >= maxPages) break;
         const nav = await this._navigateWithRetry(page, link.href, origin);
         if (!nav.success) continue;
@@ -1089,6 +1117,8 @@ class ScraperSession {
     this.log(`Full crawl starting from ${startUrl} (${maxLabel})`, 'info');
 
     while (queue.length > 0 && results.length < maxPages && !this.stopped) {
+      await this._checkPause();
+      if (this.stopped) break;
       const url = queue.shift();
       const norm = normalize(url);
       if (visited.has(norm)) continue;

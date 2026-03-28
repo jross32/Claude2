@@ -1229,6 +1229,20 @@ body.light .json-bool { color: #b45309; }
   flex-shrink: 0;
 }
 
+.session-pause-btn {
+  background: #d97706 !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 3px 9px !important;
+  border-radius: var(--radius-sm) !important;
+  font-size: 11px !important;
+  flex-shrink: 0;
+}
+
+.session-pause-btn--paused {
+  background: #16a34a !important;
+}
+
 .session-body {
   display: block;
 }

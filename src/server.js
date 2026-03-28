@@ -306,6 +306,20 @@ app.post('/api/scrape/:sessionId/stop', (req, res) => {
   }
 });
 
+// Pause an active session
+app.post('/api/scrape/:sessionId/pause', (req, res) => {
+  const scraper = sessions.get(req.params.sessionId);
+  if (scraper) { scraper.pause(); res.json({ message: 'Session paused' }); }
+  else res.status(404).json({ error: 'Session not found' });
+});
+
+// Resume a paused session
+app.post('/api/scrape/:sessionId/resume', (req, res) => {
+  const scraper = sessions.get(req.params.sessionId);
+  if (scraper) { scraper.resume(); res.json({ message: 'Session resumed' }); }
+  else res.status(404).json({ error: 'Session not found' });
+});
+
 // Verification code submission during scrape
 app.post('/api/scrape/:sessionId/verify', (req, res) => {
   const scraper = sessions.get(req.params.sessionId);
