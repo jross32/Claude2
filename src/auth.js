@@ -97,32 +97,51 @@ async function handleAuth(page, options) {
   }
 
   // ── Submit ──────────────────────────────────────────────────────────────────
+  const preSubmitUrl = page.url();
   log('Submitting login form...');
   await clickSubmit();
-  await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(1500); // let JS render the next page
+
+  // Wait for the page to navigate AWAY from the login page
+  log('Waiting for navigation after login...');
+  try {
+    await page.waitForFunction(
+      (url) => window.location.href !== url,
+      preSubmitUrl,
+      { timeout: 15000 }
+    );
+  } catch {
+    log('URL did not change after submit — login may have failed', 'warn');
+  }
+  await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(800);
   log(`Post-login URL: ${page.url()}`);
 
   // ── Forgot-password failsafe ─────────────────────────────────────────────────
-  const loginUrl = page.url();
-  if (/forgot|reset.?password|password.?reset/i.test(loginUrl)) {
-    log('Landed on forgot-password page — navigating back to login and retrying...', 'warn');
+  if (/forgot|reset.?password|password.?reset/i.test(page.url())) {
+    log('Landed on forgot-password page — going back and retrying...', 'warn');
     await page.goBack().catch(() => {});
     await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(800);
-    // re-fill and submit
     if (emailSel) await fill(emailSel, username);
     if (passSel) await fill(passSel, password);
+    const preRetryUrl = page.url();
     await clickSubmit();
-    await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-    await page.waitForTimeout(1500);
+    try {
+      await page.waitForFunction(
+        (url) => window.location.href !== url,
+        preRetryUrl,
+        { timeout: 15000 }
+      );
+    } catch {}
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(800);
     log(`Retry post-login URL: ${page.url()}`);
   }
 
   // ── Handle "Continue" confirmation page ──────────────────────────────────────
   log('Checking for continue/confirmation page...');
   await clickContinueIfPresent(page, log);
-  log(`Post-continue URL: ${page.url()}`);
+  log(`Final URL after auth: ${page.url()}`);
 
   // ── Auto-detect 2FA ─────────────────────────────────────────────────────────
   const twoFA = await detectVerificationType(page);
@@ -133,33 +152,44 @@ async function handleAuth(page, options) {
 }
 
 async function clickContinueIfPresent(page, log) {
-  // Exact-match patterns for "move forward" buttons only
   const continueRe = /^(continue|proceed|allow|accept|yes|ok|confirm)$/i;
-  // Never click these even if they match
   const skipRe = /forgot|reset|cancel|back|sign.?up|register|someone else|log.?in.?as/i;
 
   try {
-    // Wait up to 4 seconds for any button/submit to appear on page
-    await page.waitForSelector('button, input[type="submit"]', { timeout: 4000, state: 'visible' }).catch(() => {});
+    // Wait up to 5s for any button to appear
+    await page.waitForSelector('button, input[type="submit"]', { timeout: 5000, state: 'visible' }).catch(() => {});
 
     const clickables = await page.$$('button, input[type="submit"], input[type="button"]');
+    log(`Continue scan: found ${clickables.length} button(s) on page`);
+
     for (const el of clickables) {
       try {
         if (!await el.isVisible()) continue;
         const text = ((await el.textContent()) || '').trim();
         const val  = ((await el.getAttribute('value')) || '').trim();
         const label = (text || val);
-        if (skipRe.test(label)) continue;
+        log(`  button: "${label}"`);
+        if (skipRe.test(label)) { log(`  → skipped`); continue; }
         if (continueRe.test(label.toLowerCase())) {
-          log(`Clicking continue button: "${label}"`);
+          log(`  → clicking: "${label}"`);
+          const preClickUrl = page.url();
           await el.click();
-          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-          await page.waitForTimeout(1000);
+          try {
+            await page.waitForFunction(
+              (url) => window.location.href !== url,
+              preClickUrl,
+              { timeout: 10000 }
+            );
+          } catch {}
+          await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+          await page.waitForTimeout(800);
+          log(`After continue — URL: ${page.url()}`);
           await clickContinueIfPresent(page, log);
           return;
         }
       } catch {}
     }
+    log('No continue button found.');
   } catch {}
 }
 
