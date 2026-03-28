@@ -1322,27 +1322,90 @@ class ScraperSession {
     } catch { return false; }
   }
 
-  // SPA navigation via the browser's history API — avoids a server round-trip.
-  // MUST be called while on a page that has the SPA framework loaded.
+  // Click an <a> link on the current page whose href matches the target path.
+  // Returns true if the link was found, clicked, and the page updated.
+  async _tryClickLink(page, targetUrl) {
+    try {
+      const targetPath = (() => {
+        try { const u = new URL(targetUrl); return u.pathname + u.search + u.hash; }
+        catch { return targetUrl; }
+      })();
+      // Try with and without trailing slash
+      const variants = [targetPath, targetPath.endsWith('/') ? targetPath.slice(0, -1) : targetPath + '/'];
+      const clicked = await page.evaluate((paths) => {
+        for (const p of paths) {
+          // Prefer visible links; also check relative hrefs
+          const candidates = [
+            ...document.querySelectorAll(`a[href="${p}"]`),
+            ...document.querySelectorAll(`a[href="${p.replace(/^\//, '')}"]`),
+          ];
+          for (const a of candidates) {
+            // Make sure it's rendered (has a bounding box)
+            const rect = a.getBoundingClientRect();
+            if (rect.width > 0 || rect.height > 0) {
+              a.click();
+              return true;
+            }
+          }
+        }
+        return false;
+      }, variants);
+
+      if (clicked) {
+        await page.waitForTimeout(2200);
+        await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
+        return true;
+      }
+    } catch {}
+    return false;
+  }
+
+  // SPA navigation: try clicking the link first (most reliable for tab-based SPAs),
+  // then fall back to parent-page link click, then pushState as a last resort.
   async _spaNavigate(page, url, origin) {
     try {
-      // Make sure React/Vue is loaded before pushing state
       await this._ensureReactPage(page, origin);
 
       const targetPath = (() => {
         try { const u = new URL(url); return u.pathname + u.search + u.hash; }
         catch { return url; }
       })();
-      this.log(`SPA navigate → ${targetPath}`, 'info');
+
+      // ── Strategy 1: click a matching link on the CURRENT page ──────────────
+      this.log(`SPA navigate → ${targetPath} (trying link click on current page)`, 'info');
+      if (await this._tryClickLink(page, url)) {
+        const landed = page.url();
+        this.log(`SPA nav (link click, same page) landed: ${landed}`, 'info');
+        if (!this._isLoginRedirect(landed, url, origin)) return true;
+      }
+
+      // ── Strategy 2: navigate to parent page, click link from there ─────────
+      const segments = targetPath.replace(/\/$/, '').split('/').filter(Boolean);
+      if (segments.length > 1) {
+        const parentPath = '/' + segments.slice(0, -1).join('/') + '/';
+        const parentUrl = origin + parentPath;
+        this.log(`SPA nav: trying parent ${parentPath} → click to ${targetPath}`, 'info');
+        try {
+          await page.goto(parentUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+          await page.waitForTimeout(800);
+        } catch {}
+        if (await this._tryClickLink(page, url)) {
+          const landed = page.url();
+          this.log(`SPA nav (link click, parent page) landed: ${landed}`, 'info');
+          if (!this._isLoginRedirect(landed, url, origin)) return true;
+        }
+      }
+
+      // ── Strategy 3: pushState / history API fallback ───────────────────────
+      this.log(`SPA nav: falling back to pushState for ${targetPath}`, 'info');
       await page.evaluate((p) => {
         window.history.pushState({}, '', p);
         window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
         window.dispatchEvent(new Event('locationchange'));
       }, targetPath);
-      // Give React/Vue time to re-render the new route
       await page.waitForTimeout(2500);
       const landed = page.url();
-      this.log(`SPA nav landed: ${landed}`, 'info');
+      this.log(`SPA nav (pushState) landed: ${landed}`, 'info');
       return !this._isLoginRedirect(landed, url, origin);
     } catch { return false; }
   }
@@ -1357,6 +1420,18 @@ class ScraperSession {
       this.log(`SPA navigation failed for known route ${url}`, 'warn');
       this.failedPages.push({ url, reason: 'spa-nav-failed' });
       return { success: false, reason: 'spa-nav-failed' };
+    }
+
+    // ── Try clicking a visible link on the current page before doing a full goto ──
+    // This handles SPA tab-links (e.g. NEWS/EVENTS/DIVISIONS tabs) that update
+    // content client-side and would 504 if loaded directly from the server.
+    if (await this._tryClickLink(page, url)) {
+      const landed = page.url();
+      if (normalize(landed) === normalize(url) && !this._isLoginRedirect(landed, url, origin)) {
+        this.log(`Navigated via link click: ${url}`, 'info');
+        return { success: true, clicked: true };
+      }
+      // URL didn't change (link may have scrolled or done something else) — fall through to goto
     }
 
     for (let attempt = 0; attempt < 2; attempt++) {
