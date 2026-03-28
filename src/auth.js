@@ -1,11 +1,71 @@
 /**
  * Authentication handler for web scraper.
+ * Handles single-step and multi-step (email → password) login flows.
  * Supports: standard login, TOTP/2FA, email code, SMS code, captcha warning.
  */
 async function handleAuth(page, options) {
-  const { username, password, verificationType, verificationCode, waitForVerification, log } = options;
+  const { username, password, verificationCode, waitForVerification, log } = options;
 
-  // Common login field selectors
+  // Helper: fill a field reliably (works with React/Vue/Angular synthetic events)
+  async function fillField(sel, value) {
+    await page.waitForSelector(sel, { timeout: 5000, state: 'visible' });
+    await page.focus(sel);
+    await page.fill(sel, '');
+    await page.fill(sel, value);
+    await page.evaluate((selector, val) => {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      const nv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      nv.set.call(el, val);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, sel, value);
+  }
+
+  // Helper: is a selector visible right now (no waiting)
+  async function isVisible(sel) {
+    try {
+      return await page.isVisible(sel);
+    } catch { return false; }
+  }
+
+  // Helper: click the submit button, avoiding "Forgot Password" / destructive links
+  async function clickSubmit() {
+    const candidates = [
+      'button[type="submit"]',
+      'input[type="submit"]',
+      'button[id*="login" i]',
+      'button[id*="signin" i]',
+      'button[id*="sign-in" i]',
+      'button[id*="continue" i]',
+      'button[id*="next" i]',
+      '[data-testid*="submit" i]',
+      '[data-testid*="login" i]',
+      '[data-testid*="signin" i]',
+      'form button[type="submit"]',
+      'form button',
+    ];
+
+    for (const sel of candidates) {
+      try {
+        const els = await page.$$(sel);
+        for (const el of els) {
+          if (!await el.isVisible()) continue;
+          const text = (await el.textContent() || '').toLowerCase();
+          // Skip destructive / secondary actions
+          if (/forgot|reset|cancel|back|register|sign.?up|create/i.test(text)) continue;
+          await el.click();
+          log(`Clicked submit: ${sel} ("${text.trim()}")`);
+          return true;
+        }
+      } catch {}
+    }
+    // Last resort: Enter key
+    await page.keyboard.press('Enter');
+    log('Submitted via Enter key');
+    return true;
+  }
+
   const usernameSelectors = [
     'input[type="email"]',
     'input[name="email"]',
@@ -14,7 +74,6 @@ async function handleAuth(page, options) {
     'input[name="login"]',
     'input[id*="email" i]',
     'input[id*="username" i]',
-    'input[id*="user" i]',
     'input[placeholder*="email" i]',
     'input[placeholder*="username" i]',
     'input[autocomplete="username"]',
@@ -27,118 +86,125 @@ async function handleAuth(page, options) {
     'input[id*="password" i]',
   ];
 
-  const submitSelectors = [
-    'button[type="submit"]',
-    'input[type="submit"]',
-    'button[id*="login" i]',
-    'button[id*="signin" i]',
-    'button[id*="sign-in" i]',
-    'button[class*="login" i]',
-    'button[class*="signin" i]',
-    '[data-testid*="login" i]',
-    '[data-testid*="signin" i]',
-    'form button',
-  ];
-
-  // Helper: fill a field reliably (works with React/Vue/Angular)
-  async function fillField(sel, value) {
-    await page.waitForSelector(sel, { timeout: 5000, state: 'visible' });
-    await page.click(sel, { clickCount: 3 });
-    await page.fill(sel, value);
-    // Trigger React synthetic events
-    await page.evaluate((selector, val) => {
-      const el = document.querySelector(selector);
-      if (!el) return;
-      const nativeInput = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-      nativeInput.set.call(el, val);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, sel, value);
-  }
-
-  // Fill username
+  // ── Step 1: fill username ──────────────────────────────────────────────────
   if (username) {
-    let filledUser = false;
+    let filled = false;
     for (const sel of usernameSelectors) {
       try {
         await fillField(sel, username);
-        log(`Filled username field: ${sel}`);
-        filledUser = true;
+        log(`Filled username: ${sel}`);
+        filled = true;
         break;
       } catch {}
     }
-    if (!filledUser) {
-      // Last resort: find any visible text/email input
+    if (!filled) {
+      // DOM fallback: first visible text/email input
       try {
-        await page.evaluate((val) => {
-          const inputs = [...document.querySelectorAll('input[type="text"], input[type="email"]')];
-          const visible = inputs.find(el => el.offsetParent !== null && !el.readOnly);
-          if (visible) {
-            const nv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-            nv.set.call(visible, val);
-            visible.dispatchEvent(new Event('input', { bubbles: true }));
-            visible.dispatchEvent(new Event('change', { bubbles: true }));
-          }
+        const found = await page.evaluate((val) => {
+          const inputs = [...document.querySelectorAll('input[type="text"],input[type="email"],input:not([type])')];
+          const el = inputs.find(i => i.offsetParent !== null && !i.readOnly && !i.disabled);
+          if (!el) return false;
+          const nv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          nv.set.call(el, val);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
         }, username);
-        log('Filled username via DOM fallback', 'warn');
-        filledUser = true;
+        if (found) { log('Filled username via DOM fallback', 'warn'); filled = true; }
       } catch {}
     }
-    if (!filledUser) log('Could not find username field', 'warn');
+    if (!filled) { log('Could not find username field', 'warn'); }
   }
 
-  await delay(300);
+  await delay(400);
 
-  // Fill password
+  // ── Check if password field is already visible (single-step form) ──────────
+  let passwordVisible = false;
+  for (const sel of passwordSelectors) {
+    if (await isVisible(sel)) { passwordVisible = true; break; }
+  }
+
+  // ── If password not visible, this is a multi-step form — submit email first ─
+  if (!passwordVisible) {
+    log('Password field not visible — submitting email step first...');
+    await clickSubmit();
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    await delay(800);
+
+    // Handle any "Continue to …" page that appears
+    await clickContinueIfPresent(page, log);
+
+    // Wait for password field to appear
+    for (const sel of passwordSelectors) {
+      try {
+        await page.waitForSelector(sel, { timeout: 8000, state: 'visible' });
+        passwordVisible = true;
+        log('Password field appeared after email step');
+        break;
+      } catch {}
+    }
+  }
+
+  // ── Step 2: fill password ──────────────────────────────────────────────────
+  if (!passwordVisible) {
+    log('Could not find password field after email step', 'warn');
+    return;
+  }
+
   let filledPassword = false;
   for (const sel of passwordSelectors) {
     try {
       await fillField(sel, password);
-      log(`Filled password field: ${sel}`);
+      log(`Filled password: ${sel}`);
       filledPassword = true;
       break;
     } catch {}
   }
 
   if (!filledPassword) {
-    log('Could not find password field', 'warn');
+    log('Could not fill password field', 'warn');
     return;
   }
 
-  await delay(300);
+  await delay(400);
 
-  // Submit form
-  let submitted = false;
-  for (const sel of submitSelectors) {
-    try {
-      await page.waitForSelector(sel, { timeout: 2000, state: 'visible' });
-      await page.click(sel);
-      log(`Clicked submit: ${sel}`);
-      submitted = true;
-      break;
-    } catch {}
-  }
-
-  if (!submitted) {
-    await page.keyboard.press('Enter');
-    log('Submitted via Enter key');
-  }
-
-  // Wait for navigation/response
+  // ── Step 3: submit password ────────────────────────────────────────────────
+  await clickSubmit();
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-  await delay(1000);
+  await delay(800);
 
-  // Handle intermediate "Continue" / account-confirmation pages (e.g. APA SSO)
+  // Handle any "Continue to …" confirmation page
   await clickContinueIfPresent(page, log);
 
-  // Auto-detect and handle verification / 2FA if it appeared after login
+  // ── Auto-detect and handle 2FA / verification ──────────────────────────────
   const detectedType = await detectVerificationType(page);
   if (detectedType && detectedType !== 'none') {
     log(`Auto-detected verification type: ${detectedType}`, 'info');
     await handleVerification(page, { verificationType: detectedType, verificationCode, waitForVerification, log });
-  } else if (verificationType && verificationType !== 'none' && verificationType !== 'auto') {
-    // Fallback: use explicitly passed type if provided
-    await handleVerification(page, { verificationType, verificationCode, waitForVerification, log });
+  }
+}
+
+async function clickContinueIfPresent(page, log) {
+  const selectors = [
+    'button:has-text("Continue")',
+    'button:has-text("Proceed")',
+    'button:has-text("Accept")',
+    'button:has-text("Allow")',
+    'a:has-text("Continue")',
+    'input[value*="Continue" i]',
+  ];
+  for (const sel of selectors) {
+    try {
+      const el = await page.waitForSelector(sel, { timeout: 3000, state: 'visible' });
+      if (el) {
+        await el.click();
+        log(`Clicked confirmation: ${sel}`);
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+        await delay(500);
+        await clickContinueIfPresent(page, log); // handle chained steps
+        return;
+      }
+    } catch {}
   }
 }
 
@@ -159,62 +225,17 @@ async function detectVerificationType(page) {
       if (/authenticator|totp|google auth|authy/i.test(body)) return 'totp';
       if (/sent.*email|email.*code|check your email/i.test(body)) return 'email';
       if (/text message|sms|phone number/i.test(body)) return 'sms';
-      if (hasCodeInput) return 'totp'; // generic code input — treat as TOTP/code
-      return 'none';
+      return 'totp';
     });
   } catch { return 'none'; }
 }
 
-async function clickContinueIfPresent(page, log) {
-  // Selectors that match "Continue", "Proceed", "Accept" style confirmation buttons
-  const continueSelectors = [
-    'button:has-text("Continue")',
-    'button:has-text("Proceed")',
-    'button:has-text("Accept")',
-    'button:has-text("Allow")',
-    'a:has-text("Continue")',
-    'input[value*="Continue" i]',
-    'input[value*="Proceed" i]',
-    '[type="submit"][value*="Continue" i]',
-  ];
-
-  for (const sel of continueSelectors) {
-    try {
-      const el = await page.waitForSelector(sel, { timeout: 3000, state: 'visible' });
-      if (el) {
-        await el.click();
-        log(`Clicked intermediate continue button: ${sel}`);
-        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-        await delay(500);
-        // Check again in case there are multiple confirmation steps
-        await clickContinueIfPresent(page, log);
-        return;
-      }
-    } catch {}
-  }
-}
-
 async function handleVerification(page, options) {
   const { verificationType, verificationCode, waitForVerification, log } = options;
-
-  log(`Handling verification type: ${verificationType}`);
-
-  const codeInputSelectors = [
-    'input[name*="code" i]',
-    'input[name*="otp" i]',
-    'input[name*="token" i]',
-    'input[name*="verify" i]',
-    'input[placeholder*="code" i]',
-    'input[placeholder*="otp" i]',
-    'input[type="number"][maxlength="6"]',
-    'input[type="tel"][maxlength="6"]',
-    'input[autocomplete="one-time-code"]',
-    'input[data-testid*="otp" i]',
-    'input[data-testid*="code" i]',
-  ];
+  log(`Handling verification: ${verificationType}`);
 
   if (verificationType === 'captcha') {
-    log('CAPTCHA detected. Automated CAPTCHA solving is not supported - manual intervention required.', 'warn');
+    log('CAPTCHA detected — manual intervention required', 'warn');
     return;
   }
 
@@ -223,71 +244,46 @@ async function handleVerification(page, options) {
     log('Waiting for verification code from user...', 'info');
     code = await waitForVerification();
   }
+  if (!code) { log('No verification code provided — skipping', 'warn'); return; }
 
-  if (!code) {
-    log('No verification code provided - skipping', 'warn');
-    return;
-  }
+  await delay(1000);
 
-  await delay(1500);
+  const codeSelectors = [
+    'input[autocomplete="one-time-code"]',
+    'input[name*="code" i]',
+    'input[name*="otp" i]',
+    'input[name*="token" i]',
+    'input[placeholder*="code" i]',
+    'input[type="number"][maxlength="6"]',
+    'input[type="tel"][maxlength="6"]',
+  ];
 
-  let filledCode = false;
-  for (const sel of codeInputSelectors) {
+  let filled = false;
+  for (const sel of codeSelectors) {
     try {
       await page.waitForSelector(sel, { timeout: 5000 });
       await page.fill(sel, code.toString());
-      log(`Entered verification code in: ${sel}`);
-      filledCode = true;
+      log(`Entered code in: ${sel}`);
+      filled = true;
       break;
     } catch {}
   }
 
-  if (!filledCode) {
-    try {
-      await page.evaluate((codeStr) => {
-        const inputs = document.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"]');
-        for (const input of inputs) {
-          if (input.offsetParent !== null) {
-            const nv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-            nv.set.call(input, codeStr);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-            return true;
-          }
-        }
-        return false;
-      }, code.toString());
-      log('Entered verification code via DOM evaluation');
-      filledCode = true;
-    } catch {}
+  if (!filled) {
+    await page.evaluate((c) => {
+      const inputs = [...document.querySelectorAll('input[type="text"],input[type="number"],input[type="tel"]')];
+      const el = inputs.find(i => i.offsetParent !== null);
+      if (el) { el.value = c; el.dispatchEvent(new Event('input', { bubbles: true })); }
+    }, code.toString());
   }
 
-  if (filledCode) {
-    const submitSelectors = [
-      'button[type="submit"]',
-      'button[id*="verify" i]',
-      'button[class*="verify" i]',
-      'button[id*="confirm" i]',
-      'form button',
-    ];
-
-    for (const sel of submitSelectors) {
-      try {
-        await page.waitForSelector(sel, { timeout: 2000 });
-        await page.click(sel);
-        log(`Submitted verification via: ${sel}`);
-        break;
-      } catch {}
-    }
-
-    await page.keyboard.press('Enter');
-    await delay(2000);
-    log('Verification submitted');
-  }
+  await page.keyboard.press('Enter');
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  log('Verification submitted');
 }
 
 function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 module.exports = { handleAuth };
