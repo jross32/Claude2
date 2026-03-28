@@ -112,7 +112,8 @@ function renderPresets() {
     const card = document.createElement('div');
     card.className = 'preset-item';
     card.dataset.idx = idx;
-    const faviconUrl = preset.iconUrl || preset.favicon || (preset.url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent((() => { try { return new URL(preset.url).hostname; } catch { return ''; } })())}` : '');
+    const faviconSrc = preset.iconUrl || preset.url || '';
+    const faviconUrl = faviconSrc ? `/api/favicon?url=${encodeURIComponent(faviconSrc)}` : '';
     card.innerHTML = `
       <div class="preset-item-main" data-idx="${idx}">
         ${faviconUrl ? `<img class="preset-favicon" src="${escapeHTML(faviconUrl)}" alt="" onerror="this.style.display='none'" />` : '<span class="preset-favicon-placeholder">&#127760;</span>'}
@@ -231,7 +232,6 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
   if (!url)  { document.getElementById('preset-url').focus(); return; }
   const limitDepth = document.getElementById('preset-limitdepth').checked;
   const fullCrawl  = document.getElementById('preset-fullcrawl').checked;
-  const faviconDomain = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
   const preset = {
     name, url,
     iconUrl: iconUrl || '',
@@ -244,7 +244,6 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
     fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
     maxPages: fullCrawl ? 0 : (parseInt(document.getElementById('preset-maxpages').value) || 100),
-    favicon: (!iconUrl && faviconDomain) ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(faviconDomain)}` : '',
   };
   const list = getPresets();
   const editIdx = document.getElementById('btn-preset-save').dataset.editIdx;
@@ -262,7 +261,8 @@ function showPresetConfirm(idx) {
   if (!preset) return;
   _pendingPresetIdx = idx;
   const info = document.getElementById('preset-confirm-info');
-  const faviconUrl = preset.iconUrl || preset.favicon || (preset.url ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent((() => { try { return new URL(preset.url).hostname; } catch { return ''; } })())}` : '');
+  const faviconSrc = preset.iconUrl || preset.url || '';
+  const faviconUrl = faviconSrc ? `/api/favicon?url=${encodeURIComponent(faviconSrc)}` : '';
   info.innerHTML = `
     <div class="preset-confirm-row">
       ${faviconUrl ? `<img class="preset-favicon" src="${escapeHTML(faviconUrl)}" alt="" onerror="this.style.display='none'" />` : ''}

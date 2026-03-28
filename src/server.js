@@ -49,6 +49,56 @@ const KNOWN_SITES = [
 ];
 
 // Lightweight site detection — fetch title + favicon without launching a scrape
+// Proxy a favicon so the frontend avoids CORS issues and can resolve it from any URL
+app.get('/api/favicon', async (req, res) => {
+  const rawUrl = req.query.url || '';
+  if (!rawUrl) return res.status(400).send('url required');
+  const https = require('https');
+  const http  = require('http');
+  const { URL } = require('url');
+
+  async function fetchBytes(url) {
+    return new Promise((resolve, reject) => {
+      let parsed;
+      try { parsed = new URL(url); } catch { return reject(new Error('bad url')); }
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const req2 = mod.get(url, { timeout: 6000, headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+        if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
+          return fetchBytes(r.headers.location).then(resolve).catch(reject);
+        }
+        const ct = r.headers['content-type'] || '';
+        if (!ct.includes('image') && !ct.includes('octet') && !url.endsWith('.ico')) {
+          r.destroy(); return reject(new Error('not image'));
+        }
+        const chunks = [];
+        r.on('data', c => chunks.push(c));
+        r.on('end', () => resolve({ buf: Buffer.concat(chunks), ct }));
+      });
+      req2.on('error', reject);
+      req2.on('timeout', () => { req2.destroy(); reject(new Error('timeout')); });
+    });
+  }
+
+  let origin;
+  try { origin = new URL(rawUrl).origin; } catch { return res.status(400).send('bad url'); }
+
+  // Try /favicon.ico first, then /apple-touch-icon.png
+  const candidates = [`${origin}/favicon.ico`, `${origin}/apple-touch-icon.png`];
+  for (const candidate of candidates) {
+    try {
+      const { buf, ct } = await fetchBytes(candidate);
+      if (buf.length > 0) {
+        res.set('Content-Type', ct || 'image/x-icon');
+        res.set('Cache-Control', 'public, max-age=86400');
+        return res.send(buf);
+      }
+    } catch {}
+  }
+
+  // Redirect to Google as last resort
+  res.redirect(`https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(new URL(rawUrl).hostname)}`);
+});
+
 app.get('/api/detect', async (req, res) => {
   const url = req.query.url || '';
   if (!url) return res.status(400).json({ error: 'No URL' });
