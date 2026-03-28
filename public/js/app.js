@@ -162,7 +162,6 @@ function openPresetModal(editIdx = -1) {
     document.getElementById('preset-name').value = p.name || '';
     document.getElementById('preset-url').value = p.url || '';
     document.getElementById('preset-depth').value = p.scrapeDepth || 1;
-    document.getElementById('preset-depth-value').textContent = p.scrapeDepth || 1;
     document.getElementById('preset-graphql').checked = p.captureGraphQL !== false;
     document.getElementById('preset-rest').checked = p.captureREST !== false;
     document.getElementById('preset-assets').checked = p.captureAssets !== false;
@@ -178,7 +177,6 @@ function openPresetModal(editIdx = -1) {
     document.getElementById('preset-name').value = '';
     document.getElementById('preset-url').value = document.getElementById('url').value || '';
     document.getElementById('preset-depth').value = document.getElementById('scrape-depth').value;
-    document.getElementById('preset-depth-value').textContent = document.getElementById('scrape-depth').value;
     document.getElementById('preset-graphql').checked = document.getElementById('capture-graphql').checked;
     document.getElementById('preset-rest').checked = document.getElementById('capture-rest').checked;
     document.getElementById('preset-assets').checked = document.getElementById('capture-assets').checked;
@@ -202,9 +200,6 @@ document.getElementById('btn-preset-modal-close').addEventListener('click', clos
 document.getElementById('btn-preset-cancel').addEventListener('click', closePresetModal);
 document.getElementById('preset-modal-backdrop').addEventListener('click', (e) => { if (e.target === e.currentTarget) closePresetModal(); });
 
-document.getElementById('preset-depth').addEventListener('input', function () {
-  document.getElementById('preset-depth-value').textContent = this.value;
-});
 document.getElementById('preset-fullcrawl').addEventListener('change', function () {
   document.getElementById('preset-maxpages-field').style.display = this.checked ? 'block' : 'none';
 });
@@ -272,7 +267,6 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   // Load preset settings into main form
   document.getElementById('url').value = preset.url;
   document.getElementById('scrape-depth').value = preset.scrapeDepth || 1;
-  document.getElementById('depth-value').textContent = preset.scrapeDepth || 1;
   document.getElementById('capture-graphql').checked = preset.captureGraphQL !== false;
   document.getElementById('capture-rest').checked = preset.captureREST !== false;
   document.getElementById('capture-assets').checked = preset.captureAssets !== false;
@@ -410,9 +404,7 @@ document.getElementById('live-view-btn').addEventListener('click', function () {
 });
 
 // ---- Depth slider ----
-document.getElementById('scrape-depth').addEventListener('input', function () {
-  document.getElementById('depth-value').textContent = this.value;
-});
+// scrape-depth is now a number input — no slider listener needed
 
 // ---- Detect site ----
 document.getElementById('btn-detect').addEventListener('click', async () => {

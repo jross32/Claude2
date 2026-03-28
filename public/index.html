@@ -95,10 +95,9 @@
             <!-- Depth -->
             <div class="field" id="depth-field">
               <label for="scrape-depth">Scrape Depth
-                <span class="hint">(1 = single page, 2+ = follow internal links)</span>
+                <span class="hint">(how many link-levels deep to follow — 1 scrapes only the page you enter, 2 follows every link on that page, 3+ goes deeper)</span>
               </label>
-              <input type="range" id="scrape-depth" min="1" max="3" value="1" />
-              <span class="range-value" id="depth-value">1</span>
+              <input type="number" id="scrape-depth" min="1" max="99" value="1" style="width:90px" />
             </div>
             <!-- Max pages (shown when full crawl is on) -->
             <div class="field" id="max-pages-field" style="display:none">
@@ -215,11 +214,10 @@
                 <input type="text" id="preset-url" placeholder="https://example.com" autocomplete="off" data-lpignore="true" />
               </div>
               <div class="field">
-                <label>Scrape Depth</label>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <input type="range" id="preset-depth" min="1" max="3" value="1" style="width:160px" />
-                  <span id="preset-depth-value">1</span>
-                </div>
+                <label>Scrape Depth
+                  <span class="hint">(1 = entry page only, 2+ = follow links that many levels deep)</span>
+                </label>
+                <input type="number" id="preset-depth" min="1" max="99" value="1" style="width:90px" />
               </div>
               <div class="field">
                 <label>Options</label>
