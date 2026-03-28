@@ -162,6 +162,7 @@ function openPresetModal(editIdx = -1) {
     document.querySelectorAll('.preset-avoid-tag').forEach(cb => {
       cb.checked = tags.includes(cb.value);
     });
+    renderAvoidPills('preset-avoid-pills', '.preset-avoid-tag');
   };
 
   if (editIdx >= 0) {
@@ -232,6 +233,11 @@ document.getElementById('preset-images').addEventListener('change', function () 
 });
 document.getElementById('preset-image-limit').addEventListener('click', e => e.stopPropagation());
 document.getElementById('preset-image-limit').addEventListener('mousedown', e => e.stopPropagation());
+
+// Preset modal avoid-tag pills update on change
+document.getElementById('preset-avoid-grid').addEventListener('change', () => {
+  renderAvoidPills('preset-avoid-pills', '.preset-avoid-tag');
+});
 
 document.getElementById('btn-preset-save').addEventListener('click', () => {
   const name = document.getElementById('preset-name').value.trim();
@@ -320,7 +326,7 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   // Avoid tags
   const avoidTags = preset.avoidTags || ['logout', 'cart'];
   document.querySelectorAll('.avoid-tag').forEach(cb => { cb.checked = avoidTags.includes(cb.value); });
-  document.getElementById('avoid-links-count').textContent = document.querySelectorAll('.avoid-tag:checked').length;
+  renderAvoidPills('avoid-links-pills', '.avoid-tag');
   document.getElementById('auto-scroll').checked = preset.autoScroll !== false;
   // Full crawl + max pages
   const fc = !!preset.fullCrawl;
@@ -491,14 +497,24 @@ document.getElementById('avoid-links-toggle').addEventListener('click', () => {
   panel.style.display = open ? 'block' : 'none';
   chevron.innerHTML = open ? '&#9650;' : '&#9660;';
 });
-// Update badge count on change
+// Render selected tag pills into a container
+function renderAvoidPills(pillsContainerId, cbSelector) {
+  const container = document.getElementById(pillsContainerId);
+  if (!container) return;
+  const checked = [...document.querySelectorAll(cbSelector + ':checked')];
+  container.innerHTML = checked.map(cb => {
+    const label = cb.closest('label');
+    const name = (label ? label.textContent : cb.value).trim();
+    return `<span class="avoid-tag-pill">${escapeHTML(name)}</span>`;
+  }).join('');
+}
+
+// Wire main form avoid-tag checkboxes
 document.querySelectorAll('.avoid-tag').forEach(cb => {
-  cb.addEventListener('change', () => {
-    const count = document.querySelectorAll('.avoid-tag:checked').length;
-    document.getElementById('avoid-links-count').textContent = count;
-    document.getElementById('avoid-links-count').style.display = count ? 'inline-block' : 'none';
-  });
+  cb.addEventListener('change', () => renderAvoidPills('avoid-links-pills', '.avoid-tag'));
 });
+// Initial render
+renderAvoidPills('avoid-links-pills', '.avoid-tag');
 
 // ---- Detect site ----
 document.getElementById('btn-detect').addEventListener('click', async () => {

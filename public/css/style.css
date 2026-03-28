@@ -1361,6 +1361,14 @@ body.light .json-bool { color: #b45309; }
 .avoid-links-toggle:hover { background: var(--bg4); }
 .avoid-links-chevron { margin-left: auto; color: var(--text2); font-size: 11px; }
 .avoid-links-panel { padding: 10px 12px; background: var(--bg2); }
+.avoid-tag-pills { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 8px; }
+.avoid-tag-pill {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  font-size: 0.72rem; font-weight: 600;
+  background: rgba(239,68,68,0.15); color: #f87171;
+  border: 1px solid rgba(239,68,68,0.25);
+  pointer-events: none;
+}
 .avoid-tags-grid { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 
 /* Session log toggle button */

@@ -161,7 +161,7 @@
             <div class="avoid-links-section">
               <button class="avoid-links-toggle" id="avoid-links-toggle" type="button">
                 <span>&#128683; Skip Links</span>
-                <span class="avoid-links-count badge" id="avoid-links-count">2</span>
+                <span class="avoid-tag-pills" id="avoid-links-pills"></span>
                 <span class="avoid-links-chevron" id="avoid-links-chevron">&#9660;</span>
               </button>
               <div class="avoid-links-panel" id="avoid-links-panel" style="display:none">
@@ -271,7 +271,9 @@
                 </div>
               </div>
               <div class="field">
-                <label>Skip Links <span class="hint">— links the scraper should not follow</span></label>
+                <label>Skip Links <span class="hint">— links the scraper should not follow</span>
+                  <span class="avoid-tag-pills" id="preset-avoid-pills" style="margin-left:8px"></span>
+                </label>
                 <div class="checkboxes avoid-tags-grid" id="preset-avoid-grid">
                   <label><input type="checkbox" class="preset-avoid-tag" value="logout" checked />Logout</label>
                   <label><input type="checkbox" class="preset-avoid-tag" value="cart" checked />Cart</label>
