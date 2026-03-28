@@ -246,15 +246,32 @@ class ScraperSession {
     } catch { return null; }
   }
 
-  async _dismissPopups(page, waitMs = 8000) {
+  async _dismissPopups(page, waitMs = 5000) {
     const tryDismiss = async () => {
-      // ── PRIMARY: real mouse click at button coordinates (works for any framework) ──
-      const coords = await this._findDismissCoords(page);
+      // ── PRIMARY: el.click() from page context — fires all JS/React handlers directly ──
+      const dismissed = await page.evaluate(() => {
+        const texts = ['no thanks', 'no, thanks', 'not now', 'maybe later', 'skip', 'dismiss', "don't show", "don't ask"];
+        for (const el of document.querySelectorAll('button, [role="button"], input[type="button"], a[role="button"]')) {
+          const t = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim().toLowerCase();
+          if (texts.some(kw => t.includes(kw))) {
+            el.click();
+            return t;
+          }
+        }
+        return null;
+      }).catch(() => null);
+      if (dismissed) {
+        this.log(`Dismissed popup (JS click): "${dismissed}"`);
+        return true;
+      }
+
+      // ── SECONDARY: real mouse click at button coordinates ──
+      const coords = await this._findDismissCoords(page).catch(() => null);
       if (coords) {
         try {
           await page.mouse.move(coords.x, coords.y);
           await page.mouse.click(coords.x, coords.y);
-          this.log(`Dismissed popup: "${coords.text}" (mouse click at ${Math.round(coords.x)},${Math.round(coords.y)})`);
+          this.log(`Dismissed popup (mouse): "${coords.text}" at (${Math.round(coords.x)},${Math.round(coords.y)})`);
           return true;
         } catch {}
       }
@@ -262,7 +279,7 @@ class ScraperSession {
       // ── FALLBACK: Playwright locator with force ──
       for (const text of ['No Thanks', 'No, Thanks', 'Not Now', 'Maybe Later', 'Skip', 'Dismiss']) {
         try {
-          await page.click(`button:has-text("${text}")`, { timeout: 300, force: true });
+          await page.click(`button:has-text("${text}")`, { timeout: 200, force: true });
           this.log(`Dismissed popup (locator): "${text}"`);
           return true;
         } catch {}
@@ -275,7 +292,7 @@ class ScraperSession {
 
     const start = Date.now();
     while (Date.now() - start < waitMs) {
-      await page.waitForTimeout(600);
+      await page.waitForTimeout(400);
       if (this.stopped) return;
       if (await tryDismiss()) return;
     }
@@ -328,6 +345,76 @@ class ScraperSession {
       });
     });
     await page.waitForTimeout(1500);
+  }
+
+  // Detect and interact with all <select> dropdowns on the page; capture page data per option
+  async _interactDropdowns(page, url) {
+    const results = [];
+    try {
+      // Get all native select elements with more than one option
+      const selectCount = await page.evaluate(() =>
+        document.querySelectorAll('select:not([disabled])').length
+      );
+      if (selectCount === 0) return results;
+
+      this.log(`Found ${selectCount} dropdown(s) on ${url} — interacting...`);
+
+      for (let si = 0; si < selectCount; si++) {
+        try {
+          const selectInfo = await page.evaluate((idx) => {
+            const selects = [...document.querySelectorAll('select:not([disabled])')];
+            const el = selects[idx];
+            if (!el) return null;
+            const options = [...el.options].map((o, i) => ({
+              index: i, value: o.value, text: o.text.trim(), selected: o.selected,
+            }));
+            const label = el.getAttribute('aria-label') || el.getAttribute('name') || el.id || `select-${idx}`;
+            return { options, label, currentIndex: el.selectedIndex };
+          }, si);
+
+          if (!selectInfo || selectInfo.options.length <= 1) continue;
+
+          const originalIndex = selectInfo.currentIndex;
+          this.log(`Dropdown "${selectInfo.label}": ${selectInfo.options.length} options`);
+
+          for (const option of selectInfo.options) {
+            if (option.index === originalIndex) continue;
+            if (!option.value && !option.text) continue;
+            try {
+              // Re-locate the select each time (page may re-render)
+              const selHandle = await page.evaluateHandle((idx) => {
+                return document.querySelectorAll('select:not([disabled])')[idx];
+              }, si);
+
+              await selHandle.asElement().selectOption({ index: option.index });
+              await page.waitForTimeout(1200);
+              await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+
+              const stateData = await extractPageData(page, url);
+              stateData._dropdownState = { label: selectInfo.label, option: option.text, value: option.value };
+              results.push(stateData);
+              this.log(`  Captured: "${selectInfo.label}" = "${option.text}"`);
+            } catch (err) {
+              this.log(`  Option "${option.text}" failed: ${err.message}`, 'warn');
+            }
+          }
+
+          // Restore original selection
+          try {
+            const selHandle = await page.evaluateHandle((idx) => {
+              return document.querySelectorAll('select:not([disabled])')[idx];
+            }, si);
+            await selHandle.asElement().selectOption({ index: originalIndex });
+            await page.waitForTimeout(600);
+          } catch {}
+        } catch (err) {
+          this.log(`Dropdown ${si} interaction failed: ${err.message}`, 'warn');
+        }
+      }
+    } catch (err) {
+      this.log(`_interactDropdowns error: ${err.message}`, 'warn');
+    }
+    return results;
   }
 
   // Build avoidance filter from user-selected tags
@@ -412,6 +499,7 @@ class ScraperSession {
       captureImages,
       imageLimit,
       autoScroll,
+      captureDropdowns,
       clickSequence,
       showBrowser,
       liveView,
@@ -736,8 +824,8 @@ class ScraperSession {
           await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
           await page.waitForTimeout(500);
           this.log(`Settled URL: ${page.url()}`);
-          // Dismiss any post-login notification/permission popups (12s window for slow modals)
-          await this._dismissPopups(page, 12000);
+          // Dismiss any post-login notification/permission popups (wait up to 5s for slow modals)
+          await this._dismissPopups(page, 5000);
           this.log('Authentication complete', 'success');
 
           // Save session keyed to the post-login URL (may differ from login URL)
@@ -803,17 +891,17 @@ class ScraperSession {
             await page.goto(targetUrls[i], { waitUntil: 'domcontentloaded', timeout: 60000 });
             if (autoScroll) await this._autoScroll(page);
             const visited = new Set();
-            allResults.push(...await this._scrapePage(page, targetUrls[i], scrapeDepth || 1, visited));
+            allResults.push(...await this._scrapePage(page, targetUrls[i], scrapeDepth || 1, visited, autoScroll, Infinity, null, captureDropdowns));
           } catch (err) {
             this.errors.push({ type: 'batchError', url: targetUrls[i], message: err.message });
           }
         }
       } else if (fullCrawl) {
-        allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll, avoidFilter);
+        allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll, avoidFilter, captureDropdowns);
       } else {
         const visited = new Set();
         const pageLimit = maxPages > 0 ? maxPages : Infinity;
-        allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll, pageLimit, avoidFilter);
+        allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll, pageLimit, avoidFilter, captureDropdowns);
         if (allResults.length >= pageLimit) {
           this.log(`Page limit reached (${pageLimit} pages).`, 'warn');
         }
@@ -931,7 +1019,7 @@ class ScraperSession {
     }
   }
 
-  async _scrapePage(page, url, depth, visited, autoScroll = false, maxPages = Infinity, avoidFilter = null) {
+  async _scrapePage(page, url, depth, visited, autoScroll = false, maxPages = Infinity, avoidFilter = null, captureDropdowns = false) {
     if (visited.has(url) || this.stopped || visited.size >= maxPages) return [];
     visited.add(url);
     this.log(`Extracting (${visited.size}${maxPages !== Infinity ? `/${maxPages}` : ''}): ${url}`);
@@ -953,6 +1041,12 @@ class ScraperSession {
     const pageData = await extractPageData(page, url);
     const results = [pageData];
 
+    // Interact with dropdowns and capture each state
+    if (captureDropdowns) {
+      const dropdownResults = await this._interactDropdowns(page, url);
+      results.push(...dropdownResults);
+    }
+
     if (depth > 1) {
       const links = (pageData.links || [])
         .filter(l => l.isInternal && !visited.has(l.href) && l.href?.startsWith('http'))
@@ -965,14 +1059,14 @@ class ScraperSession {
         const nav = await this._navigateWithRetry(page, link.href, origin);
         if (!nav.success) continue;
         if (autoScroll) await this._autoScroll(page);
-        results.push(...await this._scrapePage(page, link.href, depth - 1, visited, autoScroll, maxPages, avoidFilter));
+        results.push(...await this._scrapePage(page, link.href, depth - 1, visited, autoScroll, maxPages, avoidFilter, captureDropdowns));
       }
     }
     return results;
   }
 
   // BFS full-site crawl — visits every reachable internal link, ordered by path depth
-  async _fullCrawl(page, startUrl, maxPages = 100, autoScroll = false, avoidFilter = null) {
+  async _fullCrawl(page, startUrl, maxPages = 100, autoScroll = false, avoidFilter = null, captureDropdowns = false) {
     const origin = new URL(startUrl).origin;
     const visited = new Set();
     // Priority queue sorted by URL path depth (shallow first)
@@ -1020,6 +1114,15 @@ class ScraperSession {
 
         if (autoScroll) await this._autoScroll(page);
         const pageData = await extractPageData(page, url);
+
+        // Interact with dropdowns and capture each state
+        if (captureDropdowns) {
+          const dropdownResults = await this._interactDropdowns(page, url);
+          dropdownResults.forEach(dr => {
+            dr._crawl = { depth: pathDepth(url), index: results.length + 1, pathname, section: getSection(url), discoveryOrder: 0, parent: null, inboundCount: 0 };
+            results.push(dr);
+          });
+        }
 
         // Attach crawl metadata to each page
         pageData._crawl = {

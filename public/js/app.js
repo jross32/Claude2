@@ -554,6 +554,7 @@ async function startScrapeSession(name, faviconUrl) {
     captureImages: document.getElementById('capture-images').checked,
     imageLimit: parseInt(document.getElementById('image-limit').value, 10) || 0,
     autoScroll: document.getElementById('auto-scroll').checked,
+    captureDropdowns: document.getElementById('capture-dropdowns').checked,
     showBrowser: false,
     liveView,
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
