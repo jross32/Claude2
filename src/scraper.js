@@ -527,6 +527,7 @@ class ScraperSession {
       imageLimit,
       autoScroll,
       captureDropdowns,
+      captureSpeed,
       clickSequence,
       showBrowser,
       liveView,
@@ -578,178 +579,10 @@ class ScraperSession {
       // ── Live screenshot stream ────────────────────────────────────────────
       if (liveView !== false) this._startLiveStream(page);
 
-      // ── Console log capture ──────────────────────────────────────────────
-      page.on('console', (msg) => {
-        this.consoleLogs.push({
-          type: msg.type(),
-          text: msg.text().substring(0, 1000),
-          location: msg.location(),
-          timestamp: new Date().toISOString(),
-        });
-      });
+      const captureOptions = { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureImages, imageLimit };
 
-      // ── Request/Response interception (capture everything) ───────────────
-      await page.route('**/*', async (route) => {
-        if (this.stopped) { await route.abort().catch(() => {}); return; }
-
-        const request = route.request();
-        const reqUrl = request.url();
-        const method = request.method();
-        const headers = request.headers();
-        const postData = request.postData();
-        const resourceType = request.resourceType();
-
-        // ── GraphQL ──
-        if (captureGraphQL) {
-          const isGraphQL =
-            reqUrl.includes('/graphql') ||
-            reqUrl.includes('/api/graphql') ||
-            (headers['content-type']?.includes('application/json') &&
-              postData && (postData.includes('"query"') || postData.includes('"mutation"')));
-
-          if (isGraphQL) {
-            let parsedBody = null;
-            try { parsedBody = JSON.parse(postData); } catch {}
-            this.graphqlCalls.push({
-              url: reqUrl, method,
-              headers: this._sanitizeHeaders(headers),
-              body: parsedBody || postData,
-              timestamp: new Date().toISOString(), response: null,
-            });
-            this.log(`GraphQL: ${reqUrl}`, 'graphql');
-          }
-        }
-
-        // ── REST API ──
-        if (captureREST) {
-          const isAPI =
-            reqUrl.match(/\/(api|v\d+|rest|graphql-rest)\//i) ||
-            (headers['accept']?.includes('application/json') && !reqUrl.includes('/graphql'));
-          const isDocLike = ['document', 'script', 'stylesheet', 'font', 'image'].includes(resourceType);
-          if (isAPI && !isDocLike && !reqUrl.includes('/graphql')) {
-            let parsedBody = null;
-            try { parsedBody = JSON.parse(postData); } catch {}
-            this.restCalls.push({
-              url: reqUrl, method,
-              headers: this._sanitizeHeaders(headers),
-              body: parsedBody || postData || null,
-              resourceType, timestamp: new Date().toISOString(), response: null,
-            });
-            this.log(`REST: ${method} ${reqUrl}`, 'api');
-          }
-        }
-
-        // ── All requests (captureAllRequests mode) ──
-        if (captureAllRequests) {
-          this.allRequests.push({
-            url: reqUrl, method, resourceType,
-            headers: this._sanitizeHeaders(headers),
-            postData: postData ? postData.substring(0, 2000) : null,
-            timestamp: new Date().toISOString(),
-            response: null,
-          });
-        }
-
-        // ── Assets ──
-        if (captureAssets) {
-          if (['image','media','font','stylesheet','script'].includes(resourceType)) {
-            this.assets.push({ url: reqUrl, type: resourceType, timestamp: new Date().toISOString() });
-          }
-        }
-
-        await route.continue().catch(() => {});
-      });
-
-      // ── Response handler ─────────────────────────────────────────────────
-      page.on('response', async (response) => {
-        const respUrl = response.url();
-        const status = response.status();
-        const respHeaders = response.headers();
-
-        // Capture security headers from main document
-        if (response.request().resourceType() === 'document') {
-          this.securityHeaders = {
-            url: respUrl,
-            status,
-            'content-security-policy': respHeaders['content-security-policy'],
-            'strict-transport-security': respHeaders['strict-transport-security'],
-            'x-frame-options': respHeaders['x-frame-options'],
-            'x-content-type-options': respHeaders['x-content-type-options'],
-            'x-xss-protection': respHeaders['x-xss-protection'],
-            'referrer-policy': respHeaders['referrer-policy'],
-            'permissions-policy': respHeaders['permissions-policy'],
-            'access-control-allow-origin': respHeaders['access-control-allow-origin'],
-            'server': respHeaders['server'],
-            'x-powered-by': respHeaders['x-powered-by'],
-            'cache-control': respHeaders['cache-control'],
-            'set-cookie': respHeaders['set-cookie'],
-            all: respHeaders,
-          };
-        }
-
-        // Attach responses to GraphQL calls
-        const gqlIdx = this.graphqlCalls.findLastIndex(c => c.url === respUrl && c.response === null);
-        if (gqlIdx !== -1) {
-          try {
-            const text = await response.text();
-            let parsed = null; try { parsed = JSON.parse(text); } catch {}
-            this.graphqlCalls[gqlIdx].response = { status, headers: respHeaders, body: parsed || text };
-          } catch {}
-        }
-
-        // Attach responses to REST calls
-        const restIdx = this.restCalls.findLastIndex(c => c.url === respUrl && c.response === null);
-        if (restIdx !== -1) {
-          try {
-            const ct = respHeaders['content-type'] || '';
-            if (ct.includes('application/json')) {
-              const text = await response.text();
-              let parsed = null; try { parsed = JSON.parse(text); } catch {}
-              this.restCalls[restIdx].response = { status, headers: respHeaders, body: parsed || text };
-            } else {
-              this.restCalls[restIdx].response = { status, headers: respHeaders, body: null };
-            }
-          } catch {}
-        }
-
-        // Attach responses to all-requests
-        if (captureAllRequests) {
-          const idx = this.allRequests.findLastIndex(c => c.url === respUrl && c.response === null);
-          if (idx !== -1) {
-            try {
-              const ct = respHeaders['content-type'] || '';
-              const isText = ct.includes('json') || ct.includes('text') || ct.includes('xml');
-              let body = null;
-              if (isText) {
-                const text = await response.text();
-                if (ct.includes('json')) {
-                  try { body = JSON.parse(text); } catch { body = text.substring(0, 2000); }
-                } else {
-                  body = text.substring(0, 2000);
-                }
-              }
-              this.allRequests[idx].response = { status, contentType: ct, headers: respHeaders, body };
-            } catch {}
-          }
-        }
-      });
-
-      // ── WebSocket capture ────────────────────────────────────────────────
-      page.on('websocket', (ws) => {
-        const entry = { url: ws.url(), frames: [], openedAt: new Date().toISOString() };
-        this.websockets.push(entry);
-        ws.on('framesent', f => entry.frames.push({ dir: 'sent', payload: String(f.payload).substring(0, 2000), time: new Date().toISOString() }));
-        ws.on('framereceived', f => entry.frames.push({ dir: 'received', payload: String(f.payload).substring(0, 2000), time: new Date().toISOString() }));
-        ws.on('close', () => { entry.closedAt = new Date().toISOString(); });
-      });
-
-      // ── Page errors ──────────────────────────────────────────────────────
-      page.on('pageerror', (err) => {
-        this.errors.push({ type: 'pageError', message: err.message, stack: err.stack?.substring(0, 500) });
-      });
-      page.on('requestfailed', (req) => {
-        this.errors.push({ type: 'requestFailed', url: req.url(), failure: req.failure()?.errorText });
-      });
+      // ── Request/Response/Console/Error interception ──────────────────────
+      await this._setupPageCapture(page, this, captureOptions);
 
       // ── Navigate ─────────────────────────────────────────────────────────
       this.progress('Navigating to page', 15);
@@ -924,7 +757,16 @@ class ScraperSession {
           }
         }
       } else if (fullCrawl) {
-        allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll, avoidFilter, captureDropdowns);
+        const SPEED_WORKERS = { 1: 1, 2: 2, 3: 3, 4: 5, 5: 8 };
+        const numWorkers = SPEED_WORKERS[captureSpeed] || 1;
+        if (numWorkers > 1) {
+          allResults = await this._fullCrawlParallel(
+            crawlStartUrl, maxPages > 0 ? maxPages : Infinity,
+            numWorkers, captureOptions, autoScroll, avoidFilter, captureDropdowns
+          );
+        } else {
+          allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll, avoidFilter, captureDropdowns);
+        }
       } else {
         const visited = new Set();
         const pageLimit = maxPages > 0 ? maxPages : Infinity;
@@ -1137,9 +979,10 @@ class ScraperSession {
           const nav = await this._navigateWithRetry(page, url, origin);
           if (!nav.success) {
             this.log(`Skipping ${pathname} — ${nav.reason}`, 'warn');
+            if (nav.reason === 'page-closed') break; // page is gone — stop this crawl
             continue;
           }
-          await page.waitForTimeout(400);
+          await page.waitForTimeout(400).catch(() => {});
         }
 
         if (autoScroll) await this._autoScroll(page);
@@ -1209,6 +1052,10 @@ class ScraperSession {
 
         this.log(`  +${toQueue.length} new links queued (${queue.length} total in queue)`, 'info');
       } catch (err) {
+        if (this._isPageClosed(err)) {
+          this.log(`Page closed unexpectedly at ${pathname} — stopping crawl.`, 'error');
+          break;
+        }
         this.errors.push({ type: 'crawlError', url, message: err.message });
         this.log(`  Failed: ${pathname} — ${err.message}`, 'warn');
       }
@@ -1467,9 +1314,15 @@ class ScraperSession {
 
         return { success: true };
       } catch (err) {
+        // If the page/context/browser is gone there is no point retrying
+        if (this._isPageClosed(err)) {
+          this.log(`Page closed during navigation to ${url} — aborting.`, 'error');
+          this.failedPages.push({ url, reason: 'page-closed' });
+          return { success: false, reason: 'page-closed' };
+        }
         if (attempt === 0) {
           this.log(`Load failed for ${url} — retrying in 1s... (${err.message})`, 'warn');
-          await page.waitForTimeout(1000);
+          await page.waitForTimeout(1000).catch(() => {});
         } else {
           this.errors.push({ type: 'navigationError', url, message: err.message });
           this.failedPages.push({ url, reason: err.message });
@@ -1479,6 +1332,374 @@ class ScraperSession {
       }
     }
     return { success: false, reason: 'unknown' };
+  }
+
+  _isPageClosed(err) {
+    return /Target page|context or browser has been closed|browser has been closed|Target closed/i.test(err?.message || '');
+  }
+
+  // ── Reusable network/console/error interception setup ─────────────────────
+  // `captures` is either `this` (for single-worker) or a plain object with the
+  // same array properties (for parallel workers).
+  async _setupPageCapture(page, captures, opts) {
+    const { captureGraphQL, captureREST, captureAssets, captureAllRequests } = opts;
+
+    page.on('console', (msg) => {
+      captures.consoleLogs.push({
+        type: msg.type(),
+        text: msg.text().substring(0, 1000),
+        location: msg.location(),
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    await page.route('**/*', async (route) => {
+      if (this.stopped) { await route.abort().catch(() => {}); return; }
+
+      const request = route.request();
+      const reqUrl = request.url();
+      const method = request.method();
+      const headers = request.headers();
+      const postData = request.postData();
+      const resourceType = request.resourceType();
+
+      if (captureGraphQL) {
+        const isGraphQL =
+          reqUrl.includes('/graphql') ||
+          reqUrl.includes('/api/graphql') ||
+          (headers['content-type']?.includes('application/json') &&
+            postData && (postData.includes('"query"') || postData.includes('"mutation"')));
+        if (isGraphQL) {
+          let parsedBody = null;
+          try { parsedBody = JSON.parse(postData); } catch {}
+          captures.graphqlCalls.push({
+            url: reqUrl, method,
+            headers: this._sanitizeHeaders(headers),
+            body: parsedBody || postData,
+            timestamp: new Date().toISOString(), response: null,
+          });
+          this.log(`GraphQL: ${reqUrl}`, 'graphql');
+        }
+      }
+
+      if (captureREST) {
+        const isAPI =
+          reqUrl.match(/\/(api|v\d+|rest|graphql-rest)\//i) ||
+          (headers['accept']?.includes('application/json') && !reqUrl.includes('/graphql'));
+        const isDocLike = ['document', 'script', 'stylesheet', 'font', 'image'].includes(resourceType);
+        if (isAPI && !isDocLike && !reqUrl.includes('/graphql')) {
+          let parsedBody = null;
+          try { parsedBody = JSON.parse(postData); } catch {}
+          captures.restCalls.push({
+            url: reqUrl, method,
+            headers: this._sanitizeHeaders(headers),
+            body: parsedBody || postData || null,
+            resourceType, timestamp: new Date().toISOString(), response: null,
+          });
+          this.log(`REST: ${method} ${reqUrl}`, 'api');
+        }
+      }
+
+      if (captureAllRequests) {
+        captures.allRequests.push({
+          url: reqUrl, method, resourceType,
+          headers: this._sanitizeHeaders(headers),
+          postData: postData ? postData.substring(0, 2000) : null,
+          timestamp: new Date().toISOString(), response: null,
+        });
+      }
+
+      if (captureAssets) {
+        if (['image','media','font','stylesheet','script'].includes(resourceType)) {
+          captures.assets.push({ url: reqUrl, type: resourceType, timestamp: new Date().toISOString() });
+        }
+      }
+
+      await route.continue().catch(() => {});
+    });
+
+    page.on('response', async (response) => {
+      const respUrl = response.url();
+      const status = response.status();
+      const respHeaders = response.headers();
+
+      if (response.request().resourceType() === 'document') {
+        this.securityHeaders = {
+          url: respUrl, status,
+          'content-security-policy': respHeaders['content-security-policy'],
+          'strict-transport-security': respHeaders['strict-transport-security'],
+          'x-frame-options': respHeaders['x-frame-options'],
+          'x-content-type-options': respHeaders['x-content-type-options'],
+          'x-xss-protection': respHeaders['x-xss-protection'],
+          'referrer-policy': respHeaders['referrer-policy'],
+          'permissions-policy': respHeaders['permissions-policy'],
+          'access-control-allow-origin': respHeaders['access-control-allow-origin'],
+          'server': respHeaders['server'],
+          'x-powered-by': respHeaders['x-powered-by'],
+          'cache-control': respHeaders['cache-control'],
+          'set-cookie': respHeaders['set-cookie'],
+          all: respHeaders,
+        };
+      }
+
+      const gqlIdx = captures.graphqlCalls.findLastIndex(c => c.url === respUrl && c.response === null);
+      if (gqlIdx !== -1) {
+        try {
+          const text = await response.text();
+          let parsed = null; try { parsed = JSON.parse(text); } catch {}
+          captures.graphqlCalls[gqlIdx].response = { status, headers: respHeaders, body: parsed || text };
+        } catch {}
+      }
+
+      const restIdx = captures.restCalls.findLastIndex(c => c.url === respUrl && c.response === null);
+      if (restIdx !== -1) {
+        try {
+          const ct = respHeaders['content-type'] || '';
+          if (ct.includes('application/json')) {
+            const text = await response.text();
+            let parsed = null; try { parsed = JSON.parse(text); } catch {}
+            captures.restCalls[restIdx].response = { status, headers: respHeaders, body: parsed || text };
+          } else {
+            captures.restCalls[restIdx].response = { status, headers: respHeaders, body: null };
+          }
+        } catch {}
+      }
+
+      if (captureAllRequests) {
+        const idx = captures.allRequests.findLastIndex(c => c.url === respUrl && c.response === null);
+        if (idx !== -1) {
+          try {
+            const ct = respHeaders['content-type'] || '';
+            const isText = ct.includes('json') || ct.includes('text') || ct.includes('xml');
+            let body = null;
+            if (isText) {
+              const text = await response.text();
+              if (ct.includes('json')) { try { body = JSON.parse(text); } catch { body = text.substring(0, 2000); } }
+              else { body = text.substring(0, 2000); }
+            }
+            captures.allRequests[idx].response = { status, contentType: ct, headers: respHeaders, body };
+          } catch {}
+        }
+      }
+    });
+
+    page.on('websocket', (ws) => {
+      const entry = { url: ws.url(), frames: [], openedAt: new Date().toISOString() };
+      captures.websockets.push(entry);
+      ws.on('framesent', f => entry.frames.push({ dir: 'sent', payload: String(f.payload).substring(0, 2000), time: new Date().toISOString() }));
+      ws.on('framereceived', f => entry.frames.push({ dir: 'received', payload: String(f.payload).substring(0, 2000), time: new Date().toISOString() }));
+      ws.on('close', () => { entry.closedAt = new Date().toISOString(); });
+    });
+
+    page.on('pageerror', (err) => {
+      captures.errors.push({ type: 'pageError', message: err.message, stack: err.stack?.substring(0, 500) });
+    });
+
+    page.on('requestfailed', (req) => {
+      captures.errors.push({ type: 'requestFailed', url: req.url(), failure: req.failure()?.errorText });
+    });
+  }
+
+  // ── Create an isolated browser context for a parallel worker ──────────────
+  async _createWorkerContext(primaryUrl, captureOptions) {
+    const savedSession = loadSession(primaryUrl);
+    const context = await this.browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1440, height: 900 },
+      ignoreHTTPSErrors: true,
+      ...(savedSession ? { storageState: savedSession } : {}),
+    });
+    const page = await context.newPage();
+    page.on('dialog', async (d) => { try { await d.dismiss(); } catch {} });
+
+    const captures = {
+      graphqlCalls: [], restCalls: [], assets: [], allRequests: [],
+      consoleLogs: [], errors: [], websockets: [], downloadedImages: [],
+    };
+    await this._setupPageCapture(page, captures, captureOptions);
+    return { context, page, captures };
+  }
+
+  // ── Per-worker BFS loop — shares queue/visited/results with all other workers ──
+  async _workerLoop(page, shared, opts) {
+    const { avoidFilter, autoScroll, captureDropdowns } = opts;
+    const { queue, queued, visited, results, origin, maxPages } = shared;
+    const normalize = (u) => u.split('#')[0].replace(/\/$/, '') || u;
+    const pathDepth = (u) => { try { return new URL(u).pathname.split('/').filter(Boolean).length; } catch { return 0; } };
+    const getSection = (u) => { try { return new URL(u).pathname.split('/').filter(Boolean)[0] || '(root)'; } catch { return '(root)'; } };
+    const isSkippable = (u) => /\.(pdf|zip|png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|mp4|mp3|xml|json|rss|atom)(\?|$)/i.test(u);
+
+    while (!this.stopped) {
+      await this._checkPause();
+      if (this.stopped) break;
+
+      if (queue.length === 0) {
+        if (results.length >= maxPages) break;
+        await page.waitForTimeout(250).catch(() => {});
+        if (queue.length === 0) break;
+        continue;
+      }
+      if (results.length >= maxPages) break;
+
+      const url = queue.shift();
+      const norm = normalize(url);
+      if (visited.has(norm)) continue;
+      visited.add(norm);
+
+      const pathname = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
+
+      try {
+        const currentNorm = normalize(page.url());
+        if (currentNorm !== norm) {
+          const nav = await this._navigateWithRetry(page, url, origin);
+          if (!nav.success) {
+            this.log(`[W] Skipping ${pathname} — ${nav.reason}`, 'warn');
+            if (nav.reason === 'page-closed') break;
+            continue;
+          }
+          await page.waitForTimeout(300).catch(() => {});
+        }
+
+        if (autoScroll) await this._autoScroll(page);
+        const pageData = await extractPageData(page, url);
+
+        if (captureDropdowns) {
+          const dr = await this._interactDropdowns(page, url);
+          results.push(...dr);
+        }
+
+        pageData._crawl = {
+          depth: pathDepth(url),
+          index: results.length + 1,
+          pathname,
+          section: getSection(url),
+          discoveryOrder: shared.discoveryOrder.get(norm) ?? 0,
+          parent: null,
+          inboundCount: 0,
+        };
+        results.push(pageData);
+        this.log(`[W${shared.workerId}] [${results.length}] ${pathname}`);
+        this.progress(
+          `Crawling ${results.length}/${maxPages}: ${pathname}`,
+          50 + Math.min(40, Math.floor((results.length / Math.max(maxPages, 1)) * 40))
+        );
+
+        // Discover and enqueue new links (synchronous ops — safe between awaits)
+        const newLinks = (pageData.links || [])
+          .map(l => l.href)
+          .filter(href => {
+            if (!href?.startsWith(origin)) return false;
+            if (isSkippable(href)) return false;
+            if (/\/login|\/signin|\/sign-in\b/i.test(href)) return false;
+            return true;
+          });
+
+        newLinks.forEach(href => {
+          const n = normalize(href);
+          shared.inboundCount.set(n, (shared.inboundCount.get(n) || 0) + 1);
+        });
+
+        newLinks
+          .filter(href => {
+            const n = normalize(href);
+            if (visited.has(n) || queued.has(n)) return false;
+            if (avoidFilter) {
+              const linkText = (pageData.links || []).find(l => l.href === href)?.text || '';
+              if (this._isAvoidedLink({ href, text: linkText }, avoidFilter, origin)) return false;
+            }
+            return true;
+          })
+          .sort((a, b) => pathDepth(a) - pathDepth(b))
+          .forEach(href => {
+            queue.push(href);
+            queued.add(normalize(href));
+            shared.discoveryOrder.set(normalize(href), shared.discoveryCounter++);
+          });
+
+        queue.sort((a, b) => pathDepth(a) - pathDepth(b));
+
+      } catch (err) {
+        if (this._isPageClosed(err)) {
+          this.log(`[W] Page closed at ${pathname} — this worker stopping.`, 'error');
+          break;
+        }
+        this.errors.push({ type: 'crawlError', url, message: err.message });
+        this.log(`[W] Failed: ${pathname} — ${err.message}`, 'warn');
+      }
+    }
+  }
+
+  // ── Parallel full-site crawl with N concurrent workers ────────────────────
+  async _fullCrawlParallel(startUrl, maxPages, numWorkers, captureOptions, autoScroll, avoidFilter, captureDropdowns) {
+    const origin = new URL(startUrl).origin;
+    const norm0 = startUrl.split('#')[0].replace(/\/$/, '');
+
+    const shared = {
+      queue: [startUrl],
+      queued: new Set([norm0]),
+      visited: new Set(),
+      results: [],
+      origin,
+      maxPages,
+      inboundCount: new Map(),
+      discoveryOrder: new Map([[norm0, 0]]),
+      discoveryCounter: 1,
+      workerId: 0,
+    };
+
+    this.log(`Parallel crawl: ${numWorkers} workers, max ${maxPages === Infinity ? '∞' : maxPages} pages`, 'info');
+
+    // Create worker contexts (each with saved session cookies)
+    const workers = [];
+    for (let i = 0; i < numWorkers; i++) {
+      try {
+        const w = await this._createWorkerContext(startUrl, captureOptions);
+        w.id = i + 1;
+        workers.push(w);
+      } catch (err) {
+        this.log(`Failed to create worker ${i + 1}: ${err.message}`, 'warn');
+      }
+    }
+    if (workers.length === 0) throw new Error('Could not create any worker contexts');
+    this.log(`${workers.length} worker context(s) ready`, 'info');
+
+    // Run all workers concurrently
+    const opts = { autoScroll, avoidFilter, captureDropdowns };
+    await Promise.all(workers.map((w, i) => {
+      const workerShared = Object.assign(shared, { workerId: i + 1 });
+      return this._workerLoop(w.page, workerShared, opts);
+    }));
+
+    // Backfill inbound counts
+    const normalize = (u) => u.split('#')[0].replace(/\/$/, '') || u;
+    shared.results.forEach(p => {
+      const n = normalize(p.meta?.url || '');
+      if (p._crawl) p._crawl.inboundCount = shared.inboundCount.get(n) || 0;
+    });
+
+    // Merge worker captures into session arrays
+    for (const w of workers) {
+      this.graphqlCalls.push(...w.captures.graphqlCalls);
+      this.restCalls.push(...w.captures.restCalls);
+      this.assets.push(...w.captures.assets);
+      this.allRequests.push(...w.captures.allRequests);
+      this.consoleLogs.push(...w.captures.consoleLogs);
+      this.errors.push(...w.captures.errors);
+      this.websockets.push(...w.captures.websockets);
+    }
+
+    // Close worker contexts (browser stays open — closed by run())
+    await Promise.all(workers.map(w => w.context.close().catch(() => {})));
+
+    const results = shared.results;
+    results._siteTree = this._buildSiteTree(results, origin);
+
+    if (results.length >= maxPages && shared.queue.length > 0) {
+      this.log(`Crawl limit reached (${maxPages} pages). ${shared.queue.length} links not visited.`, 'warn');
+    } else {
+      this.log(`Parallel crawl complete — ${results.length} pages by ${workers.length} workers.`, 'success');
+    }
+    return results;
   }
 
   _buildSiteTree(pages, origin) {
