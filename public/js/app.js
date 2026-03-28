@@ -447,7 +447,7 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     liveView: document.getElementById('live-view').value === 'true',
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
     fullCrawl: document.getElementById('full-crawl').checked,
-    maxPages: parseInt(document.getElementById('max-pages').value, 10) || 100,
+    maxPages: document.getElementById('full-crawl').checked ? 0 : (parseInt(document.getElementById('max-pages').value, 10) || 100),
   };
 
   try {
@@ -1242,8 +1242,16 @@ function showToast(msg) {
 
 // ---- Full crawl toggle ----
 document.getElementById('full-crawl').addEventListener('change', function () {
-  document.getElementById('max-pages-field').style.display = this.checked ? 'flex' : 'none';
-  document.getElementById('depth-field').style.display = this.checked ? 'none' : 'flex';
+  const maxPagesInput = document.getElementById('max-pages');
+  if (this.checked) {
+    maxPagesInput.disabled = true;
+    maxPagesInput.placeholder = 'Unlimited';
+    maxPagesInput.value = '';
+  } else {
+    maxPagesInput.disabled = false;
+    maxPagesInput.placeholder = '';
+    maxPagesInput.value = maxPagesInput.value || 100;
+  }
   const label = this.closest('#full-crawl-label');
   if (label) label.classList.toggle('active-opt', this.checked);
 });

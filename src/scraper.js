@@ -694,7 +694,7 @@ class ScraperSession {
           }
         }
       } else if (fullCrawl) {
-        allResults = await this._fullCrawl(page, crawlStartUrl, maxPages || 100, autoScroll);
+        allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll);
       } else {
         const visited = new Set();
         allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll);
@@ -853,7 +853,8 @@ class ScraperSession {
     const discoveryOrder = new Map([[normalize(startUrl), 0]]);
     let discoveryCounter = 1;
 
-    this.log(`Full crawl starting from ${startUrl} (max ${maxPages} pages)`, 'info');
+    const maxLabel = isFinite(maxPages) ? `${maxPages} pages` : 'unlimited';
+    this.log(`Full crawl starting from ${startUrl} (${maxLabel})`, 'info');
 
     while (queue.length > 0 && results.length < maxPages && !this.stopped) {
       const url = queue.shift();

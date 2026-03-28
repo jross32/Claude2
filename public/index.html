@@ -92,19 +92,19 @@
               <div class="site-badges" id="site-badges"></div>
             </div>
 
-            <!-- Depth -->
-            <div class="field" id="depth-field">
-              <label for="scrape-depth">Scrape Depth
-                <span class="hint">(how many link-levels deep to follow — 1 scrapes only the page you enter, 2 follows every link on that page, 3+ goes deeper)</span>
-              </label>
-              <input type="number" id="scrape-depth" min="1" max="99" value="1" style="width:90px" />
-            </div>
-            <!-- Max pages (shown when full crawl is on) -->
-            <div class="field" id="max-pages-field" style="display:none">
+            <!-- Max pages — always visible -->
+            <div class="field" id="max-pages-field">
               <label for="max-pages">Max Pages to Crawl
-                <span class="hint">(safety limit — 0 = unlimited)</span>
+                <span class="hint">(limits how many pages the scraper visits — check "Full site crawl" below to remove the limit)</span>
               </label>
               <input type="number" id="max-pages" value="100" min="1" max="9999" style="width:120px" />
+            </div>
+            <!-- Depth — optional, collapsed by default -->
+            <div class="field" id="depth-field">
+              <label for="scrape-depth">Scrape Depth
+                <span class="hint">(how many link-levels deep to follow — 1 = entry page only, 2 follows every link on that page, 3+ goes deeper)</span>
+              </label>
+              <input type="number" id="scrape-depth" min="1" max="99" value="1" style="width:90px" />
             </div>
           </div>
 
