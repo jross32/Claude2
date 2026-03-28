@@ -174,29 +174,63 @@ class ScraperSession {
   stop() {
     this.stopped = true;
     this._stopLiveStream();
+    if (this._popupWatcherInterval) { clearInterval(this._popupWatcherInterval); this._popupWatcherInterval = null; }
     if (this.browser) {
       this.browser.close().catch(() => {});
     }
   }
 
   async _dismissPopups(page) {
-    // Click "No Thanks" / "Close" / "Dismiss" / "Skip" buttons on modal overlays
-    const dismissTexts = /^(no thanks|no,? thanks|close|dismiss|skip|not now|maybe later|cancel|×|✕)$/i;
-    try {
-      const els = await page.$$('button, a[role="button"], [role="dialog"] button, .modal button');
-      for (const el of els) {
-        try {
-          if (!await el.isVisible()) continue;
-          const text = ((await el.textContent()) || '').trim();
-          if (dismissTexts.test(text)) {
-            this.log(`Dismissed popup: "${text}"`);
-            await el.click();
-            await page.waitForTimeout(400);
-            return;
-          }
-        } catch {}
-      }
-    } catch {}
+    // Partial-match — catches "No Thanks", "No, Thanks", "No thanks", etc.
+    const dismissRe = /no.?thanks|not now|maybe later|skip|dismiss|close/i;
+    const tryDismiss = async () => {
+      try {
+        const els = await page.$$('button, a[role="button"]');
+        for (const el of els) {
+          try {
+            if (!await el.isVisible()) continue;
+            const text = ((await el.textContent()) || '').trim();
+            if (dismissRe.test(text)) {
+              this.log(`Dismissed popup: "${text}"`);
+              await el.click().catch(() => {});
+              return true;
+            }
+          } catch {}
+        }
+      } catch {}
+      return false;
+    };
+    // Try immediately, then again after 1s and 2.5s in case modal renders late
+    if (await tryDismiss()) return;
+    await page.waitForTimeout(1000);
+    if (await tryDismiss()) return;
+    await page.waitForTimeout(1500);
+    await tryDismiss();
+  }
+
+  // Register a persistent popup watcher for the whole page lifetime
+  _registerPopupWatcher(page) {
+    const dismissRe = /no.?thanks|not now|maybe later|skip|dismiss/i;
+    page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
+    // Poll every 2s for any dismiss-able popup button
+    const interval = setInterval(async () => {
+      if (this.stopped) { clearInterval(interval); return; }
+      try {
+        const els = await page.$$('button');
+        for (const el of els) {
+          try {
+            if (!await el.isVisible()) continue;
+            const text = ((await el.textContent()) || '').trim();
+            if (dismissRe.test(text)) {
+              await el.click().catch(() => {});
+              this.log(`Auto-dismissed popup: "${text}"`);
+              break;
+            }
+          } catch {}
+        }
+      } catch {}
+    }, 2000);
+    return interval;
   }
 
   async _autoScroll(page) {
@@ -308,6 +342,9 @@ class ScraperSession {
       this.context = context;
 
       const page = await context.newPage();
+
+      // ── Persistent popup watcher (dismisses "No Thanks" modals automatically)
+      this._popupWatcherInterval = this._registerPopupWatcher(page);
 
       // ── Live screenshot stream ────────────────────────────────────────────
       if (liveView !== false) this._startLiveStream(page);
