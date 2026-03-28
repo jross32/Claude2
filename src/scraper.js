@@ -153,6 +153,8 @@ class ScraperSession {
       clickSequence,
       showBrowser,
       slowMotion,
+      fullCrawl,
+      maxPages,
     } = options;
 
     const targetUrls = urls && urls.length > 0 ? urls : (url ? [url] : []);
@@ -488,14 +490,16 @@ class ScraperSession {
           try {
             await page.goto(targetUrls[i], { waitUntil: 'networkidle', timeout: 60000 });
             if (autoScroll) await this._autoScroll(page);
-            const visited = [];
+            const visited = new Set();
             allResults.push(...await this._scrapePage(page, targetUrls[i], scrapeDepth || 1, visited));
           } catch (err) {
             this.errors.push({ type: 'batchError', url: targetUrls[i], message: err.message });
           }
         }
+      } else if (fullCrawl) {
+        allResults = await this._fullCrawl(page, primaryUrl, maxPages || 100, autoScroll);
       } else {
-        const visited = [];
+        const visited = new Set();
         allResults = await this._scrapePage(page, primaryUrl, scrapeDepth || 1, visited, autoScroll);
       }
 
@@ -605,8 +609,8 @@ class ScraperSession {
   }
 
   async _scrapePage(page, url, depth, visited, autoScroll = false) {
-    if (visited.includes(url) || this.stopped) return [];
-    visited.push(url);
+    if (visited.has(url) || this.stopped) return [];
+    visited.add(url);
     this.log(`Extracting: ${url}`);
     if (autoScroll && depth >= 1) await this._autoScroll(page);
     const pageData = await extractPageData(page, url);
@@ -614,7 +618,7 @@ class ScraperSession {
 
     if (depth > 1) {
       const links = (pageData.links || [])
-        .filter(l => l.isInternal && !visited.includes(l.href) && l.href?.startsWith('http'))
+        .filter(l => l.isInternal && !visited.has(l.href) && l.href?.startsWith('http'))
         .slice(0, 8);
 
       for (const link of links) {
@@ -629,6 +633,103 @@ class ScraperSession {
       }
     }
     return results;
+  }
+
+  // BFS full-site crawl — visits every reachable internal link, ordered by path depth
+  async _fullCrawl(page, startUrl, maxPages = 100, autoScroll = false) {
+    const origin = new URL(startUrl).origin;
+    const visited = new Set();
+    // Priority queue sorted by URL path depth (shallow first)
+    const queue = [startUrl];
+    const queued = new Set([startUrl]);
+    const results = [];
+
+    const pathDepth = (url) => { try { return new URL(url).pathname.split('/').filter(Boolean).length; } catch { return 0; } };
+    const normalize = (url) => url.split('#')[0].replace(/\/$/, '') || url;
+    const isSkippable = (url) => /\.(pdf|zip|png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|mp4|mp3|xml|json|rss|atom)(\?|$)/i.test(url);
+
+    this.log(`Full crawl starting from ${startUrl} (max ${maxPages} pages)`, 'info');
+
+    while (queue.length > 0 && results.length < maxPages && !this.stopped) {
+      const url = queue.shift();
+      const norm = normalize(url);
+      if (visited.has(norm)) continue;
+      visited.add(norm);
+
+      const pathname = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
+      this.progress(
+        `Crawling ${results.length + 1}/${maxPages}: ${pathname}`,
+        50 + Math.min(40, Math.floor((results.length / Math.max(maxPages, 1)) * 40))
+      );
+
+      try {
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+        if (autoScroll) await this._autoScroll(page);
+        const pageData = await extractPageData(page, url);
+
+        // Attach crawl metadata to each page
+        pageData._crawl = {
+          depth: pathDepth(url),
+          index: results.length + 1,
+          pathname,
+          parent: results.length > 0 ? results[results.length - 1].meta?.url : null,
+        };
+
+        results.push(pageData);
+        this.log(`[${results.length}] (depth ${pageData._crawl.depth}) ${pathname}`);
+
+        // Collect new internal links
+        const newLinks = (pageData.links || [])
+          .map(l => l.href)
+          .filter(href => {
+            if (!href?.startsWith(origin)) return false;
+            if (isSkippable(href)) return false;
+            const n = normalize(href);
+            return !visited.has(n) && !queued.has(n);
+          });
+
+        // Sort new links by path depth (shallow first) before adding to queue
+        newLinks.sort((a, b) => pathDepth(a) - pathDepth(b));
+        newLinks.forEach(href => { queue.push(href); queued.add(href); });
+
+        // Re-sort entire queue by path depth to always process shallowest next
+        queue.sort((a, b) => pathDepth(a) - pathDepth(b));
+
+        this.log(`  +${newLinks.length} new links queued (${queue.length} total in queue)`, 'info');
+      } catch (err) {
+        this.errors.push({ type: 'crawlError', url, message: err.message });
+        this.log(`  Failed: ${pathname} — ${err.message}`, 'warn');
+      }
+    }
+
+    const remaining = queue.length;
+    if (results.length >= maxPages && remaining > 0) {
+      this.log(`Crawl limit reached (${maxPages} pages). ${remaining} links not visited.`, 'warn');
+    } else {
+      this.log(`Full crawl complete — all ${results.length} reachable pages visited.`, 'success');
+    }
+
+    // Build structured sitemap tree attached to results
+    results._siteTree = this._buildSiteTree(results, origin);
+    return results;
+  }
+
+  // Build a nested tree of pages grouped by URL path segments
+  _buildSiteTree(pages, origin) {
+    const tree = { path: '/', url: origin, children: {}, pages: [] };
+    for (const page of pages) {
+      const url = page.meta?.url || '';
+      let pathname = '/';
+      try { pathname = new URL(url).pathname || '/'; } catch {}
+      const segments = pathname.split('/').filter(Boolean);
+      let node = tree;
+      for (const seg of segments) {
+        if (!node.children[seg]) node.children[seg] = { path: seg, children: {}, pages: [] };
+        node = node.children[seg];
+      }
+      node.pages.push({ url, title: page.meta?.title, depth: segments.length });
+    }
+    return tree;
   }
 
   _detectGraphQLEndpoint() {

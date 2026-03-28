@@ -154,6 +154,8 @@ document.getElementById('btn-scrape').addEventListener('click', async () => {
     autoScroll: document.getElementById('auto-scroll').checked,
     showBrowser: document.getElementById('show-browser').checked,
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
+    fullCrawl: document.getElementById('full-crawl').checked,
+    maxPages: parseInt(document.getElementById('max-pages').value, 10) || 100,
   };
 
   try {
@@ -498,6 +500,16 @@ function renderResults(data) {
   }
   if (displayData.downloadedImages) {
     displayData.downloadedImages = displayData.downloadedImages.map(i => ({ ...i, dataUrl: '[base64 omitted]' }));
+  }
+
+  // ── Site tree (full crawl) ──
+  const siteTreeSection = document.getElementById('site-tree-section');
+  if (data._siteTree) {
+    siteTreeSection.style.display = 'block';
+    document.getElementById('site-tree-badge').textContent = data.pages?.length || 0;
+    document.getElementById('site-tree').innerHTML = renderSiteTree(data._siteTree);
+  } else {
+    siteTreeSection.style.display = 'none';
   }
 
   const viewer = document.getElementById('json-viewer');
@@ -916,6 +928,38 @@ document.getElementById('show-browser').addEventListener('change', function () {
   const label = this.closest('.show-browser-label');
   if (label) label.classList.toggle('active-opt', this.checked);
 });
+
+// ---- Full crawl toggle ----
+document.getElementById('full-crawl').addEventListener('change', function () {
+  document.getElementById('max-pages-field').style.display = this.checked ? 'flex' : 'none';
+  document.getElementById('depth-field').style.display = this.checked ? 'none' : 'flex';
+  const label = this.closest('#full-crawl-label');
+  if (label) label.classList.toggle('active-opt', this.checked);
+});
+
+// ---- Site tree renderer ----
+function renderSiteTree(node, depth = 0) {
+  if (!node) return '';
+  const indent = depth * 18;
+  let html = '';
+  // Pages at this level
+  (node.pages || []).forEach(p => {
+    html += `<div class="site-tree-item" style="padding-left:${indent}px">
+      <span class="site-tree-icon">&#128196;</span>
+      <a class="site-tree-url" href="${escapeHTML(p.url)}" target="_blank">${escapeHTML(p.url)}</a>
+      <span class="site-tree-title">${escapeHTML(p.title || '')}</span>
+    </div>`;
+  });
+  // Children (sub-paths)
+  Object.entries(node.children || {}).sort(([a],[b]) => a.localeCompare(b)).forEach(([seg, child]) => {
+    html += `<div class="site-tree-segment" style="padding-left:${indent}px">
+      <span class="site-tree-icon">&#128193;</span>
+      <span class="site-tree-seg-name">/${escapeHTML(seg)}</span>
+    </div>`;
+    html += renderSiteTree(child, depth + 1);
+  });
+  return html;
+}
 
 document.getElementById('slow-motion').addEventListener('input', function () {
   document.getElementById('slowmo-value').textContent = `${this.value}ms`;

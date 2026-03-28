@@ -85,12 +85,19 @@
             </div>
 
             <!-- Depth -->
-            <div class="field">
+            <div class="field" id="depth-field">
               <label for="scrape-depth">Scrape Depth
                 <span class="hint">(1 = single page, 2+ = follow internal links)</span>
               </label>
               <input type="range" id="scrape-depth" min="1" max="3" value="1" />
               <span class="range-value" id="depth-value">1</span>
+            </div>
+            <!-- Max pages (shown when full crawl is on) -->
+            <div class="field" id="max-pages-field" style="display:none">
+              <label for="max-pages">Max Pages to Crawl
+                <span class="hint">(safety limit — 0 = unlimited)</span>
+              </label>
+              <input type="number" id="max-pages" value="100" min="1" max="9999" style="width:120px" />
             </div>
           </div>
 
@@ -123,6 +130,10 @@
               <label class="checkbox-label">
                 <input type="checkbox" id="auto-scroll" checked />
                 <span>Auto-scroll (trigger lazy loads)</span>
+              </label>
+              <label class="checkbox-label" id="full-crawl-label" title="Follows every internal link on the site, ordered by path depth. Ignores the depth slider.">
+                <input type="checkbox" id="full-crawl" />
+                <span>&#127760; Full site crawl (every internal link)</span>
               </label>
               <label class="checkbox-label show-browser-label" title="Opens a real visible Chromium window so you can watch the scraper work live">
                 <input type="checkbox" id="show-browser" />
@@ -267,6 +278,12 @@
           <div class="entities-section" id="entities-section" style="display:none">
             <h3 class="section-heading">Extracted Entities</h3>
             <div class="entities-grid" id="entities-grid"></div>
+          </div>
+
+          <!-- Site tree (full crawl) -->
+          <div class="site-tree-section" id="site-tree-section" style="display:none">
+            <h3 class="section-heading">&#127760; Site Map <span class="badge" id="site-tree-badge">0</span></h3>
+            <div class="site-tree" id="site-tree"></div>
           </div>
 
           <!-- Tech fingerprint -->
