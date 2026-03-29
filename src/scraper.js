@@ -399,7 +399,7 @@ class ScraperSession {
         }, 30);
       });
     });
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(250);
   }
 
   // Detect and interact with all <select> dropdowns on the page; capture page data per option
@@ -1137,6 +1137,7 @@ class ScraperSession {
           .filter(href => {
             if (!href?.startsWith(origin)) return false;
             if (isSkippable(href)) return false;
+            if (/\/login|\/signin|\/sign-in|\/logout|\/signout|\/log-out|\/sign-out/i.test(href)) return false;
             return true;
           });
 
@@ -1761,7 +1762,15 @@ class ScraperSession {
           const earlyHrefs = await page.$$eval('a[href]', as => as.map(a => a.href).filter(Boolean));
           let added = 0;
           earlyHrefs
-            .filter(href => href.startsWith(origin) && !isSkippable(href) && !/\/login|\/signin|\/sign-in\b/i.test(href))
+            .filter(href => {
+              if (!href.startsWith(origin)) return false;
+              if (isSkippable(href)) return false;
+              // Block login AND logout/signout — visiting logout destroys the auth session
+              if (/\/login|\/signin|\/sign-in|\/logout|\/signout|\/log-out|\/sign-out/i.test(href)) return false;
+              // Apply the same avoidFilter the full extraction uses (href-only, no link text yet)
+              if (avoidFilter && this._isAvoidedLink({ href, text: '' }, avoidFilter, origin)) return false;
+              return true;
+            })
             .forEach(href => {
               const n = normalize(href);
               if (visited.has(n) || queued.has(n)) return;
@@ -1828,7 +1837,7 @@ class ScraperSession {
           .filter(href => {
             if (!href?.startsWith(origin)) return false;
             if (isSkippable(href)) return false;
-            if (/\/login|\/signin|\/sign-in\b/i.test(href)) return false;
+            if (/\/login|\/signin|\/sign-in|\/logout|\/signout|\/log-out|\/sign-out/i.test(href)) return false;
             return true;
           });
 
