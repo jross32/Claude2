@@ -4,6 +4,19 @@ const { handleAuth } = require('./auth');
 const fs = require('fs');
 const path = require('path');
 
+// Semaphore — limits concurrent async operations to `max` at a time
+class Semaphore {
+  constructor(max) { this._max = max; this._count = 0; this._q = []; }
+  acquire() {
+    if (this._count < this._max) { this._count++; return Promise.resolve(); }
+    return new Promise(r => this._q.push(r));
+  }
+  release() {
+    this._count--;
+    if (this._q.length > 0) { this._count++; this._q.shift()(); }
+  }
+}
+
 const SESSIONS_DIR = path.join(__dirname, '../.scraper-sessions');
 
 function sessionFile(url) {
@@ -1612,23 +1625,17 @@ class ScraperSession {
       try {
         const currentNorm = normalize(page.url());
         if (currentNorm !== norm) {
-          const nav = await this._navigateWithRetry(page, url, origin);
+          // Semaphore: limit concurrent page.goto() calls to avoid thundering-herd timeouts
+          await shared.navSemaphore.acquire();
+          let nav;
+          try {
+            nav = await this._navigateWithRetry(page, url, origin);
+          } finally {
+            shared.navSemaphore.release();
+          }
           if (!nav.success) {
             if (nav.reason === 'page-closed') { shared.active--; break; }
-            // On timeout/error: re-queue up to 2 more times before permanently failing
-            if (nav.reason === 'error' || nav.reason === 'unknown') {
-              const retries = shared.retryCount.get(norm) || 0;
-              if (retries < 2) {
-                shared.retryCount.set(norm, retries + 1);
-                visited.delete(norm);  // allow the URL to be picked up again
-                queue.push(url);       // re-add to end of queue (lower pressure = less likely to timeout)
-                this.log(`[W${workerId}] Re-queued ${pathname} (retry ${retries + 1}/2)`, 'info');
-              } else {
-                this.log(`[W${workerId}] Giving up on ${pathname} after 3 attempts`, 'warn');
-              }
-            } else {
-              this.log(`[W${workerId}] Skipping ${pathname} — ${nav.reason}`, 'warn');
-            }
+            this.log(`[W${workerId}] Failed ${pathname} — ${nav.reason}`, 'warn');
             shared.active--;
             continue;
           }
@@ -1746,7 +1753,7 @@ class ScraperSession {
       results: [],
       origin,
       maxPages,
-      retryCount: new Map(), // tracks per-URL timeout retry attempts
+      navSemaphore: new Semaphore(Math.min(numWorkers, 6)), // max 6 concurrent page.goto() calls
       inboundCount: new Map(),
       discoveryOrder: new Map([[norm0, 0]]),
       discoveryCounter: 1,
@@ -1801,10 +1808,12 @@ class ScraperSession {
     if (workers.length === 0) throw new Error('Could not create any worker pages');
     this.log(`${workers.length} workers ready across ${allContexts.length} context(s)`, 'info');
 
-    // Run all workers concurrently
+    // Run all workers concurrently — stagger startup by 100ms each to avoid initial burst
     const opts = { autoScroll, avoidFilter, captureDropdowns };
     await Promise.all(workers.map((w, i) =>
-      this._workerLoop(w.page, shared, opts, i + 1)
+      new Promise(r => setTimeout(r, i * 100)).then(() =>
+        this._workerLoop(w.page, shared, opts, i + 1)
+      )
     ));
 
     // Backfill inbound counts
