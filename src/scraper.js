@@ -1582,7 +1582,8 @@ class ScraperSession {
         if (currentNorm !== norm) {
           const nav = await this._navigateWithRetry(page, url, origin);
           if (!nav.success) {
-            this.log(`[W] Skipping ${pathname} — ${nav.reason}`, 'warn');
+            this.log(`[W${workerId}] Skipping ${pathname} — ${nav.reason}`, 'warn');
+            shared.active--;
             if (nav.reason === 'page-closed') break;
             continue;
           }
@@ -1591,7 +1592,7 @@ class ScraperSession {
 
         if (autoScroll) await this._autoScroll(page);
         const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
-        if (!pageData) continue;
+        if (!pageData) { shared.active--; continue; }
 
         if (captureDropdowns) {
           const dr = await this._interactDropdowns(page, url);
