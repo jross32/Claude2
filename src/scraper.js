@@ -59,9 +59,23 @@ function saveCreds(url, username, password) {
 }
 
 function loadSession(url) {
+  // Try exact hostname first
   try {
     const file = sessionFile(url);
     if (file && fs.existsSync(file)) return file;
+  } catch {}
+  // Fallback: try any saved session for the same root domain (e.g. league.x.com → accounts.x.com)
+  try {
+    const hostname = new URL(url).hostname;
+    const parts = hostname.split('.');
+    if (parts.length > 2) {
+      const rootDomain = parts.slice(-2).join('.');
+      if (fs.existsSync(SESSIONS_DIR)) {
+        const files = fs.readdirSync(SESSIONS_DIR)
+          .filter(f => f.endsWith('.json') && !f.includes('.spa-routes') && !f.includes('.creds') && f.includes(rootDomain));
+        if (files.length) return path.join(SESSIONS_DIR, files[0]);
+      }
+    }
   } catch {}
   return null;
 }
@@ -994,10 +1008,11 @@ class ScraperSession {
             if (nav.reason === 'page-closed') break; // page is gone — stop this crawl
             continue;
           }
-          await page.waitForTimeout(400).catch(() => {});
+          await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
         }
 
         if (autoScroll) await this._autoScroll(page);
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
         const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
 
         // Interact with dropdowns and capture each state
@@ -1095,8 +1110,11 @@ class ScraperSession {
 
   // Build a nested tree of pages grouped by URL path segments
   _isLoginRedirect(currentUrl, intendedUrl, origin) {
-    if (!currentUrl.startsWith(origin)) return false;
     if (currentUrl === intendedUrl) return false;
+    const loginPattern = /\/(login|signin|sign-in|auth\/login|sso\/login|account\/login)(\?|$)/i;
+    // Cross-domain redirect to login (e.g. league.poolplayers.com → accounts.poolplayers.com/login)
+    if (!currentUrl.startsWith(origin)) return loginPattern.test(currentUrl);
+    // Same-domain redirect to login path
     return /login|signin|sign-in|auth|sso|account\/login/i.test(currentUrl);
   }
 
@@ -1587,10 +1605,13 @@ class ScraperSession {
             if (nav.reason === 'page-closed') break;
             continue;
           }
-          await page.waitForTimeout(300).catch(() => {});
+          // Wait for SPA to finish rendering (React/Vue need networkidle after bundle loads)
+          await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
         }
 
         if (autoScroll) await this._autoScroll(page);
+        // Second networkidle after scroll — ensures lazy-loaded SPA content and API responses are in
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
         const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
         if (!pageData) { shared.active--; continue; }
 
