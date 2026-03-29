@@ -299,7 +299,7 @@ app.post('/api/scrape', async (req, res) => {
       showBrowser: showBrowser || false,
       slowMotion: slowMotion || 0,
       fullCrawl: fullCrawl || false,
-      maxPages: maxPages || 100,
+      maxPages: maxPages !== undefined && maxPages !== null ? parseInt(maxPages, 10) : 100,
     })
     .then((result) => {
       clearTimeout(cleanupTimer);
