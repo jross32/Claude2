@@ -5,8 +5,11 @@ const bodyParser = require('body-parser');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const ScraperSession = require('./scraper');
+
+const SAVES_DIR = path.join(__dirname, '../scrape-saves');
 const { clearSession } = require('./scraper');
 const { exportHAR } = require('./har-exporter');
 const { inferSchema } = require('./schema-inferrer');
@@ -236,6 +239,7 @@ app.post('/api/scrape', async (req, res) => {
     slowMotion,
     fullCrawl,
     maxPages,
+    resumeFrom,
   } = req.body;
 
   if (!url && (!urls || urls.length === 0)) {
@@ -300,6 +304,8 @@ app.post('/api/scrape', async (req, res) => {
       slowMotion: slowMotion || 0,
       fullCrawl: fullCrawl || false,
       maxPages: maxPages !== undefined && maxPages !== null ? parseInt(maxPages, 10) : 100,
+      saveId: sessionId,
+      resumeFrom: resumeFrom || null,
     })
     .then((result) => {
       clearTimeout(cleanupTimer);
@@ -313,6 +319,37 @@ app.post('/api/scrape', async (req, res) => {
       broadcast(sessionId, { type: 'error', message: err.message });
       sessions.delete(sessionId);
     });
+});
+
+// ---- Saves API ----
+app.get('/api/saves', (req, res) => {
+  try {
+    if (!fs.existsSync(SAVES_DIR)) return res.json([]);
+    const files = fs.readdirSync(SAVES_DIR).filter(f => f.endsWith('.json'));
+    const saves = files.map(f => {
+      try {
+        const d = JSON.parse(fs.readFileSync(path.join(SAVES_DIR, f), 'utf8'));
+        return { sessionId: d.sessionId, startUrl: d.startUrl, startedAt: d.startedAt, lastSavedAt: d.lastSavedAt, status: d.status, pageCount: d.pages?.length || 0, options: d.options };
+      } catch { return null; }
+    }).filter(Boolean).sort((a, b) => new Date(b.lastSavedAt) - new Date(a.lastSavedAt));
+    res.json(saves);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/saves/:id', (req, res) => {
+  try {
+    const file = path.join(SAVES_DIR, `${req.params.id}.json`);
+    if (!fs.existsSync(file)) return res.status(404).json({ error: 'Save not found' });
+    res.json(JSON.parse(fs.readFileSync(file, 'utf8')));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/saves/:id', (req, res) => {
+  try {
+    const file = path.join(SAVES_DIR, `${req.params.id}.json`);
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Stop an active session

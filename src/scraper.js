@@ -18,6 +18,7 @@ class Semaphore {
 }
 
 const SESSIONS_DIR = path.join(__dirname, '../.scraper-sessions');
+const SAVES_DIR = path.join(__dirname, '../scrape-saves');
 
 function sessionFile(url) {
   try {
@@ -563,6 +564,8 @@ class ScraperSession {
       slowMotion,
       fullCrawl,
       maxPages,
+      saveId,
+      resumeFrom,
     } = options;
 
     this._captureScreenshots = captureScreenshots || false;
@@ -572,6 +575,37 @@ class ScraperSession {
     if (targetUrls.length === 0) throw new Error('No URL(s) provided');
 
     const primaryUrl = targetUrls[0];
+
+    // ── Autosave / resume setup ──────────────────────────────────────────────
+    this._saveId = saveId || null;
+    this._saveStartUrl = primaryUrl;
+    this._saveStartedAt = new Date().toISOString();
+    this._saveOptions = { url: primaryUrl, maxPages, workerCount, captureSpeed, fullCrawl, autoScroll, politeDelay: politeDelay || 0, captureGraphQL, captureREST, captureAssets, captureAllRequests };
+    this._savePages = null;
+    this._saveVisited = null;
+    this._saveWorkers = null;
+
+    // Load resume data if continuing from a previous save
+    let resumeData = null;
+    if (resumeFrom) {
+      try {
+        const savePath = path.join(SAVES_DIR, `${resumeFrom}.json`);
+        if (fs.existsSync(savePath)) {
+          resumeData = JSON.parse(fs.readFileSync(savePath, 'utf8'));
+          this.log(`Resuming save ${resumeFrom}: ${resumeData.pages?.length || 0} pages already captured`, 'info');
+          this.graphqlCalls.push(...(resumeData.apiCalls?.graphql || []));
+          this.restCalls.push(...(resumeData.apiCalls?.rest || []));
+          this.assets.push(...(resumeData.assets || []));
+          this.failedPages.push(...(resumeData.failedPages || []));
+        }
+      } catch (err) {
+        this.log(`Could not load resume data: ${err.message}`, 'warn');
+      }
+    }
+
+    // Write initial save immediately so the session appears in the saves list
+    if (saveId) this._writeAutosave('running');
+
     // Load remembered SPA-only routes for this domain
     this._spaRoutes = loadSpaRoutes(primaryUrl);
     this.log(`Starting scrape of ${primaryUrl}`);
@@ -801,10 +835,10 @@ class ScraperSession {
         if (numWorkers > 1) {
           allResults = await this._fullCrawlParallel(
             crawlStartUrl, maxPages > 0 ? maxPages : Infinity,
-            numWorkers, captureOptions, autoScroll, avoidFilter, captureDropdowns
+            numWorkers, captureOptions, autoScroll, avoidFilter, captureDropdowns, resumeData
           );
         } else {
-          allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll, avoidFilter, captureDropdowns);
+          allResults = await this._fullCrawl(page, crawlStartUrl, maxPages > 0 ? maxPages : Infinity, autoScroll, avoidFilter, captureDropdowns, resumeData);
         }
       } else {
         const visited = new Set();
@@ -917,6 +951,12 @@ class ScraperSession {
         errors: this.errors,
       };
 
+      // Write final save with complete status
+      if (this._saveId) {
+        this._savePages = allResults;
+        this._writeAutosave(this.stopped ? 'stopped' : 'complete');
+      }
+
       this.progress('Done', 100);
       this.log('Scraping complete!', 'success');
       return result;
@@ -975,13 +1015,30 @@ class ScraperSession {
   }
 
   // BFS full-site crawl — visits every reachable internal link, ordered by path depth
-  async _fullCrawl(page, startUrl, maxPages = 100, autoScroll = false, avoidFilter = null, captureDropdowns = false) {
+  async _fullCrawl(page, startUrl, maxPages = 100, autoScroll = false, avoidFilter = null, captureDropdowns = false, resumeData = null) {
     const origin = new URL(startUrl).origin;
     const visited = new Set();
     // Priority queue sorted by URL path depth (shallow first)
     const queue = [startUrl];
     const queued = new Set([startUrl]);
     const results = [];
+
+    // Pre-populate from resume data (skip already-visited URLs)
+    if (resumeData) {
+      const norm = (u) => u.split('#')[0].replace(/\/$/, '') || u;
+      (resumeData.visitedUrls || []).forEach(u => { const n = norm(u); visited.add(n); queued.add(n); });
+      results.push(...(resumeData.pages || []));
+      this.log(`Resume: loaded ${results.length} pages, skipping ${visited.size} URLs`, 'info');
+    }
+
+    // Autosave setup — sequential mode, captures go directly to this.*
+    this._savePages = results;
+    this._saveVisited = visited;
+    this._saveWorkers = null;
+    let _saveSize = results.length;
+    const saveTimer = this._saveId ? setInterval(() => {
+      if (results.length > _saveSize) { _saveSize = results.length; this._writeAutosave('running'); }
+    }, 3000) : null;
 
     const pathDepth = (url) => { try { return new URL(url).pathname.split('/').filter(Boolean).length; } catch { return 0; } };
     const normalize = (url) => url.split('#')[0].replace(/\/$/, '') || url;
@@ -1122,6 +1179,8 @@ class ScraperSession {
       const norm = normalize(p.meta?.url || '');
       p._crawl.inboundCount = inboundCount.get(norm) || 0;
     });
+
+    if (saveTimer) clearInterval(saveTimer);
 
     const remaining = queue.length;
     if (results.length >= maxPages && remaining > 0) {
@@ -1742,7 +1801,7 @@ class ScraperSession {
   // ── Parallel full-site crawl with N concurrent workers ────────────────────
   // Uses a page pool: groups workers into shared contexts (16 pages per context)
   // so 100 workers = 7 contexts × 16 pages — far cheaper than 100 separate contexts
-  async _fullCrawlParallel(startUrl, maxPages, numWorkers, captureOptions, autoScroll, avoidFilter, captureDropdowns) {
+  async _fullCrawlParallel(startUrl, maxPages, numWorkers, captureOptions, autoScroll, avoidFilter, captureDropdowns, resumeData = null) {
     const origin = new URL(startUrl).origin;
     const norm0 = startUrl.split('#')[0].replace(/\/$/, '');
 
@@ -1759,6 +1818,14 @@ class ScraperSession {
       discoveryCounter: 1,
       active: 0,   // workers currently processing a URL — idle workers wait when this > 0
     };
+
+    // Pre-populate from resume data (skip already-visited URLs, load saved pages)
+    if (resumeData) {
+      const norm = (u) => u.split('#')[0].replace(/\/$/, '') || u;
+      (resumeData.visitedUrls || []).forEach(u => { const n = norm(u); shared.visited.add(n); shared.queued.add(n); });
+      shared.results.push(...(resumeData.pages || []));
+      this.log(`Resume: loaded ${shared.results.length} pages, skipping ${shared.visited.size} URLs`, 'info');
+    }
 
     const PAGES_PER_CTX = 16; // pages per browser context
     const numContexts = Math.max(1, Math.ceil(numWorkers / PAGES_PER_CTX));
@@ -1808,6 +1875,17 @@ class ScraperSession {
     if (workers.length === 0) throw new Error('Could not create any worker pages');
     this.log(`${workers.length} workers ready across ${allContexts.length} context(s)`, 'info');
 
+    // Set save references — _writeAutosave reads these
+    this._saveWorkers = workers;
+    this._savePages = shared.results;
+    this._saveVisited = shared.visited;
+
+    // Autosave timer — writes every 3s when new pages have been scraped
+    let _saveSize = shared.results.length;
+    const saveTimer = this._saveId ? setInterval(() => {
+      if (shared.results.length > _saveSize) { _saveSize = shared.results.length; this._writeAutosave('running'); }
+    }, 3000) : null;
+
     // Run all workers concurrently — stagger startup by 100ms each to avoid initial burst
     const opts = { autoScroll, avoidFilter, captureDropdowns };
     await Promise.all(workers.map((w, i) =>
@@ -1815,6 +1893,8 @@ class ScraperSession {
         this._workerLoop(w.page, shared, opts, i + 1)
       )
     ));
+
+    if (saveTimer) clearInterval(saveTimer);
 
     // Backfill inbound counts
     const normalize = (u) => u.split('#')[0].replace(/\/$/, '') || u;
@@ -1849,6 +1929,36 @@ class ScraperSession {
       this.log(`Parallel crawl complete — ${results.length} pages by ${workers.length} workers.`, 'success');
     }
     return results;
+  }
+
+  // ── Autosave helper — writes current crawl state to disk ─────────────────
+  _writeAutosave(status = 'running') {
+    const saveId = this._saveId;
+    if (!saveId) return;
+    const HEAVY = ['htmlSource', 'layoutTree', 'stylesheetContents', 'screenshot', 'viewportScreenshot'];
+    const strip = obj => JSON.parse(JSON.stringify(obj, (k, v) => HEAVY.includes(k) ? undefined : v));
+    try {
+      // In parallel mode workers have per-worker captures; in sequential they go to this.*
+      const ws = this._saveWorkers || [];
+      const graphql = ws.length ? ws.flatMap(w => w.captures.graphqlCalls) : this.graphqlCalls;
+      const rest = ws.length ? ws.flatMap(w => w.captures.restCalls) : this.restCalls;
+      const assets = ws.length ? ws.flatMap(w => w.captures.assets) : this.assets;
+      const saveData = {
+        sessionId: saveId,
+        startUrl: this._saveStartUrl,
+        startedAt: this._saveStartedAt,
+        lastSavedAt: new Date().toISOString(),
+        status,
+        options: this._saveOptions,
+        visitedUrls: this._saveVisited ? [...this._saveVisited] : [],
+        pages: strip(this._savePages || []),
+        apiCalls: { graphql: strip(graphql), rest: strip(rest) },
+        assets: strip(assets),
+        failedPages: this.failedPages || [],
+      };
+      if (!fs.existsSync(SAVES_DIR)) fs.mkdirSync(SAVES_DIR, { recursive: true });
+      fs.writeFileSync(path.join(SAVES_DIR, `${saveId}.json`), JSON.stringify(saveData));
+    } catch {}
   }
 
   _buildSiteTree(pages, origin) {

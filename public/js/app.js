@@ -2172,6 +2172,124 @@ function downloadCSV(rows, headers, filename) {
   downloadFile(csv, filename, 'text/csv');
 }
 
+// ============================================================
+// ---- Saves (server-side autosave, resume) ----
+// ============================================================
+async function loadSaves() {
+  const list = document.getElementById('saves-list');
+  if (!list) return;
+  list.innerHTML = '<p class="empty-hint">Loading...</p>';
+  try {
+    const res = await fetch('/api/saves');
+    if (!res.ok) throw new Error(await res.text());
+    const saves = await res.json();
+    renderSaves(saves);
+  } catch(e) {
+    list.innerHTML = `<p class="empty-hint">Failed to load: ${escapeHTML(e.message)}</p>`;
+  }
+}
+
+function renderSaves(saves) {
+  const list = document.getElementById('saves-list');
+  if (!list) return;
+  if (!saves.length) {
+    list.innerHTML = '<p class="empty-hint">No saved scrapes yet. Start a full crawl to see auto-saves here.</p>';
+    return;
+  }
+  const statusClass = { complete: 'chip-ok', stopped: 'chip-warn', running: 'chip-info' };
+  list.innerHTML = saves.map(s => `
+    <div class="history-card" data-id="${escapeAttr(s.sessionId)}">
+      <div class="history-card-info">
+        <div class="history-card-url">${escapeHTML(s.startUrl || '(unknown)')}</div>
+        <div class="history-card-meta">
+          ${new Date(s.lastSavedAt).toLocaleString()} &mdash; ${s.pageCount} pages
+          <span class="cd-chip ${statusClass[s.status] || 'chip-log'}" style="margin-left:8px">${escapeHTML(s.status)}</span>
+        </div>
+      </div>
+      <div class="history-card-actions">
+        <button class="btn-xs btn-primary sv-load" data-id="${escapeAttr(s.sessionId)}">Load</button>
+        ${s.status !== 'complete' ? `<button class="btn-xs btn-success sv-resume" data-id="${escapeAttr(s.sessionId)}" data-url="${escapeAttr(s.startUrl || '')}" data-options="${escapeAttr(JSON.stringify(s.options || {}))}">Resume</button>` : ''}
+        <button class="btn-xs btn-danger sv-del" data-id="${escapeAttr(s.sessionId)}">Delete</button>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('.sv-load').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = '...';
+      try {
+        const res = await fetch(`/api/saves/${encodeURIComponent(btn.dataset.id)}`);
+        if (!res.ok) throw new Error(await res.text());
+        const save = await res.json();
+        // Build a result object compatible with onSessionComplete
+        const data = {
+          pages: save.pages || [],
+          apiCalls: save.apiCalls || { graphql: [], rest: [], all: [] },
+          assets: save.assets || [],
+          failedPages: save.failedPages || [],
+          meta: { scrapedAt: save.lastSavedAt, targetUrl: save.startUrl, totalPages: save.pages?.length || 0 },
+          visitedUrls: save.visitedUrls || [],
+        };
+        window._scraperResult = data;
+        scrapedData = data;
+        renderResults(data);
+        renderAPICalls(data.apiCalls);
+        renderAssets(data.assets);
+        enableRefactor(data);
+        document.querySelector('[data-panel="results"]').click();
+      } catch(e) { showToast('Load failed: ' + e.message); }
+      finally { btn.disabled = false; btn.textContent = 'Load'; }
+    });
+  });
+
+  list.querySelectorAll('.sv-resume').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = '...';
+      try {
+        let opts = {};
+        try { opts = JSON.parse(btn.dataset.options || '{}'); } catch {}
+        const url = btn.dataset.url || opts.url || '';
+        const payload = {
+          url,
+          fullCrawl: opts.fullCrawl !== false,
+          maxPages: opts.maxPages || 0,
+          captureSpeed: opts.captureSpeed || 3,
+          workerCount: opts.workerCount || 0,
+          autoScroll: opts.autoScroll || false,
+          politeDelay: opts.politeDelay || 0,
+          captureGraphQL: opts.captureGraphQL !== false,
+          captureREST: opts.captureREST !== false,
+          captureAssets: opts.captureAssets !== false,
+          captureAllRequests: opts.captureAllRequests || false,
+          capturePageUrls: true,
+          resumeFrom: btn.dataset.id,
+        };
+        const res = await fetch('/api/scrape', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error(await res.text());
+        const { sessionId } = await res.json();
+        const displayName = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+        const favicon = `/api/favicon?url=${encodeURIComponent(url)}`;
+        createSessionPanel(sessionId, displayName, favicon, false);
+        activeSessions.set(sessionId, { name: displayName, faviconUrl: favicon, liveView: false, expanded: true });
+        appendSessionLog(sessionId, `Resuming from save ${btn.dataset.id}`, 'info');
+        document.querySelector('[data-panel="scraper"]').click();
+      } catch(e) { showToast('Resume failed: ' + e.message); }
+      finally { btn.disabled = false; btn.textContent = 'Resume'; }
+    });
+  });
+
+  list.querySelectorAll('.sv-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await fetch(`/api/saves/${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
+        loadSaves();
+      } catch(e) { showToast('Delete failed: ' + e.message); }
+    });
+  });
+}
+
+document.querySelector('[data-panel="saves"]')?.addEventListener('click', loadSaves);
+document.getElementById('btn-refresh-saves')?.addEventListener('click', loadSaves);
+
 // ---- Initialize panels that need data on load ----
 renderHistory();
 
