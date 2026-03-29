@@ -1381,6 +1381,7 @@ class ScraperSession {
         window.dispatchEvent(new Event('locationchange'));
       }, targetPath);
       await page.waitForTimeout(1000);
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
       const landed = page.url();
       this.log(`SPA nav (pushState) landed: ${landed}`, 'info');
       return !this._isLoginRedirect(landed, url, origin);
@@ -1789,10 +1790,11 @@ class ScraperSession {
             .filter(href => {
               if (!href.startsWith(origin)) return false;
               if (isSkippable(href)) return false;
-              // Block login AND logout/signout — visiting logout destroys the auth session
+              // Block login AND logout/signout — visiting a logout URL destroys the auth session
+              // NOTE: intentionally NOT applying avoidFilter here. Early discovery queues links
+              // before link text is known, so URL-only matching would cause false positives and
+              // block entire site branches. avoidFilter runs in the full extraction loop instead.
               if (/\/login|\/signin|\/sign-in|\/logout|\/signout|\/log-out|\/sign-out/i.test(href)) return false;
-              // Apply the same avoidFilter the full extraction uses (href-only, no link text yet)
-              if (avoidFilter && this._isAvoidedLink({ href, text: '' }, avoidFilter, origin)) return false;
               return true;
             })
             .forEach(href => {
