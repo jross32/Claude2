@@ -1536,7 +1536,7 @@ class ScraperSession {
   }
 
   // ── Per-worker BFS loop — shares queue/visited/results with all other workers ──
-  async _workerLoop(page, shared, opts) {
+  async _workerLoop(page, shared, opts, workerId = 1) {
     const { avoidFilter, autoScroll, captureDropdowns } = opts;
     const { queue, queued, visited, results, origin, maxPages } = shared;
     const normalize = (u) => u.split('#')[0].replace(/\/$/, '') || u;
@@ -1550,8 +1550,9 @@ class ScraperSession {
 
       if (queue.length === 0) {
         if (results.length >= maxPages) break;
-        await page.waitForTimeout(250).catch(() => {});
-        if (queue.length === 0) break;
+        // Only exit if no other worker is actively processing (and could add new links)
+        if (shared.active === 0) break;
+        await page.waitForTimeout(300).catch(() => {});
         continue;
       }
       if (results.length >= maxPages) break;
@@ -1563,6 +1564,7 @@ class ScraperSession {
 
       const pathname = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
 
+      shared.active++;
       try {
         const currentNorm = normalize(page.url());
         if (currentNorm !== norm) {
@@ -1594,7 +1596,7 @@ class ScraperSession {
           inboundCount: 0,
         };
         results.push(pageData);
-        this.log(`[W${shared.workerId}] [${results.length}] ${pathname}`);
+        this.log(`[W${workerId}] [${results.length}] ${pathname}`);
         this.progress(
           `Crawling ${results.length}/${maxPages}: ${pathname}`,
           50 + Math.min(40, Math.floor((results.length / Math.max(maxPages, 1)) * 40))
@@ -1638,13 +1640,16 @@ class ScraperSession {
           });
 
       } catch (err) {
+        shared.active--;
         if (this._isPageClosed(err)) {
-          this.log(`[W] Page closed at ${pathname} — this worker stopping.`, 'error');
+          this.log(`[W${workerId}] Page closed at ${pathname} — this worker stopping.`, 'error');
           break;
         }
         this.errors.push({ type: 'crawlError', url, message: err.message });
-        this.log(`[W] Failed: ${pathname} — ${err.message}`, 'warn');
+        this.log(`[W${workerId}] Failed: ${pathname} — ${err.message}`, 'warn');
+        continue;
       }
+      shared.active--;
     }
   }
 
@@ -1663,7 +1668,7 @@ class ScraperSession {
       inboundCount: new Map(),
       discoveryOrder: new Map([[norm0, 0]]),
       discoveryCounter: 1,
-      workerId: 0,
+      active: 0,   // number of workers currently processing a URL
     };
 
     this.log(`Parallel crawl: ${numWorkers} workers, max ${maxPages === Infinity ? '∞' : maxPages} pages`, 'info');
@@ -1683,12 +1688,11 @@ class ScraperSession {
     if (workers.length === 0) throw new Error('Could not create any worker contexts');
     this.log(`${workers.length} worker context(s) ready`, 'info');
 
-    // Run all workers concurrently
+    // Run all workers concurrently — pass workerId separately so each worker has its own identity
     const opts = { autoScroll, avoidFilter, captureDropdowns };
-    await Promise.all(workers.map((w, i) => {
-      const workerShared = Object.assign(shared, { workerId: i + 1 });
-      return this._workerLoop(w.page, workerShared, opts);
-    }));
+    await Promise.all(workers.map((w, i) =>
+      this._workerLoop(w.page, shared, opts, i + 1)
+    ));
 
     // Backfill inbound counts
     const normalize = (u) => u.split('#')[0].replace(/\/$/, '') || u;
