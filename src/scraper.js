@@ -625,10 +625,31 @@ class ScraperSession {
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
         '--allow-running-insecure-content',
+        '--ignore-certificate-errors',
       ],
     };
     if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
       launchOpts.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+    }
+    // Pass system proxy to the browser if configured (e.g. in sandboxed/containerised environments)
+    const _proxyEnv = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY;
+    if (_proxyEnv) {
+      try {
+        const _proxyRaw = _proxyEnv.replace(/^https?:\/\//, '');
+        const _atIdx = _proxyRaw.lastIndexOf('@');
+        if (_atIdx > 0) {
+          const _server = 'http://' + _proxyRaw.substring(_atIdx + 1);
+          const _userpass = _proxyRaw.substring(0, _atIdx);
+          const _ci = _userpass.indexOf(':');
+          launchOpts.proxy = {
+            server: _server,
+            username: _userpass.substring(0, _ci),
+            password: _userpass.substring(_ci + 1),
+          };
+        } else {
+          launchOpts.proxy = { server: 'http://' + _proxyRaw };
+        }
+      } catch {}
     }
     this.browser = await chromium.launch(launchOpts);
 
