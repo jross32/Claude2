@@ -529,6 +529,7 @@ class ScraperSession {
       captureDropdowns,
       captureScreenshots,
       captureSpeed,
+      workerCount,
       clickSequence,
       liveView,
       slowMotion,
@@ -549,7 +550,8 @@ class ScraperSession {
 
     this.log('Launching browser...');
 
-    this.browser = await chromium.launch({
+    // Support PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var (used when bundled browser version differs)
+    const launchOpts = {
       headless: true,
       slowMo: slowMotion ? parseInt(slowMotion) : 0,
       args: [
@@ -559,7 +561,11 @@ class ScraperSession {
         '--disable-features=VizDisplayCompositor',
         '--allow-running-insecure-content',
       ],
-    });
+    };
+    if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+      launchOpts.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+    }
+    this.browser = await chromium.launch(launchOpts);
 
     try {
       const savedSession = loadSession(primaryUrl);
@@ -759,8 +765,10 @@ class ScraperSession {
           }
         }
       } else if (fullCrawl) {
-        const SPEED_WORKERS = { 1: 1, 2: 2, 3: 3, 4: 5, 5: 8 };
-        const numWorkers = SPEED_WORKERS[captureSpeed] || 1;
+        // workerCount overrides speed preset; speed preset maps 1→1, 2→4, 3→8, 4→16, 5→32
+        const SPEED_WORKERS = { 1: 1, 2: 4, 3: 8, 4: 16, 5: 32 };
+        const numWorkers = (workerCount > 0 ? Math.min(parseInt(workerCount), 100) : null)
+          ?? (SPEED_WORKERS[captureSpeed] || 1);
         if (numWorkers > 1) {
           allResults = await this._fullCrawlParallel(
             crawlStartUrl, maxPages > 0 ? maxPages : Infinity,
@@ -1654,6 +1662,8 @@ class ScraperSession {
   }
 
   // ── Parallel full-site crawl with N concurrent workers ────────────────────
+  // Uses a page pool: groups workers into shared contexts (16 pages per context)
+  // so 100 workers = 7 contexts × 16 pages — far cheaper than 100 separate contexts
   async _fullCrawlParallel(startUrl, maxPages, numWorkers, captureOptions, autoScroll, avoidFilter, captureDropdowns) {
     const origin = new URL(startUrl).origin;
     const norm0 = startUrl.split('#')[0].replace(/\/$/, '');
@@ -1668,27 +1678,58 @@ class ScraperSession {
       inboundCount: new Map(),
       discoveryOrder: new Map([[norm0, 0]]),
       discoveryCounter: 1,
-      active: 0,   // number of workers currently processing a URL
+      active: 0,   // workers currently processing a URL — idle workers wait when this > 0
     };
 
-    this.log(`Parallel crawl: ${numWorkers} workers, max ${maxPages === Infinity ? '∞' : maxPages} pages`, 'info');
+    const PAGES_PER_CTX = 16; // pages per browser context
+    const numContexts = Math.max(1, Math.ceil(numWorkers / PAGES_PER_CTX));
+    this.log(`Parallel crawl: ${numWorkers} workers across ${numContexts} context(s), max ${maxPages === Infinity ? '∞' : maxPages} pages`, 'info');
 
-    // Create worker contexts in parallel (each with saved session cookies)
-    const workerResults = await Promise.allSettled(
-      Array.from({ length: numWorkers }, (_, i) =>
-        this._createWorkerContext(startUrl, captureOptions).then(w => { w.id = i + 1; return w; })
-      )
+    const savedSession = loadSession(startUrl);
+    const ctxOpts = {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1440, height: 900 },
+      ignoreHTTPSErrors: true,
+      ...(savedSession ? { storageState: savedSession } : {}),
+    };
+
+    // Create all contexts + pages in parallel (page pool)
+    let workerIdx = 0;
+    const contextSetups = await Promise.allSettled(
+      Array.from({ length: numContexts }, async (_, ci) => {
+        const ctx = await this.browser.newContext(ctxOpts);
+        const pagesInCtx = Math.min(PAGES_PER_CTX, numWorkers - ci * PAGES_PER_CTX);
+        const pages = await Promise.allSettled(
+          Array.from({ length: pagesInCtx }, async () => {
+            const page = await ctx.newPage();
+            page.on('dialog', async (d) => { try { await d.dismiss(); } catch {} });
+            const captures = {
+              graphqlCalls: [], restCalls: [], assets: [], allRequests: [],
+              consoleLogs: [], errors: [], websockets: [], downloadedImages: [],
+              securityHeaders: {},
+            };
+            await this._setupPageCapture(page, captures, captureOptions);
+            return { page, captures };
+          })
+        );
+        return {
+          context: ctx,
+          workers: pages.filter(r => r.status === 'fulfilled').map(r => r.value),
+        };
+      })
     );
-    const workers = workerResults
-      .filter(r => r.status === 'fulfilled')
-      .map(r => r.value);
-    workerResults
-      .filter(r => r.status === 'rejected')
-      .forEach((r, i) => this.log(`Failed to create worker ${i + 1}: ${r.reason?.message}`, 'warn'));
-    if (workers.length === 0) throw new Error('Could not create any worker contexts');
-    this.log(`${workers.length} worker context(s) ready`, 'info');
 
-    // Run all workers concurrently — pass workerId separately so each worker has its own identity
+    const allContexts = contextSetups.filter(r => r.status === 'fulfilled').map(r => r.value.context);
+    const workers = contextSetups
+      .filter(r => r.status === 'fulfilled')
+      .flatMap(r => r.value.workers);
+
+    const failedCtx = contextSetups.filter(r => r.status === 'rejected').length;
+    if (failedCtx > 0) this.log(`${failedCtx} context(s) failed to create`, 'warn');
+    if (workers.length === 0) throw new Error('Could not create any worker pages');
+    this.log(`${workers.length} workers ready across ${allContexts.length} context(s)`, 'info');
+
+    // Run all workers concurrently
     const opts = { autoScroll, avoidFilter, captureDropdowns };
     await Promise.all(workers.map((w, i) =>
       this._workerLoop(w.page, shared, opts, i + 1)
@@ -1701,7 +1742,7 @@ class ScraperSession {
       if (p._crawl) p._crawl.inboundCount = shared.inboundCount.get(n) || 0;
     });
 
-    // Merge worker captures into session arrays
+    // Merge all worker captures into session arrays
     for (const w of workers) {
       this.graphqlCalls.push(...w.captures.graphqlCalls);
       this.restCalls.push(...w.captures.restCalls);
@@ -1710,14 +1751,13 @@ class ScraperSession {
       this.consoleLogs.push(...w.captures.consoleLogs);
       this.errors.push(...w.captures.errors);
       this.websockets.push(...w.captures.websockets);
-      // Merge securityHeaders — last worker with data wins
       if (w.captures.securityHeaders && w.captures.securityHeaders.url) {
         this.securityHeaders = w.captures.securityHeaders;
       }
     }
 
-    // Close worker contexts (browser stays open — closed by run())
-    await Promise.all(workers.map(w => w.context.close().catch(() => {})));
+    // Close all contexts (browser stays open — closed by run())
+    await Promise.all(allContexts.map(ctx => ctx.close().catch(() => {})));
 
     const results = shared.results;
     results._siteTree = this._buildSiteTree(results, origin);

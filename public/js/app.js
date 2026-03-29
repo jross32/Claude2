@@ -290,6 +290,7 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
     captureDropdowns: document.getElementById('preset-dropdowns').checked,
     captureScreenshots: document.getElementById('preset-screenshots').checked,
     captureSpeed: parseInt(document.getElementById('preset-capture-speed').value, 10) || 1,
+    workerCount: parseInt(document.getElementById('worker-count')?.value, 10) || 0,
     slowMotion: parseInt(document.getElementById('preset-slow-motion').value, 10) || 0,
     fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
@@ -361,7 +362,11 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   document.getElementById('capture-screenshots').checked = !!preset.captureScreenshots;
   const presetCsVal = preset.captureSpeed || 1;
   document.getElementById('capture-speed').value = presetCsVal;
-  document.getElementById('capture-speed-badge').textContent = _captureSpeedLabels[presetCsVal] || `${presetCsVal}`;
+  const presetWc = preset.workerCount || 0;
+  document.getElementById('worker-count').value = presetWc || '';
+  document.getElementById('capture-speed-badge').textContent = presetWc
+    ? `${presetWc} workers (custom)`
+    : (_captureSpeedLabels[presetCsVal] || `${presetCsVal}`);
   document.getElementById('slow-motion').value = preset.slowMotion || 0;
   // Full crawl + max pages
   const fc = !!preset.fullCrawl;
@@ -592,6 +597,7 @@ async function startScrapeSession(name, faviconUrl) {
     captureDropdowns: document.getElementById('capture-dropdowns').checked,
     captureScreenshots: document.getElementById('capture-screenshots').checked,
     captureSpeed: parseInt(document.getElementById('capture-speed').value, 10) || 1,
+    workerCount: parseInt(document.getElementById('worker-count').value, 10) || 0,
     showBrowser: false,
     liveView,
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
@@ -1964,9 +1970,19 @@ document.getElementById('slow-motion').addEventListener('input', function () {
   document.getElementById('slowmo-value').textContent = `${this.value}ms`;
 });
 
-const _captureSpeedLabels = { 1: 'Default', 2: 'Fast', 3: 'Faster', 4: 'Turbo', 5: 'Max' };
+const _captureSpeedLabels = { 1: '1 worker', 2: '4 workers', 3: '8 workers', 4: '16 workers', 5: '32 workers' };
 document.getElementById('capture-speed').addEventListener('input', function () {
-  document.getElementById('capture-speed-badge').textContent = `${this.value} — ${_captureSpeedLabels[this.value] || this.value}`;
+  const custom = document.getElementById('worker-count').value;
+  document.getElementById('capture-speed-badge').textContent = custom
+    ? `${custom} workers (custom)`
+    : (_captureSpeedLabels[this.value] || this.value);
+});
+document.getElementById('worker-count').addEventListener('input', function () {
+  const val = this.value.trim();
+  const speed = document.getElementById('capture-speed').value;
+  document.getElementById('capture-speed-badge').textContent = val
+    ? `${val} workers (custom)`
+    : (_captureSpeedLabels[speed] || speed);
 });
 
 // ---- Crawl sort tabs ----

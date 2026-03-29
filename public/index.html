@@ -107,18 +107,25 @@
               <span class="section-icon">&#128257;</span> Capture Options
             </h2>
 
-            <!-- Capture Speed -->
+            <!-- Capture Speed / Worker Count -->
             <div class="capture-speed-row">
               <span class="capture-speed-label">&#9889; Capture Speed</span>
               <div class="capture-speed-track">
-                <span class="capture-speed-tick">1<br><span class="capture-speed-sublabel">Default</span></span>
-                <span class="capture-speed-tick">2</span>
-                <span class="capture-speed-tick">3</span>
-                <span class="capture-speed-tick">4</span>
-                <span class="capture-speed-tick">5<br><span class="capture-speed-sublabel">Max</span></span>
+                <span class="capture-speed-tick">1<br><span class="capture-speed-sublabel">1w</span></span>
+                <span class="capture-speed-tick">2<br><span class="capture-speed-sublabel">4w</span></span>
+                <span class="capture-speed-tick">3<br><span class="capture-speed-sublabel">8w</span></span>
+                <span class="capture-speed-tick">4<br><span class="capture-speed-sublabel">16w</span></span>
+                <span class="capture-speed-tick">5<br><span class="capture-speed-sublabel">32w</span></span>
               </div>
               <input type="range" id="capture-speed" min="1" max="5" step="1" value="1" class="capture-speed-slider" />
-              <span class="capture-speed-badge" id="capture-speed-badge">1 — Default</span>
+              <span class="capture-speed-badge" id="capture-speed-badge">1 worker</span>
+            </div>
+            <div class="capture-speed-row" style="margin-top:4px;align-items:center;gap:8px">
+              <span class="capture-speed-label" style="font-size:0.78rem;color:var(--text3)">Custom workers</span>
+              <input type="number" id="worker-count" min="1" max="100" placeholder="auto"
+                style="width:80px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:0.82rem"
+                title="Override speed preset — set exact number of parallel workers (1–100)" />
+              <span style="font-size:0.75rem;color:var(--text3)">(overrides slider, max 100)</span>
             </div>
 
             <div class="checkboxes">
