@@ -1752,6 +1752,32 @@ class ScraperSession {
         if (autoScroll) await this._autoScroll(page);
         // Second networkidle after scroll (lazy-loaded API content); short timeout with resource blocking
         await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
+
+        // ── EARLY LINK DISCOVERY ──────────────────────────────────────────────
+        // Grab all <a href> links immediately (~50ms) and queue them NOW so idle
+        // workers have URLs to navigate while this worker does the heavy extraction.
+        // extractPageData() takes 2-5s; without this, all other workers starve.
+        try {
+          const earlyHrefs = await page.$$eval('a[href]', as => as.map(a => a.href).filter(Boolean));
+          let added = 0;
+          earlyHrefs
+            .filter(href => href.startsWith(origin) && !isSkippable(href) && !/\/login|\/signin|\/sign-in\b/i.test(href))
+            .forEach(href => {
+              const n = normalize(href);
+              if (visited.has(n) || queued.has(n)) return;
+              queued.add(n);
+              shared.discoveryOrder.set(n, shared.discoveryCounter++);
+              if (!shared.referrers.has(n)) shared.referrers.set(n, url);
+              const depth = pathDepth(href);
+              let lo = 0, hi = queue.length;
+              while (lo < hi) { const mid = (lo + hi) >> 1; pathDepth(queue[mid]) <= depth ? lo = mid + 1 : hi = mid; }
+              queue.splice(lo, 0, href);
+              added++;
+            });
+          if (added > 0 && shared._queueWaiters.length > 0) shared.notifyQueue();
+        } catch {} // non-fatal — full extraction below will catch any missed links
+        // ─────────────────────────────────────────────────────────────────────
+
         const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots, lightMode: true });
         if (!pageData) { shared.active--; continue; }
 
