@@ -1565,6 +1565,13 @@ class ScraperSession {
           (headers['content-type']?.includes('application/json') &&
             postData && (postData.includes('"query"') || postData.includes('"mutation"')));
         if (isGraphQL) {
+          // Sniff auth token from the raw (un-sanitized) headers before we redact them.
+          // Broadcast once per session so the APA API tab can auto-populate.
+          const rawAuth = headers['authorization'];
+          if (rawAuth && !this._broadcastedAuthToken) {
+            this._broadcastedAuthToken = true;
+            this.broadcast(this.sessionId, { type: 'authToken', token: rawAuth, endpoint: reqUrl.replace(/\?.*$/, '') });
+          }
           let parsedBody = null;
           try { parsedBody = JSON.parse(postData); } catch {}
           captures.graphqlCalls.push({

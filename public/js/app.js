@@ -51,6 +51,7 @@ function handleSessionMessage(sessionId, msg) {
     case 'progress':        updateSessionProgress(sessionId, msg.step, msg.percent, msg); break;
     case 'siteInfo':        updateSessionSitePreview(sessionId, msg.data); break;
     case 'needsAuth':       showSessionCredsPrompt(sessionId); break;
+    case 'authToken':       _apaAutoFillToken(msg.token, msg.endpoint); break;
     case 'needVerification':showSessionVerifyPrompt(sessionId); break;
     case 'liveFrame':       updateSessionLiveFrame(sessionId, msg.dataUrl); break;
     case 'sessionSaved':
@@ -2844,4 +2845,21 @@ connectWS();
   });
 
   _renderSaved();
+
+  // Called from the WebSocket message handler when the scraper sniffs an
+  // Authorization header from a GraphQL request during a crawl.
+  // Only auto-fills if the user hasn't already typed something there.
+  window._apaAutoFillToken = function (token, endpoint) {
+    const authEl = document.getElementById('apa-auth-header');
+    const epEl   = document.getElementById('apa-endpoint');
+    if (authEl && !authEl.value.trim()) {
+      authEl.value = 'Authorization: ' + token;
+      authEl.style.borderColor = 'var(--success)';
+      setTimeout(() => { authEl.style.borderColor = ''; }, 2000);
+    }
+    if (epEl && endpoint && !epEl.value.includes(new URL(endpoint).hostname)) {
+      epEl.value = endpoint;
+    }
+    showToast('APA auth token auto-filled from active crawl session');
+  };
 })();
