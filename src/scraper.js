@@ -630,6 +630,7 @@ class ScraperSession {
     }
     this.browser = await chromium.launch(launchOpts);
 
+    let allResults = [];
     try {
       const savedSession = loadSession(primaryUrl);
       if (savedSession) this.log('Restoring saved session state...', 'info');
@@ -811,7 +812,6 @@ class ScraperSession {
       if (crawlStartUrl !== primaryUrl) this.log(`Scraping from post-auth URL: ${crawlStartUrl}`);
 
       this.progress('Extracting page data', 50);
-      let allResults = [];
       const avoidFilter = this._buildAvoidFilter(avoidTags);
 
       if (targetUrls.length > 1) {
@@ -951,17 +951,16 @@ class ScraperSession {
         errors: this.errors,
       };
 
-      // Write final save with complete status
-      if (this._saveId) {
-        this._savePages = allResults;
-        this._writeAutosave(this.stopped ? 'stopped' : 'complete');
-      }
-
       this.progress('Done', 100);
       this.log('Scraping complete!', 'success');
       return result;
 
     } finally {
+      // Always write a final save — even if stop() closed the browser mid-crawl
+      if (this._saveId) {
+        this._savePages = allResults;
+        this._writeAutosave(this.stopped ? 'stopped' : 'complete');
+      }
       this._stopLiveStream();
       if (this.browser) await this.browser.close().catch(() => {});
     }
@@ -1451,6 +1450,19 @@ class ScraperSession {
           this.log(`Load failed for ${url} — retrying in 1s... (${err.message})`, 'warn');
           await page.waitForTimeout(1000).catch(() => {});
         } else {
+          // Last resort: try SPA client-side navigation (handles pages like /divisions
+          // that 504 or timeout when loaded directly but work via in-app link clicks)
+          const isTimeout = /timeout|Timeout/i.test(err.message);
+          if (isTimeout) {
+            this.log(`Timeout on ${url} — attempting SPA navigation fallback...`, 'warn');
+            saveSpaRoute(url);
+            this._spaRoutes = loadSpaRoutes(url);
+            const ok = await this._spaNavigate(page, url, origin);
+            if (ok) {
+              this.log(`SPA fallback succeeded for ${url}`, 'info');
+              return { success: true, spa: true };
+            }
+          }
           this.errors.push({ type: 'navigationError', url, message: err.message });
           this.failedPages.push({ url, reason: err.message });
           this.log(`Could not load ${url}: ${err.message}`, 'error');

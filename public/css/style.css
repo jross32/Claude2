@@ -1166,6 +1166,8 @@ body.light .json-bool { color: #b45309; }
 
 .session-panel.session-done .session-header { border-left: 3px solid var(--success); }
 .session-panel.session-stopped .session-header { border-left: 3px solid var(--text3); }
+.btn-dismiss-session { margin-left: auto; background: transparent; border: none; color: var(--text3); font-size: 14px; padding: 2px 6px; cursor: pointer; border-radius: 4px; line-height: 1; }
+.btn-dismiss-session:hover { color: var(--text); background: var(--bg4); }
 
 .session-header {
   display: flex;

@@ -856,7 +856,19 @@ function finalizeSession(sessionId, success) {
   activeSessions.delete(sessionId);
   // Mark panel as done
   const panel = document.getElementById(`sp-${sessionId}`);
-  if (panel) panel.classList.add(success ? 'session-done' : 'session-stopped');
+  if (panel) {
+    panel.classList.add(success ? 'session-done' : 'session-stopped');
+    // Add a dismiss button so the user can close completed/stopped sessions
+    const header = panel.querySelector('.session-header');
+    if (header && !header.querySelector('.btn-dismiss-session')) {
+      const dismissBtn = document.createElement('button');
+      dismissBtn.className = 'btn-xs btn-dismiss-session';
+      dismissBtn.title = 'Dismiss this session';
+      dismissBtn.textContent = '✕';
+      dismissBtn.addEventListener('click', () => panel.remove());
+      header.appendChild(dismissBtn);
+    }
+  }
 }
 
 function onSessionComplete(sessionId, data) {
