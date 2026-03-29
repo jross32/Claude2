@@ -743,6 +743,8 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
       body: JSON.stringify({ username: user, password: pass }),
     });
     document.getElementById(`scp-${sid}`).style.display = 'none';
+    // Re-hide the live panel if it was only shown for the credentials prompt
+    if (!liveView) { const lp = document.getElementById(`slp-${sid}`); if (lp) lp.style.display = 'none'; }
     appendSessionLog(sid, 'Credentials submitted — continuing scrape...', 'info');
   });
 
@@ -818,7 +820,13 @@ function updateSessionSitePreview(sessionId, info) {
 
 function showSessionCredsPrompt(sessionId) {
   const el = document.getElementById(`scp-${sessionId}`);
-  if (el) { el.style.display = 'block'; document.getElementById(`scu-${sessionId}`)?.focus(); }
+  if (el) {
+    // Ensure the parent live-browser-panel is visible even if liveView is off
+    const panel = document.getElementById(`slp-${sessionId}`);
+    if (panel) panel.style.display = 'block';
+    el.style.display = 'block';
+    document.getElementById(`scu-${sessionId}`)?.focus();
+  }
   // Expand session if collapsed
   const body = document.getElementById(`sbody-${sessionId}`);
   if (body && body.style.display === 'none') {
