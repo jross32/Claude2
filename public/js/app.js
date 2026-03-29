@@ -24,6 +24,7 @@
 
 let ws = null;
 const activeSessions = new Map(); // sessionId -> { name, faviconUrl, liveView, expanded }
+const _credsSubmitted = new Set(); // sessions that have already submitted credentials
 let scrapedData = null;
 let _lastScrapePayload = null; // stored for retry-failed-pages
 
@@ -744,6 +745,7 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
       body: JSON.stringify({ username: user, password: pass }),
     });
     document.getElementById(`scp-${sid}`).style.display = 'none';
+    _credsSubmitted.add(sid);
     appendSessionLog(sid, 'Credentials submitted — continuing scrape...', 'info');
   };
   panel.querySelector('.session-submit-creds').addEventListener('click', submitCreds);
@@ -821,6 +823,7 @@ function updateSessionSitePreview(sessionId, info) {
 }
 
 function showSessionCredsPrompt(sessionId) {
+  if (_credsSubmitted.has(sessionId)) return;
   const el = document.getElementById(`scp-${sessionId}`);
   if (el) {
     el.style.display = 'block';
@@ -861,6 +864,7 @@ function finalizeSession(sessionId, success) {
   const pauseBtn = document.getElementById(`spb-${sessionId}`);
   if (pauseBtn) { pauseBtn.style.display = 'none'; }
   activeSessions.delete(sessionId);
+  _credsSubmitted.delete(sessionId);
   // Mark panel as done
   const panel = document.getElementById(`sp-${sessionId}`);
   if (panel) {
