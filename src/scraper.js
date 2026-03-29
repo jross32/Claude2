@@ -530,6 +530,7 @@ class ScraperSession {
       captureScreenshots,
       captureSpeed,
       workerCount,
+      politeDelay,
       clickSequence,
       liveView,
       slowMotion,
@@ -538,6 +539,7 @@ class ScraperSession {
     } = options;
 
     this._captureScreenshots = captureScreenshots || false;
+    this._politeDelay = parseInt(politeDelay, 10) || 0;
 
     const targetUrls = urls && urls.length > 0 ? urls : (url ? [url] : []);
     if (targetUrls.length === 0) throw new Error('No URL(s) provided');
@@ -1061,6 +1063,8 @@ class ScraperSession {
         });
 
         this.log(`  +${toQueue.length} new links queued (${queue.length} total in queue)`, 'info');
+
+        if (this._politeDelay > 0) await new Promise(r => setTimeout(r, this._politeDelay));
       } catch (err) {
         if (this._isPageClosed(err)) {
           this.log(`Page closed unexpectedly at ${pathname} — stopping crawl.`, 'error');
@@ -1647,6 +1651,7 @@ class ScraperSession {
             queue.splice(lo, 0, href);
           });
 
+        if (this._politeDelay > 0) await new Promise(r => setTimeout(r, this._politeDelay));
       } catch (err) {
         shared.active--;
         if (this._isPageClosed(err)) {

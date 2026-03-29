@@ -25,6 +25,7 @@
 let ws = null;
 const activeSessions = new Map(); // sessionId -> { name, faviconUrl, liveView, expanded }
 let scrapedData = null;
+let _lastScrapePayload = null; // stored for retry-failed-pages
 
 // ---- WebSocket ----
 function connectWS() {
@@ -598,6 +599,7 @@ async function startScrapeSession(name, faviconUrl) {
     captureScreenshots: document.getElementById('capture-screenshots').checked,
     captureSpeed: parseInt(document.getElementById('capture-speed').value, 10) || 1,
     workerCount: parseInt(document.getElementById('worker-count').value, 10) || 0,
+    politeDelay: parseInt(document.getElementById('polite-delay')?.value, 10) || 0,
     showBrowser: false,
     liveView,
     slowMotion: parseInt(document.getElementById('slow-motion').value, 10),
@@ -605,6 +607,7 @@ async function startScrapeSession(name, faviconUrl) {
     maxPages: document.getElementById('full-crawl').checked ? 0 : (parseInt(document.getElementById('max-pages').value, 10) || 100),
   };
 
+  _lastScrapePayload = payload;
   try {
     const res = await fetch('/api/scrape', {
       method: 'POST',
@@ -844,6 +847,7 @@ function finalizeSession(sessionId, success) {
 
 function onSessionComplete(sessionId, data) {
   scrapedData = data;
+  saveToHistory(data);
   updateSessionProgress(sessionId, 'Complete ✓', 100);
   appendSessionLog(sessionId, 'Scraping complete!', 'success');
   finalizeSession(sessionId, true);
@@ -924,7 +928,22 @@ function buildCardDetail(key, data) {
       const dropdownSummary = dropdownCount > 0
         ? `<div class="cd-dropdown-summary">&#9660; ${dropdownCount} dropdown state${dropdownCount !== 1 ? 's' : ''} captured</div>`
         : '';
-      return dropdownSummary + allPages.map((p, i) =>
+      const pagesExportBtn = `<div class="cd-export-row"><button class="btn-xs" id="cd-export-pages-csv">&#8659; Export CSV</button></div>`;
+      setTimeout(() => {
+        const btn = document.getElementById('cd-export-pages-csv');
+        if (btn) btn.addEventListener('click', () => {
+          downloadCSV(allPages.map(p => ({
+            url: p.meta?.url || '',
+            title: p.meta?.title || '',
+            statusCode: p.meta?.statusCode || '',
+            responseTime: p.meta?.responseTime || '',
+            domElements: p.domStats?.totalElements || '',
+            links: p.links?.length || 0,
+            images: p.images?.length || 0,
+          })), ['url','title','statusCode','responseTime','domElements','links','images'], 'pages.csv');
+        });
+      }, 0);
+      return pagesExportBtn + dropdownSummary + allPages.map((p, i) =>
         `<div class="cd-row">
           <span class="cd-num">${i + 1}</span>
           <div class="cd-main">
@@ -977,7 +996,18 @@ function buildCardDetail(key, data) {
     case 'graphql': {
       const calls = data.apiCalls?.graphql || [];
       if (!calls.length) return '<p class="cd-empty">No GraphQL calls captured.</p>';
-      return calls.map((c, i) => {
+      const gqlExportBtn = `<div class="cd-export-row"><button class="btn-xs" id="cd-export-gql-csv">&#8659; Export CSV</button></div>`;
+      setTimeout(() => {
+        const btn = document.getElementById('cd-export-gql-csv');
+        if (btn) btn.addEventListener('click', () => {
+          downloadCSV(calls.map(c => ({
+            url: c.url, method: c.method, type: 'graphql',
+            operationName: c.body?.operationName || '',
+            statusCode: c.response?.status || '',
+          })), ['url','method','type','operationName','statusCode'], 'graphql-calls.csv');
+        });
+      }, 0);
+      return gqlExportBtn + calls.map((c, i) => {
         const opName = c.body?.operationName ||
           (typeof c.body?.query === 'string' ? (c.body.query.match(/(?:query|mutation|subscription)\s+(\w+)/)?.[1]) : null) ||
           `Call ${i + 1}`;
@@ -996,7 +1026,16 @@ function buildCardDetail(key, data) {
     case 'rest': {
       const calls = data.apiCalls?.rest || [];
       if (!calls.length) return '<p class="cd-empty">No REST calls captured.</p>';
-      return calls.map(c => {
+      const restExportBtn = `<div class="cd-export-row"><button class="btn-xs" id="cd-export-rest-csv">&#8659; Export CSV</button></div>`;
+      setTimeout(() => {
+        const btn = document.getElementById('cd-export-rest-csv');
+        if (btn) btn.addEventListener('click', () => {
+          downloadCSV(calls.map(c => ({
+            url: c.url, method: c.method, type: 'rest', statusCode: c.response?.status || '',
+          })), ['url','method','type','statusCode'], 'rest-calls.csv');
+        });
+      }, 0);
+      return restExportBtn + calls.map(c => {
         const path = (() => { try { return new URL(c.url).pathname; } catch { return c.url; } })();
         const st = c.response?.status;
         return `<div class="cd-row">
@@ -1013,7 +1052,16 @@ function buildCardDetail(key, data) {
     case 'all': {
       const reqs = data.apiCalls?.all || [];
       if (!reqs.length) return '<p class="cd-empty">No requests captured. Enable "Capture All Requests" in options.</p>';
-      return reqs.slice(0, 500).map(c => {
+      const allExportBtn = `<div class="cd-export-row"><button class="btn-xs" id="cd-export-all-csv">&#8659; Export CSV</button></div>`;
+      setTimeout(() => {
+        const btn = document.getElementById('cd-export-all-csv');
+        if (btn) btn.addEventListener('click', () => {
+          downloadCSV(reqs.map(c => ({
+            url: c.url, method: c.method, resourceType: c.resourceType, statusCode: c.response?.status || '',
+          })), ['url','method','resourceType','statusCode'], 'all-requests.csv');
+        });
+      }, 0);
+      return allExportBtn + reqs.slice(0, 500).map(c => {
         const st = c.response?.status;
         return `<div class="cd-row">
           <span class="cd-chip chip-method">${c.method}</span>
@@ -1132,15 +1180,34 @@ function buildCardDetail(key, data) {
     case 'auth-redirects':
       return (data.authRedirectedPages || []).map(urlRow).join('') || '<p class="cd-empty">No auth redirects.</p>';
 
-    case 'failed-pages':
-      return (data.failedPages || []).map((p, i) =>
+    case 'failed-pages': {
+      const failed = data.failedPages || [];
+      if (!failed.length) return '<p class="cd-empty">No failed pages.</p>';
+      const retryBtn = `<div class="cd-export-row"><button class="btn-xs" id="cd-retry-failed">&#8635; Retry Failed Pages</button></div>`;
+      setTimeout(() => {
+        const btn = document.getElementById('cd-retry-failed');
+        if (btn) btn.addEventListener('click', async () => {
+          if (!_lastScrapePayload) return showToast('No scrape options available');
+          btn.disabled = true; btn.textContent = 'Retrying...';
+          for (const p of failed) {
+            try {
+              await fetch('/api/scrape', { method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ ..._lastScrapePayload, url: p.url, maxPages: 1, fullCrawl: false }) });
+            } catch {}
+          }
+          btn.textContent = `Started ${failed.length} retry session${failed.length !== 1 ? 's' : ''}`;
+          showToast(`Retrying ${failed.length} failed page${failed.length !== 1 ? 's' : ''}`);
+        });
+      }, 0);
+      return retryBtn + failed.map((p, i) =>
         `<div class="cd-row">
           <span class="cd-num">${i + 1}</span>
           <div class="cd-main">
             <a class="cd-url" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.url)}</a>
             <span class="cd-error-msg">${esc(p.reason || '')}</span>
           </div>
-        </div>`).join('') || '<p class="cd-empty">No failed pages.</p>';
+        </div>`).join('');
+    }
 
     default:
       return '<p class="cd-empty">No details available.</p>';
@@ -1209,6 +1276,22 @@ function renderResults(data) {
         activeCardKey = c.key;
         detailTitle.textContent = c.label;
         detailBody.innerHTML = buildCardDetail(c.key, window._scraperResult);
+        // Show search filter for filterable card types
+        const filterRow = document.getElementById('card-detail-filter-row');
+        const searchInput = document.getElementById('card-detail-search');
+        const filterableTypes = ['pages', 'graphql', 'rest', 'all', 'links', 'assets', 'scripts', 'errors'];
+        if (filterRow) {
+          filterRow.style.display = filterableTypes.includes(c.key) ? 'block' : 'none';
+          if (searchInput) {
+            searchInput.value = '';
+            searchInput.oninput = () => {
+              const q = searchInput.value.toLowerCase();
+              detailBody.querySelectorAll('.cd-row').forEach(row => {
+                row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+              });
+            };
+          }
+        }
         detailPanel.style.display = 'block';
         detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
@@ -1808,6 +1891,275 @@ ${scripts}
 </body>
 </html>`;
 }
+
+// ============================================================
+// ---- History (localStorage persistence) ----
+// ============================================================
+const HISTORY_KEY = 'scraper_history';
+const HISTORY_HEAVY = ['htmlSource', 'layoutTree', 'stylesheetContents', 'screenshot', 'viewportScreenshot'];
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+}
+
+function saveToHistory(data) {
+  const entry = {
+    id: Date.now().toString(),
+    url: data.pages?.[0]?.meta?.url || data.startUrl || '',
+    ts: new Date().toISOString(),
+    pageCount: data.pages?.length || 0,
+    apiCount: (data.apiCalls?.graphql?.length || 0) + (data.apiCalls?.rest?.length || 0),
+    data: JSON.parse(JSON.stringify(data, (key, val) =>
+      HISTORY_HEAVY.includes(key) ? undefined : val
+    )),
+  };
+  const history = getHistory();
+  history.unshift(entry);
+  if (history.length > 20) history.length = 20;
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch {}
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  if (!list || !empty) return;
+  const history = getHistory();
+  if (!history.length) {
+    empty.style.display = 'block';
+    list.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  list.style.display = 'block';
+  list.innerHTML = history.map(e => `
+    <div class="history-card" data-id="${escapeAttr(e.id)}">
+      <div class="history-card-info">
+        <div class="history-card-url">${escapeHTML(e.url || '(unknown)')}</div>
+        <div class="history-card-meta">${new Date(e.ts).toLocaleString()} — ${e.pageCount} pages, ${e.apiCount} API calls</div>
+      </div>
+      <div class="history-card-actions">
+        <button class="btn-xs btn-primary hc-load" data-id="${escapeAttr(e.id)}">Load</button>
+        <button class="btn-xs btn-danger hc-del" data-id="${escapeAttr(e.id)}">Delete</button>
+      </div>
+    </div>`).join('');
+  list.querySelectorAll('.hc-load').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const entry = getHistory().find(e => e.id === btn.dataset.id);
+      if (!entry) return;
+      window._scraperResult = entry.data;
+      scrapedData = entry.data;
+      renderResults(entry.data);
+      renderAPICalls(entry.data.apiCalls);
+      renderAssets(entry.data.assets);
+      enableRefactor(entry.data);
+      document.querySelector('[data-panel="results"]').click();
+    });
+  });
+  list.querySelectorAll('.hc-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const history = getHistory().filter(e => e.id !== btn.dataset.id);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch {}
+      renderHistory();
+    });
+  });
+}
+
+document.getElementById('btn-clear-history')?.addEventListener('click', () => {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+  showToast('History cleared');
+});
+
+document.querySelector('[data-panel="history"]')?.addEventListener('click', renderHistory);
+
+// ---- Diff panel ----
+function populateDiffDropdowns() {
+  const history = getHistory();
+  ['diff-a', 'diff-b'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">-- Select from history --</option>' +
+      history.map(e => `<option value="${escapeAttr(e.id)}">${escapeHTML(e.url || '(unknown)')} — ${new Date(e.ts).toLocaleString()}</option>`).join('');
+    if (prev) sel.value = prev;
+  });
+}
+
+function renderDiffResults(diff) {
+  const container = document.getElementById('diff-results');
+  if (!container) return;
+  container.style.display = 'block';
+  if (!diff || (!diff.added?.length && !diff.removed?.length && !diff.changed?.length)) {
+    container.innerHTML = '<p style="padding:16px;color:var(--text3)">No differences found.</p>';
+    return;
+  }
+  const rows = [
+    ...(diff.added || []).map(u => `<div class="cd-row diff-added">+ ${escapeHTML(u)}</div>`),
+    ...(diff.removed || []).map(u => `<div class="cd-row diff-removed">− ${escapeHTML(u)}</div>`),
+    ...(diff.changed || []).map(u => `<div class="cd-row diff-changed">~ ${escapeHTML(typeof u === 'string' ? u : (u.url || JSON.stringify(u)))}</div>`),
+  ];
+  container.innerHTML = `<div style="padding:12px 0">${rows.join('')}</div>`;
+}
+
+document.getElementById('btn-run-diff')?.addEventListener('click', async () => {
+  const history = getHistory();
+  const aId = document.getElementById('diff-a')?.value;
+  const bId = document.getElementById('diff-b')?.value;
+  const a = history.find(e => e.id === aId);
+  const b = history.find(e => e.id === bId);
+  if (!a || !b) return showToast('Select two results to compare');
+  const btn = document.getElementById('btn-run-diff');
+  btn.disabled = true; btn.textContent = 'Comparing...';
+  try {
+    const res = await fetch('/api/diff', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ resultA: a.data, resultB: b.data }) });
+    if (!res.ok) throw new Error(await res.text());
+    renderDiffResults(await res.json());
+  } catch(e) { showToast('Diff failed: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = '⊷ Compare'; }
+});
+
+document.querySelector('[data-panel="diff"]')?.addEventListener('click', populateDiffDropdowns);
+
+// ---- Code generators ----
+function downloadFile(content, filename, type = 'text/plain') {
+  const blob = new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+async function runGenerator(endpoint, payload, filename) {
+  if (!window._scraperResult) return showToast('Run a scrape first');
+  try {
+    const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error(await res.text());
+    const result = await res.json();
+    downloadFile(result.code || result.sitemap || JSON.stringify(result, null, 2), filename);
+  } catch(e) { showToast('Generator failed: ' + e.message); }
+}
+
+document.getElementById('btn-gen-react')?.addEventListener('click', async function() {
+  this.disabled = true;
+  await runGenerator('/api/generate/react', { pageData: window._scraperResult?.pages?.[0] }, 'component.jsx');
+  this.disabled = false;
+});
+document.getElementById('btn-gen-css')?.addEventListener('click', async function() {
+  this.disabled = true;
+  await runGenerator('/api/generate/css', { pageData: window._scraperResult?.pages?.[0] }, 'styles.css');
+  this.disabled = false;
+});
+document.getElementById('btn-gen-markdown')?.addEventListener('click', async function() {
+  this.disabled = true;
+  await runGenerator('/api/generate/markdown', { pageData: window._scraperResult?.pages?.[0] }, 'page.md');
+  this.disabled = false;
+});
+document.getElementById('btn-gen-sitemap')?.addEventListener('click', async function() {
+  this.disabled = true;
+  await runGenerator('/api/generate/sitemap', { pages: window._scraperResult?.pages }, 'sitemap.xml');
+  this.disabled = false;
+});
+
+// ---- Schema inferrer ----
+let _schemaTabsWired = false;
+function wireSchemaSubTabs() {
+  if (_schemaTabsWired) return;
+  _schemaTabsWired = true;
+  const panels = { 'stab-typescript': 'schema-typescript', 'stab-jsonschema': 'schema-jsonschema' };
+  Object.entries(panels).forEach(([tabId, panelId]) => {
+    document.getElementById(tabId)?.addEventListener('click', () => {
+      Object.keys(panels).forEach(t => document.getElementById(t)?.classList.remove('active'));
+      Object.values(panels).forEach(p => { const el = document.getElementById(p); if (el) el.style.display = 'none'; });
+      document.getElementById(tabId)?.classList.add('active');
+      const panel = document.getElementById(panelId);
+      if (panel) panel.style.display = 'block';
+    });
+  });
+}
+
+document.getElementById('btn-infer-schema')?.addEventListener('click', async function() {
+  const data = window._scraperResult;
+  if (!data?.apiCalls?.graphql?.length) return showToast('No GraphQL calls to infer from');
+  this.disabled = true; this.textContent = '⚙ Inferring...';
+  try {
+    const res = await fetch('/api/schema', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ graphqlCalls: data.apiCalls.graphql }) });
+    if (!res.ok) throw new Error(await res.text());
+    const { typescript, jsonSchema } = await res.json();
+    const tsEl = document.getElementById('schema-typescript');
+    const jsEl = document.getElementById('schema-jsonschema');
+    if (tsEl) tsEl.textContent = typescript || '';
+    if (jsEl) jsEl.textContent = JSON.stringify(jsonSchema, null, 2) || '';
+    document.getElementById('schema-output').style.display = 'block';
+    wireSchemaSubTabs();
+    // Show typescript tab by default
+    document.getElementById('stab-typescript')?.click();
+  } catch(e) { showToast('Schema inference failed: ' + e.message); }
+  finally { this.disabled = false; this.textContent = '⚙ Infer Schema from GraphQL'; }
+});
+
+// ---- Scheduler ----
+async function loadSchedules() {
+  const list = document.getElementById('schedule-list');
+  if (!list) return;
+  try {
+    const res = await fetch('/api/schedules');
+    if (!res.ok) throw new Error(await res.text());
+    const schedules = await res.json();
+    if (!schedules.length) {
+      list.innerHTML = '<p class="empty-hint">No schedules yet.</p>';
+      return;
+    }
+    list.innerHTML = schedules.map(s => `
+      <div class="schedule-card" data-id="${escapeAttr(s.id)}">
+        <div class="schedule-card-info">
+          <div class="schedule-card-url">${escapeHTML(s.scrapeOptions?.startUrl || s.scrapeOptions?.url || '')}</div>
+          <span class="schedule-card-cron">${escapeHTML(s.cronExpr)}</span>
+          <div class="schedule-card-meta">Next: ${s.nextRun ? new Date(s.nextRun).toLocaleString() : 'N/A'}</div>
+        </div>
+        <button class="btn-xs btn-danger sched-del" data-id="${escapeAttr(s.id)}">Delete</button>
+      </div>`).join('');
+    list.querySelectorAll('.sched-del').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          await fetch(`/api/schedules/${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
+          loadSchedules();
+        } catch(e) { showToast('Delete failed: ' + e.message); }
+      });
+    });
+  } catch(e) { list.innerHTML = `<p class="empty-hint">Failed to load: ${escapeHTML(e.message)}</p>`; }
+}
+
+document.getElementById('btn-create-schedule')?.addEventListener('click', async () => {
+  const url = document.getElementById('sched-url')?.value.trim();
+  const cron = document.getElementById('sched-cron')?.value.trim();
+  if (!url) return showToast('Enter a URL');
+  if (!cron) return showToast('Enter a cron expression');
+  try {
+    const res = await fetch('/api/schedules', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url } }) });
+    if (!res.ok) throw new Error(await res.text());
+    showToast('Schedule created');
+    loadSchedules();
+  } catch(e) { showToast('Failed: ' + e.message); }
+});
+
+document.getElementById('btn-refresh-schedules')?.addEventListener('click', loadSchedules);
+document.querySelector('[data-panel="schedule"]')?.addEventListener('click', loadSchedules);
+
+// ---- CSV export utility ----
+function downloadCSV(rows, headers, filename) {
+  const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = [headers.map(esc).join(','), ...rows.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
+  downloadFile(csv, filename, 'text/csv');
+}
+
+// ---- Initialize panels that need data on load ----
+renderHistory();
 
 // ---- Utilities ----
 function downloadJSON(data, filename) {

@@ -127,6 +127,17 @@
                 title="Override speed preset — set exact number of parallel workers (1–100)" />
               <span style="font-size:0.75rem;color:var(--text3)">(overrides slider, max 100)</span>
             </div>
+            <div class="capture-speed-row" style="margin-top:6px;align-items:center;gap:8px">
+              <span class="capture-speed-label" style="font-size:0.78rem;color:var(--text3)">Politeness delay</span>
+              <select id="polite-delay" style="padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:0.82rem" title="Wait between page requests to avoid overloading the server">
+                <option value="0">None</option>
+                <option value="500">500ms</option>
+                <option value="1000">1s</option>
+                <option value="2000">2s</option>
+                <option value="5000">5s</option>
+              </select>
+              <span style="font-size:0.75rem;color:var(--text3)">(wait between pages)</span>
+            </div>
 
             <div class="checkboxes">
               <label class="checkbox-label">
@@ -393,6 +404,9 @@
             <div class="card-detail-header">
               <span id="card-detail-title"></span>
               <button class="card-detail-close" id="card-detail-close" title="Close">✕</button>
+            </div>
+            <div class="cd-filter-row" id="card-detail-filter-row" style="display:none">
+              <input type="text" id="card-detail-search" placeholder="Filter..." autocomplete="off" />
             </div>
             <div class="card-detail-body" id="card-detail-body"></div>
           </div>
