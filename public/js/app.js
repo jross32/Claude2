@@ -734,7 +734,7 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
   });
 
   // Credentials
-  panel.querySelector('.session-submit-creds').addEventListener('click', async () => {
+  const submitCreds = async () => {
     const user = document.getElementById(`scu-${sid}`).value.trim();
     const pass = document.getElementById(`scpw-${sid}`).value;
     if (!user || !pass) return;
@@ -744,7 +744,10 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
     });
     document.getElementById(`scp-${sid}`).style.display = 'none';
     appendSessionLog(sid, 'Credentials submitted — continuing scrape...', 'info');
-  });
+  };
+  panel.querySelector('.session-submit-creds').addEventListener('click', submitCreds);
+  panel.querySelector(`#scpw-${sid}`).addEventListener('keydown', (e) => { if (e.key === 'Enter') submitCreds(); });
+  panel.querySelector(`#scu-${sid}`).addEventListener('keydown', (e) => { if (e.key === 'Enter') panel.querySelector(`#scpw-${sid}`).focus(); });
 
   // Verification
   panel.querySelector('.session-submit-verify').addEventListener('click', async () => {
