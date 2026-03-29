@@ -680,7 +680,10 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
           <button class="btn-primary session-submit-verify">Submit</button>
         </div>
       </div>
-      <div class="log-box session-log-box" id="slb-${sid}"></div>
+      <div class="log-box-wrap">
+        <div class="log-box session-log-box" id="slb-${sid}"></div>
+        <button class="btn-copy-log" id="scl-${sid}" title="Copy all log text">&#128203;</button>
+      </div>
       <div class="live-browser-panel" id="slp-${sid}" style="${liveView ? 'display:block' : 'display:none'}">
         <div class="live-browser-header">
           <span>&#128247; Live Browser View</span>
@@ -700,6 +703,28 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
     const hidden = log.style.display === 'none';
     log.style.display = hidden ? 'block' : 'none';
     btn.style.opacity = hidden ? '1' : '0.45';
+  });
+
+  // Copy log button + right-click → Copy all
+  const _copyLog = (btn) => {
+    const box = document.getElementById(`slb-${sid}`);
+    if (!box) return;
+    const text = [...box.querySelectorAll('.log-entry')].map(el => el.textContent).join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      if (btn) { const prev = btn.textContent; btn.textContent = '✓'; setTimeout(() => { btn.textContent = prev; }, 1200); }
+    }).catch(() => {});
+  };
+  panel.querySelector(`#scl-${sid}`).addEventListener('click', (e) => { e.stopPropagation(); _copyLog(e.currentTarget); });
+  panel.querySelector(`#slb-${sid}`).addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.innerHTML = '<div class="ctx-item">&#128203; Copy all log text</div>';
+    menu.style.cssText = `left:${e.clientX}px;top:${e.clientY}px`;
+    document.body.appendChild(menu);
+    menu.querySelector('.ctx-item').addEventListener('click', () => { _copyLog(null); menu.remove(); });
+    const dismiss = () => { menu.remove(); document.removeEventListener('click', dismiss); };
+    setTimeout(() => document.addEventListener('click', dismiss), 0);
   });
 
   // Collapse toggle
