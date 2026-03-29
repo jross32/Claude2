@@ -1013,7 +1013,7 @@ class ScraperSession {
       for (const link of links) {
         await this._checkPause();
         if (this.stopped || visited.size >= maxPages) break;
-        const nav = await this._navigateWithRetry(page, link.href, origin);
+        const nav = await this._navigateWithRetry(page, link.href, origin, url); // url = current page = referrer
         if (!nav.success) continue;
         if (autoScroll) await this._autoScroll(page);
         results.push(...await this._scrapePage(page, link.href, depth - 1, visited, autoScroll, maxPages, avoidFilter, captureDropdowns));
@@ -1387,7 +1387,7 @@ class ScraperSession {
   }
 
   // Navigate to a URL with SPA pre-check, retry-on-failure, and session recovery
-  async _navigateWithRetry(page, url, origin) {
+  async _navigateWithRetry(page, url, origin, referrer = null) {
     // ── Pre-check: known SPA route — skip page.goto() entirely ──────────────
     if (isSpaRoute(url, this._spaRoutes)) {
       this.log(`Known SPA route: ${url} — skipping server request`, 'info');
@@ -1460,6 +1460,22 @@ class ScraperSession {
             this.log(`Timeout on ${url} — attempting SPA navigation fallback...`, 'warn');
             saveSpaRoute(url);
             this._spaRoutes = loadSpaRoutes(url);
+            // First: go back to the page that originally linked here and click from there
+            if (referrer && referrer !== url) {
+              this.log(`SPA fallback: returning to referrer ${referrer} to click link`, 'info');
+              try {
+                await page.goto(referrer, { waitUntil: 'domcontentloaded', timeout: 10000 });
+                await page.waitForTimeout(500);
+              } catch {}
+              if (await this._tryClickLink(page, url)) {
+                const landed = page.url();
+                if (!this._isLoginRedirect(landed, url, origin)) {
+                  this.log(`SPA fallback via referrer succeeded for ${url}`, 'info');
+                  return { success: true, spa: true };
+                }
+              }
+            }
+            // Then fall back to generic SPA nav strategies
             const ok = await this._spaNavigate(page, url, origin);
             if (ok) {
               this.log(`SPA fallback succeeded for ${url}`, 'info');
@@ -1708,6 +1724,7 @@ class ScraperSession {
       visited.add(norm);
 
       const pathname = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
+      const referrer = shared.referrers.get(norm) || null;
 
       shared.active++;
       try {
@@ -1717,7 +1734,7 @@ class ScraperSession {
           await shared.navSemaphore.acquire();
           let nav;
           try {
-            nav = await this._navigateWithRetry(page, url, origin);
+            nav = await this._navigateWithRetry(page, url, origin, referrer);
           } finally {
             shared.navSemaphore.release();
           }
@@ -1809,6 +1826,7 @@ class ScraperSession {
             const n = normalize(href);
             queued.add(n);
             shared.discoveryOrder.set(n, shared.discoveryCounter++);
+            if (!shared.referrers.has(n)) shared.referrers.set(n, url); // track which page linked here
             // Binary-insert into already-sorted queue instead of full re-sort
             const depth = pathDepth(href);
             let lo = 0, hi = queue.length;
@@ -1850,6 +1868,7 @@ class ScraperSession {
       inboundCount: new Map(),
       discoveryOrder: new Map([[norm0, 0]]),
       discoveryCounter: 1,
+      referrers: new Map(), // normalized href → URL of page that discovered it
       active: 0,   // workers currently processing a URL — idle workers wait when this > 0
       // Queue notification — resolves idle workers immediately when a URL is added
       _queueWaiters: [],
