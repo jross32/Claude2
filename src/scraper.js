@@ -389,6 +389,8 @@ class ScraperSession {
         let totalHeight = 0;
         const distance = 500;
         const timer = setInterval(() => {
+          // Guard: body can be null during SPA re-renders / pushState transitions
+          if (!document.body) { clearInterval(timer); resolve(); return; }
           window.scrollBy(0, distance);
           totalHeight += distance;
           if (totalHeight >= document.body.scrollHeight || totalHeight > 8000) {
@@ -398,7 +400,7 @@ class ScraperSession {
           }
         }, 30);
       });
-    });
+    }).catch(() => {}); // page may navigate away mid-scroll
     await page.waitForTimeout(250);
   }
 
@@ -1025,6 +1027,7 @@ class ScraperSession {
   // BFS full-site crawl — visits every reachable internal link, ordered by path depth
   async _fullCrawl(page, startUrl, maxPages = 100, autoScroll = false, avoidFilter = null, captureDropdowns = false, resumeData = null) {
     const origin = new URL(startUrl).origin;
+    this._crawlStartUrl = startUrl;
     const visited = new Set();
     // Priority queue sorted by URL path depth (shallow first)
     const queue = [startUrl];
@@ -1290,12 +1293,15 @@ class ScraperSession {
   }
 
   // Ensure we are on a page with the SPA framework loaded (not an error page).
-  // If currently on a non-origin page or error page, navigate to origin first.
+  // Uses this._crawlStartUrl (the known-working entry point) instead of bare origin,
+  // because many SPAs redirect / or return 504 on the root but work via their main route.
   async _ensureReactPage(page, origin) {
     try {
       const cur = page.url();
       if (cur.startsWith(origin)) return true;
-      await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 10000 });
+      const target = this._crawlStartUrl || origin;
+      await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
       return true;
     } catch { return false; }
   }
@@ -1688,7 +1694,14 @@ class ScraperSession {
       ws.on('close', () => { entry.closedAt = new Date().toISOString(); });
     });
 
+    const _PAGE_ERROR_NOISE = [
+      /messaging.*permission.*blocked/i,       // Firebase FCM notification permission
+      /notification.*not granted/i,
+      /ResizeObserver loop/i,                  // harmless browser resize observer warning
+      /Non-Error promise rejection/i,          // generic catch-all that hides real message
+    ];
     page.on('pageerror', (err) => {
+      if (_PAGE_ERROR_NOISE.some(p => p.test(err.message))) return;
       captures.errors.push({ type: 'pageError', message: err.message, stack: err.stack?.substring(0, 500) });
     });
 
@@ -1917,6 +1930,7 @@ class ScraperSession {
   async _fullCrawlParallel(startUrl, maxPages, numWorkers, captureOptions, autoScroll, avoidFilter, captureDropdowns, resumeData = null) {
     const origin = new URL(startUrl).origin;
     const norm0 = startUrl.split('#')[0].replace(/\/$/, '');
+    this._crawlStartUrl = startUrl; // used by _ensureReactPage so SPA workers load the known-good entry point
 
     const shared = {
       queue: [startUrl],
