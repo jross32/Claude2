@@ -994,8 +994,8 @@ class ScraperSession {
 
       const pathname = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
       this.progress(
-        `Crawling ${results.length + 1}/${maxPages}: ${pathname}`,
-        50 + Math.min(40, Math.floor((results.length / Math.max(maxPages, 1)) * 40))
+        `Crawling ${results.length + 1}${maxPages !== Infinity ? '/' + maxPages : ''}: ${pathname}`,
+        50 + Math.min(40, Math.floor((results.length / Math.max(maxPages === Infinity ? 200 : maxPages, 1)) * 40))
       );
 
       try {
@@ -1632,8 +1632,8 @@ class ScraperSession {
         results.push(pageData);
         this.log(`[W${workerId}] [${results.length}] ${pathname}`);
         this.progress(
-          `Crawling ${results.length}/${maxPages}: ${pathname}`,
-          50 + Math.min(40, Math.floor((results.length / Math.max(maxPages, 1)) * 40))
+          `Crawling ${results.length}${maxPages !== Infinity ? '/' + maxPages : ''}: ${pathname}`,
+          50 + Math.min(40, Math.floor((results.length / Math.max(maxPages === Infinity ? 200 : maxPages, 1)) * 40))
         );
 
         // Discover and enqueue new links (synchronous ops — safe between awaits)
