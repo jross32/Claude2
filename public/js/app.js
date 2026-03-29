@@ -2586,3 +2586,262 @@ document.getElementById('crawl-sort-tabs').addEventListener('click', (e) => {
 
 // ---- Init ----
 connectWS();
+
+// ============================================================
+//  APA GraphQL API Panel
+// ============================================================
+(function () {
+  const STORAGE_KEY = 'apa_saved_queries';
+  let _apaSchema = null;
+
+  // ── helpers ──────────────────────────────────────────────
+  function _buildHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const auth = document.getElementById('apa-auth-header').value.trim();
+    if (auth) {
+      const colon = auth.indexOf(':');
+      if (colon > 0) {
+        headers[auth.slice(0, colon).trim()] = auth.slice(colon + 1).trim();
+      }
+    }
+    const extraRaw = document.getElementById('apa-extra-headers').value.trim();
+    if (extraRaw) {
+      try { Object.assign(headers, JSON.parse(extraRaw)); } catch {}
+    }
+    return headers;
+  }
+
+  async function _runQuery(query, variables) {
+    const endpoint = document.getElementById('apa-endpoint').value.trim();
+    const body = JSON.stringify({ query, variables: variables || undefined });
+    const res = await fetch(endpoint, { method: 'POST', headers: _buildHeaders(), body });
+    return res.json();
+  }
+
+  function _setResult(text, cls) {
+    const box = document.getElementById('apa-result');
+    box.innerHTML = '';
+    const span = document.createElement('span');
+    span.className = cls || '';
+    span.textContent = text;
+    box.appendChild(span);
+    document.getElementById('apa-btn-copy-result').style.display = 'inline';
+  }
+
+  function _setResultJSON(obj) {
+    const box = document.getElementById('apa-result');
+    box.textContent = JSON.stringify(obj, null, 2);
+    document.getElementById('apa-btn-copy-result').style.display = 'inline';
+  }
+
+  // ── introspection ─────────────────────────────────────────
+  const INTROSPECT_QUERY = `{
+  __schema {
+    queryType { name }
+    mutationType { name }
+    subscriptionType { name }
+    types {
+      name kind description
+      fields(includeDeprecated: false) {
+        name description
+        type { name kind ofType { name kind ofType { name kind } } }
+        args { name description type { name kind ofType { name kind } } defaultValue }
+      }
+      inputFields { name description type { name kind ofType { name kind } } defaultValue }
+    }
+  }
+}`;
+
+  async function _introspect() {
+    const btn = document.getElementById('apa-btn-introspect');
+    btn.disabled = true; btn.textContent = '⏳ Introspecting…';
+    try {
+      const data = await _runQuery(INTROSPECT_QUERY);
+      if (data.errors) { _setResult('Introspection error:\n' + JSON.stringify(data.errors, null, 2), 'apa-result-error'); return; }
+      _apaSchema = data.data.__schema;
+      _renderSchema(_apaSchema);
+      _setResult('Introspection complete. Schema loaded — see Schema Explorer below.', 'apa-result-ok');
+    } catch (e) {
+      _setResult('Network error: ' + e.message, 'apa-result-error');
+    } finally {
+      btn.disabled = false; btn.innerHTML = '&#128269; Introspect Schema';
+    }
+  }
+
+  function _typeName(t) {
+    if (!t) return 'Unknown';
+    if (t.kind === 'NON_NULL') return _typeName(t.ofType) + '!';
+    if (t.kind === 'LIST') return '[' + _typeName(t.ofType) + ']';
+    return t.name || '?';
+  }
+
+  function _renderSchema(schema) {
+    const wrap = document.getElementById('apa-schema-wrap');
+    const body = document.getElementById('apa-schema-body');
+    const queryType = schema.queryType?.name || 'Query';
+    const mutationType = schema.mutationType?.name;
+
+    // Only show Query / Mutation / object types (skip scalars, built-ins)
+    const interestingTypes = schema.types.filter(t =>
+      !t.name.startsWith('__') &&
+      (t.kind === 'OBJECT' || t.kind === 'INPUT_OBJECT' || t.kind === 'INTERFACE' || t.kind === 'UNION' || t.kind === 'ENUM') &&
+      t.name !== 'Boolean' && t.name !== 'String' && t.name !== 'Int' && t.name !== 'Float' && t.name !== 'ID'
+    );
+
+    // Put Query and Mutation first
+    interestingTypes.sort((a, b) => {
+      const aScore = a.name === queryType ? 0 : a.name === mutationType ? 1 : 2;
+      const bScore = b.name === queryType ? 0 : b.name === mutationType ? 1 : 2;
+      return aScore - bScore || a.name.localeCompare(b.name);
+    });
+
+    body.innerHTML = interestingTypes.map(t => {
+      const fields = t.fields || t.inputFields || [];
+      const fieldsHtml = fields.map(f => {
+        const typeTxt = _typeName(f.type);
+        const args = (f.args || []).map(a => a.name + ': ' + _typeName(a.type)).join(', ');
+        const signature = args ? `${f.name}(${args})` : f.name;
+        return `<div class="apa-schema-field apa-schema-clickable" data-field="${escapeAttr(f.name)}" data-type="${escapeAttr(t.name)}">
+          <span class="apa-schema-field-name">${escapeHTML(signature)}</span>
+          <span class="apa-schema-field-type">${escapeHTML(typeTxt)}</span>
+          ${f.description ? `<span class="apa-schema-field-desc">${escapeHTML(f.description.substring(0, 80))}</span>` : ''}
+        </div>`;
+      }).join('');
+      return `<div class="apa-schema-type">
+        <div><span class="apa-schema-type-name">${escapeHTML(t.name)}</span><span class="apa-schema-kind">${t.kind}${t.description ? ' — ' + escapeHTML(t.description.substring(0, 60)) : ''}</span></div>
+        ${fieldsHtml || '<div style="padding-left:16px;color:var(--text3);font-size:11px">no fields</div>'}
+      </div>`;
+    }).join('');
+
+    // Click on a query field → scaffold a query
+    body.addEventListener('click', (e) => {
+      const el = e.target.closest('.apa-schema-clickable');
+      if (!el) return;
+      const field = el.dataset.field;
+      const typeName = el.dataset.type;
+      if (typeName === queryType) {
+        document.getElementById('apa-query').value = `{\n  ${field}\n}`;
+      } else if (typeName === mutationType) {
+        document.getElementById('apa-query').value = `mutation {\n  ${field}\n}`;
+      }
+    });
+
+    wrap.style.display = 'block';
+  }
+
+  // ── run query ─────────────────────────────────────────────
+  async function _run() {
+    const query = document.getElementById('apa-query').value.trim();
+    const varsRaw = document.getElementById('apa-variables').value.trim();
+    if (!query) { _setResult('Enter a GraphQL query above.', 'apa-result-hint'); return; }
+    let vars = null;
+    if (varsRaw && varsRaw !== '{}') {
+      try { vars = JSON.parse(varsRaw); } catch { _setResult('Variables JSON is invalid.', 'apa-result-error'); return; }
+    }
+    const btn = document.getElementById('apa-btn-run');
+    btn.disabled = true; btn.textContent = '⏳ Running…';
+    try {
+      const data = await _runQuery(query, vars);
+      _setResultJSON(data);
+    } catch (e) {
+      _setResult('Network error: ' + e.message, 'apa-result-error');
+    } finally {
+      btn.disabled = false; btn.innerHTML = '&#9654; Run';
+    }
+  }
+
+  // ── prettify ──────────────────────────────────────────────
+  function _prettify() {
+    // Very basic prettifier: re-indent with 2 spaces
+    const ta = document.getElementById('apa-query');
+    const s = ta.value;
+    let depth = 0, out = '', prev = '';
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === '{') { out += ' {\n' + '  '.repeat(++depth); }
+      else if (ch === '}') { depth = Math.max(0, depth - 1); out = out.trimEnd() + '\n' + '  '.repeat(depth) + '}'; }
+      else if (ch === '\n') { out += '\n' + '  '.repeat(depth); }
+      else { out += ch; }
+      prev = ch;
+    }
+    // collapse excessive blank lines
+    ta.value = out.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  // ── saved queries ─────────────────────────────────────────
+  function _loadSaved() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; } }
+  function _persistSaved(list) { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+
+  function _renderSaved() {
+    const list = _loadSaved();
+    const el = document.getElementById('apa-saved-list');
+    if (!list.length) { el.innerHTML = '<span class="empty-hint">No saved queries yet.</span>'; return; }
+    el.innerHTML = list.map((item, i) => `
+      <div class="apa-saved-item" data-idx="${i}">
+        <span class="apa-saved-name">${escapeHTML(item.name)}</span>
+        <button class="apa-saved-del" data-del="${i}" title="Delete">&#10005;</button>
+      </div>`).join('');
+  }
+
+  document.getElementById('apa-saved-list').addEventListener('click', (e) => {
+    const delBtn = e.target.closest('[data-del]');
+    if (delBtn) {
+      const list = _loadSaved();
+      list.splice(parseInt(delBtn.dataset.del), 1);
+      _persistSaved(list);
+      _renderSaved();
+      return;
+    }
+    const item = e.target.closest('.apa-saved-item');
+    if (item) {
+      const list = _loadSaved();
+      const saved = list[parseInt(item.dataset.idx)];
+      if (saved) {
+        document.getElementById('apa-query').value = saved.query;
+        document.getElementById('apa-variables').value = saved.variables || '';
+      }
+    }
+  });
+
+  document.getElementById('apa-btn-save-query').addEventListener('click', () => {
+    const query = document.getElementById('apa-query').value.trim();
+    if (!query) return;
+    const name = prompt('Name this query:', query.split('\n')[0].substring(0, 40));
+    if (!name) return;
+    const list = _loadSaved();
+    list.unshift({ name, query, variables: document.getElementById('apa-variables').value });
+    _persistSaved(list);
+    _renderSaved();
+  });
+
+  // ── wire events ───────────────────────────────────────────
+  document.getElementById('apa-btn-introspect').addEventListener('click', _introspect);
+  document.getElementById('apa-btn-run').addEventListener('click', _run);
+  document.getElementById('apa-btn-prettify').addEventListener('click', _prettify);
+
+  document.getElementById('apa-btn-copy-result').addEventListener('click', () => {
+    const txt = document.getElementById('apa-result').textContent;
+    navigator.clipboard.writeText(txt).catch(() => {});
+  });
+
+  document.getElementById('apa-btn-close-schema').addEventListener('click', () => {
+    document.getElementById('apa-schema-wrap').style.display = 'none';
+  });
+
+  document.getElementById('apa-btn-toggle-headers').addEventListener('click', () => {
+    const row = document.getElementById('apa-extra-headers-row');
+    const btn = document.getElementById('apa-btn-toggle-headers');
+    if (row.style.display === 'none') {
+      row.style.display = 'flex'; btn.textContent = '− Hide extra headers';
+    } else {
+      row.style.display = 'none'; btn.textContent = '+ Add extra headers';
+    }
+  });
+
+  // Ctrl+Enter in query box → run
+  document.getElementById('apa-query').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _run(); }
+  });
+
+  _renderSaved();
+})();

@@ -1509,3 +1509,52 @@ body.light .json-bool { color: #b45309; }
   font-size: 10px !important;
   flex-shrink: 0;
 }
+
+/* ============================
+   APA API Panel
+   ============================ */
+.apa-api-wrap { display: flex; flex-direction: column; gap: 16px; height: 100%; padding: 0; }
+.apa-api-top { display: flex; flex-direction: column; gap: 8px; padding: 16px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); }
+.apa-api-endpoint-row { display: flex; align-items: center; gap: 10px; }
+.apa-api-label { font-size: 12px; color: var(--text3); white-space: nowrap; width: 90px; flex-shrink: 0; }
+.apa-input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; padding: 6px 10px; font-family: var(--mono); }
+.apa-input:focus { outline: none; border-color: var(--accent); }
+.apa-textarea-sm { height: 58px; resize: vertical; font-family: var(--mono); font-size: 12px; padding: 6px 10px; }
+.apa-api-link-row { padding-left: 100px; }
+.btn-link { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; }
+.btn-link:hover { color: var(--text); }
+.apa-api-body { display: flex; gap: 12px; flex: 1; min-height: 0; }
+.apa-api-left { display: flex; flex-direction: column; gap: 0; flex: 1; min-width: 0; }
+.apa-api-right { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.apa-query-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg3); border: 1px solid var(--border); border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+.apa-result-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg3); border: 1px solid var(--border); border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+.apa-variables-header { display: flex; align-items: center; padding: 5px 10px; background: var(--bg3); border: 1px solid var(--border); border-top: 1px solid var(--border); border-bottom: none; margin-top: 8px; }
+.apa-section-title { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+.apa-query-actions { display: flex; gap: 6px; }
+.btn-sm { padding: 3px 10px !important; font-size: 12px !important; }
+.apa-textarea { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 0 0 var(--radius-sm) var(--radius-sm); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 10px; resize: none; min-height: 160px; }
+.apa-textarea:focus { outline: none; border-color: var(--accent); }
+.apa-textarea-vars { min-height: 70px; flex: none; }
+.apa-code { tab-size: 2; }
+.apa-result-box { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 0 0 var(--radius-sm) var(--radius-sm); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 10px; overflow: auto; white-space: pre-wrap; word-break: break-all; min-height: 260px; }
+.apa-result-hint { color: var(--text3); font-style: italic; }
+.apa-result-error { color: var(--danger); }
+.apa-result-ok { color: var(--success); }
+.apa-api-schema-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 0; overflow: hidden; }
+.apa-schema-body { padding: 12px; overflow: auto; max-height: 400px; font-family: var(--mono); font-size: 12px; color: var(--text2); }
+.apa-schema-type { margin-bottom: 16px; }
+.apa-schema-type-name { color: var(--accent); font-weight: 700; font-size: 13px; }
+.apa-schema-kind { color: var(--text3); font-size: 11px; margin-left: 6px; }
+.apa-schema-field { padding: 2px 0 2px 16px; color: var(--text); }
+.apa-schema-field-name { color: var(--success); }
+.apa-schema-field-type { color: var(--warning); font-size: 11px; margin-left: 6px; }
+.apa-schema-field-desc { color: var(--text3); font-size: 11px; margin-left: 6px; font-style: italic; }
+.apa-schema-clickable { cursor: pointer; }
+.apa-schema-clickable:hover .apa-schema-field-name { text-decoration: underline; }
+.apa-saved-queries-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.apa-saved-list { padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.apa-saved-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--bg3); border-radius: var(--radius-sm); cursor: pointer; }
+.apa-saved-item:hover { background: var(--bg4); }
+.apa-saved-name { flex: 1; font-size: 13px; color: var(--text); }
+.apa-saved-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 0 4px; }
+.apa-saved-del:hover { color: var(--danger); }
