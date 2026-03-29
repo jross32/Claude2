@@ -117,8 +117,8 @@
                 <span class="capture-speed-tick">1<br><span class="capture-speed-sublabel">1w</span></span>
                 <span class="capture-speed-tick">2<br><span class="capture-speed-sublabel">4w</span></span>
                 <span class="capture-speed-tick">3<br><span class="capture-speed-sublabel">8w</span></span>
-                <span class="capture-speed-tick">4<br><span class="capture-speed-sublabel">16w</span></span>
-                <span class="capture-speed-tick">5<br><span class="capture-speed-sublabel">32w</span></span>
+                <span class="capture-speed-tick">4<br><span class="capture-speed-sublabel">20w</span></span>
+                <span class="capture-speed-tick">5<br><span class="capture-speed-sublabel">40w</span></span>
               </div>
               <input type="range" id="capture-speed" min="1" max="5" step="1" value="1" class="capture-speed-slider" />
               <span class="capture-speed-badge" id="capture-speed-badge">1 worker</span>
@@ -429,6 +429,7 @@
                 <button class="sort-tab" data-sort="inbound" title="Most-linked pages first (PageRank-like)">&#128279; Inbound Links</button>
                 <button class="sort-tab" data-sort="discovery" title="Order the crawler first found each link">&#128269; Discovery Order</button>
                 <button class="sort-tab" data-sort="section" title="Grouped by top-level path segment (/blog, /docs, etc.)">&#128196; By Section</button>
+                <button class="sort-tab" data-sort="referrer" title="Tree of which page discovered which — shows crawl relationships">&#128279; Discovery Tree</button>
               </div>
             </div>
             <div class="site-tree" id="site-tree"></div>

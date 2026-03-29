@@ -67,6 +67,7 @@ function handleSessionMessage(sessionId, msg) {
       if (pb) { pb.innerHTML = '&#9646;&#9646; Pause'; pb.classList.remove('session-pause-btn--paused'); }
       break;
     }
+    case 'partialResults':  onPartialResults(sessionId, msg); break;
     case 'complete':        onSessionComplete(sessionId, msg.data); break;
     case 'error':           onSessionError(sessionId, msg.message); break;
   }
@@ -875,6 +876,15 @@ function finalizeSession(sessionId, success) {
       header.appendChild(dismissBtn);
     }
   }
+}
+
+function onPartialResults(sessionId, msg) {
+  // Update the results badge with live count while scraping
+  const badge = document.getElementById('results-badge');
+  badge.textContent = msg.pageCount;
+  badge.style.display = 'inline-block';
+  // Show live count in the session header
+  appendSessionLog(sessionId, `Pages captured so far: ${msg.pageCount} (${msg.queueSize} in queue)`, 'info');
 }
 
 function onSessionComplete(sessionId, data) {
@@ -2378,6 +2388,7 @@ function renderCrawlTree(data, mode) {
     case 'inbound':  container.innerHTML = renderFlatByInbound(data.pages); break;
     case 'discovery':container.innerHTML = renderFlatByDiscovery(data.pages); break;
     case 'section':  container.innerHTML = renderBySection(data.pages); break;
+    case 'referrer': container.innerHTML = renderByReferrer(data.pages); break;
   }
 }
 
@@ -2468,11 +2479,45 @@ function renderBySection(pages) {
   }).join('');
 }
 
+// Mode 5: discovery tree — which page led to which (referrer-based)
+function renderByReferrer(pages) {
+  if (!pages?.length) return '<p class="empty-hint">No pages.</p>';
+  const pageByUrl = new Map(pages.map(p => [p.meta?.url, p]));
+  const byParent = new Map();
+  pages.forEach(p => {
+    const par = p._crawl?.parent || '__root__';
+    if (!byParent.has(par)) byParent.set(par, []);
+    byParent.get(par).push(p);
+  });
+  const rendered = new Set();
+  function renderNode(pageUrl, depth) {
+    if (rendered.has(pageUrl)) return '';
+    rendered.add(pageUrl);
+    const p = pageByUrl.get(pageUrl);
+    const children = byParent.get(pageUrl) || [];
+    const icon = children.length ? '&#128193;' : '&#128196;';
+    const path = (() => { try { return new URL(pageUrl).pathname || '/'; } catch { return pageUrl; } })();
+    const title = p?.meta?.title ? escapeHTML(p.meta.title.substring(0, 60)) : '';
+    let html = `<div class="site-tree-item" style="padding-left:${depth * 18}px">
+      <span class="site-tree-icon">${icon}</span>
+      <a class="site-tree-url" href="${escapeAttr(pageUrl)}" target="_blank">${escapeHTML(path)}</a>
+      ${title ? `<span class="site-tree-title">— ${title}</span>` : ''}
+      ${children.length ? `<span class="site-tree-count">${children.length}</span>` : ''}
+    </div>`;
+    children.sort((a, b) => (a._crawl?.depth || 0) - (b._crawl?.depth || 0))
+      .forEach(child => { if (child.meta?.url) html += renderNode(child.meta.url, depth + 1); });
+    return html;
+  }
+  const roots = (byParent.get('__root__') || []);
+  if (!roots.length && pages.length) roots.push(pages[0]);
+  return roots.map(p => renderNode(p.meta?.url, 0)).join('') || '<p class="empty-hint">No discovery relationships recorded (sequential mode).</p>';
+}
+
 document.getElementById('slow-motion').addEventListener('input', function () {
   document.getElementById('slowmo-value').textContent = `${this.value}ms`;
 });
 
-const _captureSpeedLabels = { 1: '1 worker', 2: '4 workers', 3: '8 workers', 4: '16 workers', 5: '32 workers' };
+const _captureSpeedLabels = { 1: '1 worker', 2: '4 workers', 3: '8 workers', 4: '20 workers', 5: '40 workers' };
 document.getElementById('capture-speed').addEventListener('input', function () {
   const custom = document.getElementById('worker-count').value;
   document.getElementById('capture-speed-badge').textContent = custom

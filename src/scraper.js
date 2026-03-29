@@ -828,8 +828,8 @@ class ScraperSession {
           }
         }
       } else if (fullCrawl) {
-        // workerCount overrides speed preset; speed preset maps 1→1, 2→4, 3→8, 4→16, 5→32
-        const SPEED_WORKERS = { 1: 1, 2: 4, 3: 8, 4: 16, 5: 32 };
+        // workerCount overrides speed preset; speed preset maps 1→1, 2→4, 3→8, 4→20, 5→40
+        const SPEED_WORKERS = { 1: 1, 2: 4, 3: 8, 4: 20, 5: 40 };
         const numWorkers = (workerCount > 0 ? Math.min(parseInt(workerCount), 100) : null)
           ?? (SPEED_WORKERS[captureSpeed] || 1);
         if (numWorkers > 1) {
@@ -1766,7 +1766,7 @@ class ScraperSession {
           pathname,
           section: getSection(url),
           discoveryOrder: shared.discoveryOrder.get(norm) ?? 0,
-          parent: null,
+          parent: shared.referrers.get(norm) || null,
           inboundCount: 0,
         };
         results.push(pageData);
@@ -1864,7 +1864,7 @@ class ScraperSession {
       results: [],
       origin,
       maxPages,
-      navSemaphore: new Semaphore(Math.min(numWorkers, 6)), // max 6 concurrent page.goto() calls
+      navSemaphore: new Semaphore(Math.max(6, Math.ceil(numWorkers * 0.3))), // ~30% navigate at once (6→6, 20→6, 40→12)
       inboundCount: new Map(),
       discoveryOrder: new Map([[norm0, 0]]),
       discoveryCounter: 1,
@@ -1950,11 +1950,20 @@ class ScraperSession {
     this._savePages = shared.results;
     this._saveVisited = shared.visited;
 
-    // Autosave timer — writes every 3s when new pages have been scraped
+    // Autosave + live broadcast timer — fires every 3s when new pages arrive
     let _saveSize = shared.results.length;
-    const saveTimer = this._saveId ? setInterval(() => {
-      if (shared.results.length > _saveSize) { _saveSize = shared.results.length; this._writeAutosave('running'); }
-    }, 3000) : null;
+    const saveTimer = setInterval(() => {
+      if (shared.results.length > _saveSize) {
+        _saveSize = shared.results.length;
+        if (this._saveId) this._writeAutosave('running');
+        // Broadcast partial results so frontend can show live progress
+        this.broadcast(this.sessionId, {
+          type: 'partialResults',
+          pageCount: shared.results.length,
+          queueSize: shared.queue.length,
+        });
+      }
+    }, 3000);
 
     // Run all workers concurrently — stagger startup by 100ms each to avoid initial burst
     const opts = { autoScroll, avoidFilter, captureDropdowns };
@@ -1986,6 +1995,8 @@ class ScraperSession {
         this.securityHeaders = w.captures.securityHeaders;
       }
     }
+
+    clearInterval(saveTimer);
 
     // Close all contexts (browser stays open — closed by run())
     await Promise.all(allContexts.map(ctx => ctx.close().catch(() => {})));
