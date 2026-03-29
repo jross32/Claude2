@@ -2517,20 +2517,27 @@ document.getElementById('slow-motion').addEventListener('input', function () {
   document.getElementById('slowmo-value').textContent = `${this.value}ms`;
 });
 
+const _captureSpeedWorkers = { 1: 1, 2: 4, 3: 8, 4: 20, 5: 40 };
 const _captureSpeedLabels = { 1: '1 worker', 2: '4 workers', 3: '8 workers', 4: '20 workers', 5: '40 workers' };
-document.getElementById('capture-speed').addEventListener('input', function () {
-  const custom = document.getElementById('worker-count').value;
+
+function _updateWorkerUI() {
+  const custom = parseInt(document.getElementById('worker-count').value, 10);
+  const speed = parseInt(document.getElementById('capture-speed').value, 10);
+  const workers = custom || _captureSpeedWorkers[speed] || 1;
   document.getElementById('capture-speed-badge').textContent = custom
-    ? `${custom} workers (custom)`
-    : (_captureSpeedLabels[this.value] || this.value);
-});
-document.getElementById('worker-count').addEventListener('input', function () {
-  const val = this.value.trim();
-  const speed = document.getElementById('capture-speed').value;
-  document.getElementById('capture-speed-badge').textContent = val
-    ? `${val} workers (custom)`
-    : (_captureSpeedLabels[speed] || speed);
-});
+    ? `${custom} workers (custom)` : (_captureSpeedLabels[speed] || speed);
+  const warn = document.getElementById('ram-warning');
+  const ramEst = document.getElementById('ram-est');
+  if (workers >= 16) {
+    ramEst.textContent = (workers * 0.065).toFixed(1);
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
+document.getElementById('capture-speed').addEventListener('input', _updateWorkerUI);
+document.getElementById('worker-count').addEventListener('input', _updateWorkerUI);
 
 // ---- Crawl sort tabs ----
 document.getElementById('crawl-sort-tabs').addEventListener('click', (e) => {

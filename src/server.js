@@ -1,4 +1,13 @@
 require('dotenv').config();
+
+// ---- Crash guards ----
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH] uncaughtException:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[CRASH] unhandledRejection:', reason?.message || reason);
+});
+
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');

@@ -123,6 +123,9 @@
               <input type="range" id="capture-speed" min="1" max="5" step="1" value="1" class="capture-speed-slider" />
               <span class="capture-speed-badge" id="capture-speed-badge">1 worker</span>
             </div>
+            <div id="ram-warning" style="display:none;margin-top:4px;padding:5px 10px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:6px;font-size:0.76rem;color:#ca8a04">
+              &#9888; High worker count uses significant RAM (est. <span id="ram-est"></span>GB for browser tabs). Reduce if the scraper crashes silently.
+            </div>
             <div class="capture-speed-row" style="margin-top:4px;align-items:center;gap:8px">
               <span class="capture-speed-label" style="font-size:0.78rem;color:var(--text3)">Custom workers</span>
               <input type="number" id="worker-count" min="1" max="100" placeholder="auto"
