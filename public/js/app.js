@@ -1472,13 +1472,20 @@ function renderResults(data) {
   // ── Console logs ──
   if (data.consoleLogs?.length) {
     document.getElementById('console-section').style.display = 'block';
-    document.getElementById('console-badge').textContent = data.consoleLogs.length;
+    const errors = data.consoleLogs.filter(l => l.type === 'error');
+    const warnings = data.consoleLogs.filter(l => l.type === 'warning' || l.type === 'warn');
+    const badge = document.getElementById('console-badge');
+    badge.textContent = data.consoleLogs.length;
+    if (errors.length) badge.style.background = 'var(--error)';
     const box = document.getElementById('console-log-box');
     box.innerHTML = '';
-    data.consoleLogs.slice(0, 100).forEach(log => {
+    // Show errors first, then warnings, sorted by severity
+    const sorted = [...errors, ...warnings,
+      ...data.consoleLogs.filter(l => l.type !== 'error' && l.type !== 'warning' && l.type !== 'warn')];
+    sorted.slice(0, 200).forEach(log => {
       const el = document.createElement('div');
       el.className = 'log-entry';
-      const level = log.type === 'error' ? 'error' : log.type === 'warning' ? 'warn' : 'info';
+      const level = log.type === 'error' ? 'error' : log.type === 'warning' || log.type === 'warn' ? 'warn' : 'info';
       el.innerHTML = `<span class="log-time">${formatTime(log.timestamp)}</span><span class="log-msg ${level}">[${log.type}] ${escapeHTML(log.text)}</span>`;
       box.appendChild(el);
     });

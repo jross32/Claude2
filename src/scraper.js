@@ -1508,10 +1508,34 @@ class ScraperSession {
     const pendingRest = new Map();
     const pendingAll  = new Map();
 
+    // Console log noise filter — skip debug/log/verbose level messages and
+    // known harmless third-party library promotions/warnings that clutter results
+    const _CONSOLE_NOISE = [
+      /google maps javascript api has been loaded/i,
+      /for best-practice loading patterns/i,
+      /loadable.*requires state/i,
+      /getscripttags.*getscriptelements/i,
+      /download the apollo devtools/i,
+      /apollo client developer/i,
+      /react.*devtools/i,
+      /redux.*devtools/i,
+      /you are running vue in development mode/i,
+    ];
+    const _SKIP_TYPES = new Set(['debug', 'verbose', 'dir', 'dirxml', 'table',
+      'trace', 'group', 'groupCollapsed', 'groupEnd', 'time', 'timeEnd', 'clear']);
+
     page.on('console', (msg) => {
+      const type = msg.type();
+      // Skip noisy debug-level output
+      if (_SKIP_TYPES.has(type)) return;
+      // Skip plain 'log' messages — sites spam these with internal debug info
+      if (type === 'log') return;
+      const text = msg.text();
+      // Skip known harmless third-party library warnings
+      if (_CONSOLE_NOISE.some(p => p.test(text))) return;
       captures.consoleLogs.push({
-        type: msg.type(),
-        text: msg.text().substring(0, 1000),
+        type,
+        text: text.substring(0, 1000),
         location: msg.location(),
         timestamp: new Date().toISOString(),
       });
