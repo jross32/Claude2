@@ -1102,11 +1102,11 @@ class ScraperSession {
             if (nav.reason === 'page-closed') break; // page is gone — stop this crawl
             continue;
           }
-          await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
+          await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
         }
 
         if (autoScroll) await this._autoScroll(page);
-        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
         const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
 
         // Interact with dropdowns and capture each state
@@ -1708,13 +1708,14 @@ class ScraperSession {
             shared.active--;
             continue;
           }
-          // Wait for SPA to finish rendering (React/Vue need networkidle after bundle loads)
-          await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
+          // Wait for SPA to finish rendering — resource blocking means only API calls remain,
+          // so networkidle fires much faster (images/fonts/CSS are already blocked)
+          await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
         }
 
         if (autoScroll) await this._autoScroll(page);
-        // Second networkidle after scroll — ensures lazy-loaded SPA content and API responses are in
-        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+        // Second networkidle after scroll (lazy-loaded API content); short timeout with resource blocking
+        await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
         const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
         if (!pageData) { shared.active--; continue; }
 
@@ -1851,10 +1852,21 @@ class ScraperSession {
     };
 
     // Create all contexts + pages in parallel (page pool)
+    // Block heavy resources (images, fonts, CSS) — not needed for scraping and slow page loads significantly
+    const BLOCK_EXTENSIONS = /\.(png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|eot)(\?|$)/i;
     let workerIdx = 0;
     const contextSetups = await Promise.allSettled(
       Array.from({ length: numContexts }, async (_, ci) => {
         const ctx = await this.browser.newContext(ctxOpts);
+        // Intercept and abort unnecessary resource types to speed up navigation
+        await ctx.route('**/*', (route) => {
+          const url = route.request().url();
+          const type = route.request().resourceType();
+          if (type === 'image' || type === 'font' || type === 'media' || BLOCK_EXTENSIONS.test(url)) {
+            return route.abort();
+          }
+          return route.continue();
+        });
         const pagesInCtx = Math.min(PAGES_PER_CTX, numWorkers - ci * PAGES_PER_CTX);
         const pages = await Promise.allSettled(
           Array.from({ length: pagesInCtx }, async () => {
