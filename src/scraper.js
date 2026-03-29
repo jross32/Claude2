@@ -971,6 +971,15 @@ class ScraperSession {
     if (visited.has(url) || this.stopped || visited.size >= maxPages) return [];
     visited.add(url);
     this.log(`Extracting (${visited.size}${maxPages !== Infinity ? `/${maxPages}` : ''}): ${url}`);
+    // Update progress header with live counts
+    {
+      const done = visited.size;
+      const pathname = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
+      const pct = maxPages !== Infinity
+        ? Math.min(99, Math.round(50 + (done / maxPages) * 49))
+        : Math.min(75, 50 + done);
+      this.progress(`Crawling ${pathname}`, pct, { visited: done, total: maxPages !== Infinity ? maxPages : done, queued: 0, failed: this.failedPages.length });
+    }
 
     const origin = (() => { try { return new URL(url).origin; } catch { return ''; } })();
 
@@ -1069,10 +1078,11 @@ class ScraperSession {
         const totalDiscovered = done + inQueue;
         this._fcMaxDiscovered = Math.max(this._fcMaxDiscovered || 0, totalDiscovered);
         let pct;
+        // Scale to 50-99% so crawl progress never goes backwards from pre-crawl 50%
         if (maxPages !== Infinity) {
-          pct = Math.min(99, Math.round((done / maxPages) * 100));
+          pct = Math.min(99, Math.round(50 + (done / maxPages) * 49));
         } else {
-          pct = Math.min(99, Math.round((done / Math.max(this._fcMaxDiscovered, 1)) * 100));
+          pct = Math.min(99, Math.round(50 + (done / Math.max(this._fcMaxDiscovered, 1)) * 49));
         }
         const totalLabel = maxPages !== Infinity ? maxPages : totalDiscovered;
         this.progress(
@@ -1733,10 +1743,11 @@ class ScraperSession {
           shared.maxDiscovered = Math.max(shared.maxDiscovered || 0, totalDiscovered);
           const failedCount = this.failedPages.length;
           let pct;
+          // Scale to 50-99% so crawl progress never goes backwards from pre-crawl 50%
           if (maxPages !== Infinity) {
-            pct = Math.min(99, Math.round((done / maxPages) * 100));
+            pct = Math.min(99, Math.round(50 + (done / maxPages) * 49));
           } else {
-            pct = Math.min(99, Math.round((done / Math.max(shared.maxDiscovered, 1)) * 100));
+            pct = Math.min(99, Math.round(50 + (done / Math.max(shared.maxDiscovered, 1)) * 49));
           }
           const totalLabel = maxPages !== Infinity ? maxPages : totalDiscovered;
           this.progress(
