@@ -1852,21 +1852,23 @@ class ScraperSession {
     };
 
     // Create all contexts + pages in parallel (page pool)
-    // Block heavy resources (images, fonts, CSS) — not needed for scraping and slow page loads significantly
+    // Block heavy resources only when the user isn't trying to capture them —
+    // images/fonts are not needed for DOM/text scraping and slow page loads significantly
+    const shouldBlockMedia = !captureOptions.captureImages && !captureOptions.captureAssets;
     const BLOCK_EXTENSIONS = /\.(png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|eot)(\?|$)/i;
     let workerIdx = 0;
     const contextSetups = await Promise.allSettled(
       Array.from({ length: numContexts }, async (_, ci) => {
         const ctx = await this.browser.newContext(ctxOpts);
-        // Intercept and abort unnecessary resource types to speed up navigation
-        await ctx.route('**/*', (route) => {
-          const url = route.request().url();
-          const type = route.request().resourceType();
-          if (type === 'image' || type === 'font' || type === 'media' || BLOCK_EXTENSIONS.test(url)) {
-            return route.abort();
-          }
-          return route.continue();
-        });
+        if (shouldBlockMedia) {
+          await ctx.route('**/*', (route) => {
+            const type = route.request().resourceType();
+            if (type === 'image' || type === 'font' || type === 'media' || BLOCK_EXTENSIONS.test(route.request().url())) {
+              return route.abort();
+            }
+            return route.continue();
+          });
+        }
         const pagesInCtx = Math.min(PAGES_PER_CTX, numWorkers - ci * PAGES_PER_CTX);
         const pages = await Promise.allSettled(
           Array.from({ length: pagesInCtx }, async () => {
