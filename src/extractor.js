@@ -6,7 +6,7 @@ const { extractEntities } = require('./entity-extractor');
 
 async function extractPageData(page, url, opts = {}) {
   // ── 1. Core DOM + content extraction ──────────────────────────────────────
-  const data = await page.evaluate((pageUrl) => {
+  const data = await page.evaluate((pageUrl, lightMode) => {
     const origin = new URL(pageUrl).origin;
 
     function abs(src) {
@@ -276,66 +276,76 @@ async function extractPageData(page, url, opts = {}) {
       });
     } catch {}
 
-    // ── COLORS (unique computed colors on page) ──
-    const colorSet = new Set();
-    Array.from(document.querySelectorAll('*')).slice(0, 300).forEach(el => {
-      try {
-        const cs = window.getComputedStyle(el);
-        if (cs.color && cs.color !== 'rgba(0, 0, 0, 0)') colorSet.add(cs.color);
-        if (cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') colorSet.add(cs.backgroundColor);
-      } catch {}
-    });
-    const colors = Array.from(colorSet).slice(0, 100);
-
-    // ── TYPOGRAPHY ──
-    const fontSet = new Set();
-    Array.from(document.querySelectorAll('body, h1, h2, h3, p, a, button, input')).forEach(el => {
-      try {
-        const cs = window.getComputedStyle(el);
-        fontSet.add(JSON.stringify({
-          family: cs.fontFamily,
-          size: cs.fontSize,
-          weight: cs.fontWeight,
-          lineHeight: cs.lineHeight,
-          element: el.tagName.toLowerCase(),
-        }));
-      } catch {}
-    });
-    const typography = Array.from(fontSet).map(s => { try { return JSON.parse(s); } catch { return null; } }).filter(Boolean);
-
-    // ── CSS ANIMATIONS / KEYFRAMES ──
-    const animations = [];
-    try {
-      Array.from(document.styleSheets).forEach(sheet => {
+    // ── COLORS (unique computed colors on page) — skipped in lightMode ──
+    const colors = lightMode ? [] : (() => {
+      const colorSet = new Set();
+      Array.from(document.querySelectorAll('*')).slice(0, 300).forEach(el => {
         try {
-          Array.from(sheet.cssRules).forEach(rule => {
-            if (rule instanceof CSSKeyframesRule) {
-              animations.push({ name: rule.name, cssText: rule.cssText.substring(0, 2000) });
-            }
-          });
+          const cs = window.getComputedStyle(el);
+          if (cs.color && cs.color !== 'rgba(0, 0, 0, 0)') colorSet.add(cs.color);
+          if (cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') colorSet.add(cs.backgroundColor);
         } catch {}
       });
-    } catch {}
+      return Array.from(colorSet).slice(0, 100);
+    })();
 
-    // ── MEDIA QUERIES ──
-    const mediaQueries = [];
-    try {
-      Array.from(document.styleSheets).forEach(sheet => {
+    // ── TYPOGRAPHY — skipped in lightMode ──
+    const typography = lightMode ? [] : (() => {
+      const fontSet = new Set();
+      Array.from(document.querySelectorAll('body, h1, h2, h3, p, a, button, input')).forEach(el => {
         try {
-          Array.from(sheet.cssRules).forEach(rule => {
-            if (rule instanceof CSSMediaRule) {
-              mediaQueries.push({
-                conditionText: rule.conditionText || rule.media?.mediaText,
-                rules: Array.from(rule.cssRules).slice(0, 5).map(r => r.selectorText).filter(Boolean),
-              });
-            }
-          });
+          const cs = window.getComputedStyle(el);
+          fontSet.add(JSON.stringify({
+            family: cs.fontFamily,
+            size: cs.fontSize,
+            weight: cs.fontWeight,
+            lineHeight: cs.lineHeight,
+            element: el.tagName.toLowerCase(),
+          }));
         } catch {}
       });
-    } catch {}
+      return Array.from(fontSet).map(s => { try { return JSON.parse(s); } catch { return null; } }).filter(Boolean);
+    })();
 
-    // ── ACCESSIBILITY (ARIA) ──
-    const ariaElements = Array.from(document.querySelectorAll('[role], [aria-label], [aria-labelledby], [aria-describedby], [aria-hidden], [tabindex]')).slice(0, 200).map(el => ({
+    // ── CSS ANIMATIONS / KEYFRAMES — skipped in lightMode ──
+    const animations = lightMode ? [] : (() => {
+      const result = [];
+      try {
+        Array.from(document.styleSheets).forEach(sheet => {
+          try {
+            Array.from(sheet.cssRules).forEach(rule => {
+              if (rule instanceof CSSKeyframesRule) {
+                result.push({ name: rule.name, cssText: rule.cssText.substring(0, 2000) });
+              }
+            });
+          } catch {}
+        });
+      } catch {}
+      return result;
+    })();
+
+    // ── MEDIA QUERIES — skipped in lightMode ──
+    const mediaQueries = lightMode ? [] : (() => {
+      const result = [];
+      try {
+        Array.from(document.styleSheets).forEach(sheet => {
+          try {
+            Array.from(sheet.cssRules).forEach(rule => {
+              if (rule instanceof CSSMediaRule) {
+                result.push({
+                  conditionText: rule.conditionText || rule.media?.mediaText,
+                  rules: Array.from(rule.cssRules).slice(0, 5).map(r => r.selectorText).filter(Boolean),
+                });
+              }
+            });
+          } catch {}
+        });
+      } catch {}
+      return result;
+    })();
+
+    // ── ACCESSIBILITY (ARIA) — skipped in lightMode ──
+    const ariaElements = lightMode ? [] : Array.from(document.querySelectorAll('[role], [aria-label], [aria-labelledby], [aria-describedby], [aria-hidden], [tabindex]')).slice(0, 200).map(el => ({
       tag: el.tagName.toLowerCase(),
       role: el.getAttribute('role'),
       ariaLabel: el.getAttribute('aria-label'),
@@ -346,7 +356,7 @@ async function extractPageData(page, url, opts = {}) {
       text: el.innerText?.trim().substring(0, 100) || null,
     }));
 
-    // ── LAYOUT TREE (deep DOM snapshot) ──
+    // ── LAYOUT TREE (deep DOM snapshot) — skipped in lightMode ──
     function getLayoutTree(el, depth) {
       if (depth <= 0 || !el || !el.tagName) return null;
       const cs = window.getComputedStyle(el);
@@ -368,7 +378,7 @@ async function extractPageData(page, url, opts = {}) {
         children: children.length > 0 ? children : undefined,
       };
     }
-    const layoutTree = getLayoutTree(document.body, 8);
+    const layoutTree = lightMode ? null : getLayoutTree(document.body, 8);
 
     // ── LOCAL/SESSION STORAGE ──
     const localStorage_ = {};
@@ -478,8 +488,8 @@ async function extractPageData(page, url, opts = {}) {
       })(),
     };
 
-    // ── HTML SOURCE ──
-    const htmlSource = document.documentElement.outerHTML.substring(0, 500000);
+    // ── HTML SOURCE — skipped in lightMode ──
+    const htmlSource = lightMode ? '' : document.documentElement.outerHTML.substring(0, 500000);
 
     // ── HEAD HTML ──
     const headHTML = document.head.outerHTML;
@@ -525,7 +535,7 @@ async function extractPageData(page, url, opts = {}) {
       htmlSource,
       customElements: customElements_,
     };
-  }, url);
+  }, url, !!opts.lightMode);
 
   // ── 2. Screenshot (full page) — only when captureScreenshots is enabled ────
   if (opts.captureScreenshots) {
@@ -548,50 +558,58 @@ async function extractPageData(page, url, opts = {}) {
     data.viewportScreenshot = null;
   }
 
-  // ── 4. Fetch all stylesheet text (parallel) ───────────────────────────────
-  data.stylesheetContents = (await Promise.all(
-    (data.stylesheets || []).slice(0, 10).map(ss =>
-      page.evaluate(async (href) => {
-        try {
-          const r = await fetch(href);
-          return r.ok ? { href, content: (await r.text()).substring(0, 50000) } : null;
-        } catch { return null; }
-      }, ss.href).catch(() => null)
-    )
-  )).filter(Boolean);
+  // ── 4. Fetch all stylesheet text (parallel) — skipped in lightMode ──────────
+  if (opts.lightMode) {
+    data.stylesheetContents = [];
+  } else {
+    data.stylesheetContents = (await Promise.all(
+      (data.stylesheets || []).slice(0, 10).map(ss =>
+        page.evaluate(async (href) => {
+          try {
+            const r = await fetch(href);
+            return r.ok ? { href, content: (await r.text()).substring(0, 50000) } : null;
+          } catch { return null; }
+        }, ss.href).catch(() => null)
+      )
+    )).filter(Boolean);
+  }
 
-  // ── 5. Performance metrics ─────────────────────────────────────────────────
-  try {
-    data.performance = await page.evaluate(() => {
-      const nav = performance.getEntriesByType('navigation')[0];
-      const paint = performance.getEntriesByType('paint');
-      const resources = performance.getEntriesByType('resource').slice(0, 100);
-      return {
-        navigation: nav ? {
-          domContentLoaded: Math.round(nav.domContentLoadedEventEnd - nav.startTime),
-          loadComplete: Math.round(nav.loadEventEnd - nav.startTime),
-          ttfb: Math.round(nav.responseStart - nav.requestStart),
-          domInteractive: Math.round(nav.domInteractive - nav.startTime),
-          transferSize: nav.transferSize,
-          encodedBodySize: nav.encodedBodySize,
-          decodedBodySize: nav.decodedBodySize,
-        } : null,
-        paint: Object.fromEntries(paint.map(p => [p.name, Math.round(p.startTime)])),
-        resources: resources.map(r => ({
-          name: r.name.substring(0, 200),
-          type: r.initiatorType,
-          duration: Math.round(r.duration),
-          transferSize: r.transferSize,
-          startTime: Math.round(r.startTime),
-        })),
-        memory: performance.memory ? {
-          usedJSHeapSize: performance.memory.usedJSHeapSize,
-          totalJSHeapSize: performance.memory.totalJSHeapSize,
-        } : null,
-      };
-    });
-  } catch {
+  // ── 5. Performance metrics — skipped in lightMode ─────────────────────────
+  if (opts.lightMode) {
     data.performance = null;
+  } else {
+    try {
+      data.performance = await page.evaluate(() => {
+        const nav = performance.getEntriesByType('navigation')[0];
+        const paint = performance.getEntriesByType('paint');
+        const resources = performance.getEntriesByType('resource').slice(0, 100);
+        return {
+          navigation: nav ? {
+            domContentLoaded: Math.round(nav.domContentLoadedEventEnd - nav.startTime),
+            loadComplete: Math.round(nav.loadEventEnd - nav.startTime),
+            ttfb: Math.round(nav.responseStart - nav.requestStart),
+            domInteractive: Math.round(nav.domInteractive - nav.startTime),
+            transferSize: nav.transferSize,
+            encodedBodySize: nav.encodedBodySize,
+            decodedBodySize: nav.decodedBodySize,
+          } : null,
+          paint: Object.fromEntries(paint.map(p => [p.name, Math.round(p.startTime)])),
+          resources: resources.map(r => ({
+            name: r.name.substring(0, 200),
+            type: r.initiatorType,
+            duration: Math.round(r.duration),
+            transferSize: r.transferSize,
+            startTime: Math.round(r.startTime),
+          })),
+          memory: performance.memory ? {
+            usedJSHeapSize: performance.memory.usedJSHeapSize,
+            totalJSHeapSize: performance.memory.totalJSHeapSize,
+          } : null,
+        };
+      });
+    } catch {
+      data.performance = null;
+    }
   }
 
   // ── 6. Console logs (captured via page events before this) ────────────────

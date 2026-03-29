@@ -396,10 +396,10 @@ class ScraperSession {
             window.scrollTo(0, 0);
             resolve();
           }
-        }, 80);
+        }, 30);
       });
     });
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(100);
   }
 
   // Detect and interact with all <select> dropdowns on the page; capture page data per option
@@ -994,7 +994,7 @@ class ScraperSession {
     }
 
     if (autoScroll && depth >= 1) await this._autoScroll(page);
-    const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
+    const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots, lightMode: true });
     const results = [pageData];
 
     // Interact with dropdowns and capture each state
@@ -1106,7 +1106,7 @@ class ScraperSession {
 
         if (autoScroll) await this._autoScroll(page);
         await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
-        const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
+        const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots, lightMode: true });
 
         // Interact with dropdowns and capture each state
         if (captureDropdowns) {
@@ -1146,13 +1146,16 @@ class ScraperSession {
           inboundCount.set(n, (inboundCount.get(n) || 0) + 1);
         });
 
+        // O(1) link text lookup for avoid filter
+        const linkTextMap = new Map((pageData.links || []).map(l => [l.href, l.text || '']));
+
         // Only queue unvisited, unqueued, non-avoided, non-login links
         const toQueue = newLinks.filter(href => {
           const n = normalize(href);
           if (visited.has(n) || queued.has(n)) return false;
           if (/\/login|\/signin|\/sign-in\b/i.test(href)) return false;
           if (avoidFilter) {
-            const linkText = (pageData.links || []).find(l => l.href === href)?.text || '';
+            const linkText = linkTextMap.get(href) || '';
             if (this._isAvoidedLink({ href, text: linkText }, avoidFilter, origin)) return false;
           }
           return true;
@@ -1291,7 +1294,7 @@ class ScraperSession {
     try {
       const cur = page.url();
       if (cur.startsWith(origin)) return true;
-      await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 10000 });
       return true;
     } catch { return false; }
   }
@@ -1359,7 +1362,7 @@ class ScraperSession {
         const parentUrl = origin + parentPath;
         this.log(`SPA nav: trying parent ${parentPath} → click to ${targetPath}`, 'info');
         try {
-          await page.goto(parentUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+          await page.goto(parentUrl, { waitUntil: 'domcontentloaded', timeout: 8000 });
           await page.waitForTimeout(800);
         } catch {}
         if (await this._tryClickLink(page, url)) {
@@ -1690,7 +1693,11 @@ class ScraperSession {
         if (results.length >= maxPages) break;
         // Only exit if no other worker is actively processing (and could add new links)
         if (shared.active === 0) break;
-        await page.waitForTimeout(300).catch(() => {});
+        // Wait for a URL to be added (up to 500ms safety timeout)
+        await Promise.race([
+          shared.waitForQueue(),
+          page.waitForTimeout(500).catch(() => {}),
+        ]);
         continue;
       }
       if (results.length >= maxPages) break;
@@ -1728,7 +1735,7 @@ class ScraperSession {
         if (autoScroll) await this._autoScroll(page);
         // Second networkidle after scroll (lazy-loaded API content); short timeout with resource blocking
         await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
-        const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots });
+        const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots, lightMode: true });
         if (!pageData) { shared.active--; continue; }
 
         if (captureDropdowns) {
@@ -1771,6 +1778,8 @@ class ScraperSession {
         }
 
         // Discover and enqueue new links (synchronous ops — safe between awaits)
+        // O(1) link text lookup for avoid filter
+        const linkTextMap = new Map((pageData.links || []).map(l => [l.href, l.text || '']));
         const newLinks = (pageData.links || [])
           .map(l => l.href)
           .filter(href => {
@@ -1790,7 +1799,7 @@ class ScraperSession {
             const n = normalize(href);
             if (visited.has(n) || queued.has(n)) return false;
             if (avoidFilter) {
-              const linkText = (pageData.links || []).find(l => l.href === href)?.text || '';
+              const linkText = linkTextMap.get(href) || '';
               if (this._isAvoidedLink({ href, text: linkText }, avoidFilter, origin)) return false;
             }
             return true;
@@ -1806,6 +1815,7 @@ class ScraperSession {
             while (lo < hi) { const mid = (lo + hi) >> 1; pathDepth(queue[mid]) <= depth ? lo = mid + 1 : hi = mid; }
             queue.splice(lo, 0, href);
           });
+        if (shared._queueWaiters.length > 0) shared.notifyQueue();
 
         if (this._politeDelay > 0) await new Promise(r => setTimeout(r, this._politeDelay));
       } catch (err) {
@@ -1841,6 +1851,10 @@ class ScraperSession {
       discoveryOrder: new Map([[norm0, 0]]),
       discoveryCounter: 1,
       active: 0,   // workers currently processing a URL — idle workers wait when this > 0
+      // Queue notification — resolves idle workers immediately when a URL is added
+      _queueWaiters: [],
+      notifyQueue() { while (this._queueWaiters.length > 0) this._queueWaiters.shift()(); },
+      waitForQueue() { return new Promise(r => this._queueWaiters.push(r)); },
     };
 
     // Pre-populate from resume data (skip already-visited URLs, load saved pages)
@@ -1875,7 +1889,7 @@ class ScraperSession {
         if (shouldBlockMedia) {
           await ctx.route('**/*', (route) => {
             const type = route.request().resourceType();
-            if (type === 'image' || type === 'font' || type === 'media' || BLOCK_EXTENSIONS.test(route.request().url())) {
+            if (type === 'image' || type === 'font' || type === 'media' || type === 'stylesheet' || BLOCK_EXTENSIONS.test(route.request().url())) {
               return route.abort();
             }
             return route.continue();
