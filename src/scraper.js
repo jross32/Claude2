@@ -1315,7 +1315,7 @@ class ScraperSession {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
         // Server returned 5xx — remember it, go back to a React page, then SPA nav
         if (response && response.status() >= 500) {
@@ -1600,9 +1600,22 @@ class ScraperSession {
         if (currentNorm !== norm) {
           const nav = await this._navigateWithRetry(page, url, origin);
           if (!nav.success) {
-            this.log(`[W${workerId}] Skipping ${pathname} — ${nav.reason}`, 'warn');
+            if (nav.reason === 'page-closed') { shared.active--; break; }
+            // On timeout/error: re-queue up to 2 more times before permanently failing
+            if (nav.reason === 'error' || nav.reason === 'unknown') {
+              const retries = shared.retryCount.get(norm) || 0;
+              if (retries < 2) {
+                shared.retryCount.set(norm, retries + 1);
+                visited.delete(norm);  // allow the URL to be picked up again
+                queue.push(url);       // re-add to end of queue (lower pressure = less likely to timeout)
+                this.log(`[W${workerId}] Re-queued ${pathname} (retry ${retries + 1}/2)`, 'info');
+              } else {
+                this.log(`[W${workerId}] Giving up on ${pathname} after 3 attempts`, 'warn');
+              }
+            } else {
+              this.log(`[W${workerId}] Skipping ${pathname} — ${nav.reason}`, 'warn');
+            }
             shared.active--;
-            if (nav.reason === 'page-closed') break;
             continue;
           }
           // Wait for SPA to finish rendering (React/Vue need networkidle after bundle loads)
@@ -1702,6 +1715,7 @@ class ScraperSession {
       results: [],
       origin,
       maxPages,
+      retryCount: new Map(), // tracks per-URL timeout retry attempts
       inboundCount: new Map(),
       discoveryOrder: new Map([[norm0, 0]]),
       discoveryCounter: 1,
