@@ -1706,7 +1706,9 @@ class ScraperSession {
     });
 
     page.on('requestfailed', (req) => {
-      captures.errors.push({ type: 'requestFailed', url: req.url(), failure: req.failure()?.errorText });
+      const failure = req.failure()?.errorText;
+      if (failure === 'net::ERR_ABORTED') return; // expected from resource blocking & mid-nav aborts
+      captures.errors.push({ type: 'requestFailed', url: req.url(), failure });
     });
   }
 

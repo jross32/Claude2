@@ -462,6 +462,7 @@ async function extractPageData(page, url, opts = {}) {
     const domStats = {
       totalElements: document.querySelectorAll('*').length,
       totalTextNodes: (() => {
+        if (!document.body) return 0;
         let count = 0;
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) count++;
