@@ -661,6 +661,23 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
           <div class="session-site-badges" id="ssbd-${sid}"></div>
         </div>
       </div>
+      <div class="live-creds-prompt" id="scp-${sid}" style="display:none">
+        <span class="live-creds-icon">&#128274;</span>
+        <strong>Login required</strong>
+        <div class="live-creds-fields">
+          <input type="text" id="scu-${sid}" placeholder="Username / Email" autocomplete="new-password" data-lpignore="true" />
+          <input type="password" id="scpw-${sid}" placeholder="Password" autocomplete="new-password" data-lpignore="true" />
+          <button class="btn-primary session-submit-creds">Continue</button>
+        </div>
+      </div>
+      <div class="live-creds-prompt" id="svp-${sid}" style="display:none">
+        <span class="live-creds-icon">&#128273;</span>
+        <strong>Verification code required</strong>
+        <div class="live-creds-fields">
+          <input type="text" id="svc-${sid}" placeholder="Enter code..." maxlength="10" />
+          <button class="btn-primary session-submit-verify">Submit</button>
+        </div>
+      </div>
       <div class="log-box session-log-box" id="slb-${sid}"></div>
       <div class="live-browser-panel" id="slp-${sid}" style="${liveView ? 'display:block' : 'display:none'}">
         <div class="live-browser-header">
@@ -668,23 +685,6 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
         </div>
         <div class="live-browser-body">
           <img class="live-frame-img" id="slf-${sid}" src="" alt="Live view" />
-        </div>
-        <div class="live-creds-prompt" id="scp-${sid}" style="display:none">
-          <span class="live-creds-icon">&#128274;</span>
-          <strong>Login required</strong>
-          <div class="live-creds-fields">
-            <input type="text" id="scu-${sid}" placeholder="Username / Email" autocomplete="new-password" data-lpignore="true" />
-            <input type="password" id="scpw-${sid}" placeholder="Password" autocomplete="new-password" data-lpignore="true" />
-            <button class="btn-primary session-submit-creds">Continue</button>
-          </div>
-        </div>
-        <div class="live-creds-prompt" id="svp-${sid}" style="display:none">
-          <span class="live-creds-icon">&#128273;</span>
-          <strong>Verification code required</strong>
-          <div class="live-creds-fields">
-            <input type="text" id="svc-${sid}" placeholder="Enter code..." maxlength="10" />
-            <button class="btn-primary session-submit-verify">Submit</button>
-          </div>
         </div>
       </div>
     </div>
@@ -743,8 +743,6 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
       body: JSON.stringify({ username: user, password: pass }),
     });
     document.getElementById(`scp-${sid}`).style.display = 'none';
-    // Re-hide the live panel if it was only shown for the credentials prompt
-    if (!liveView) { const lp = document.getElementById(`slp-${sid}`); if (lp) lp.style.display = 'none'; }
     appendSessionLog(sid, 'Credentials submitted — continuing scrape...', 'info');
   });
 
@@ -821,9 +819,6 @@ function updateSessionSitePreview(sessionId, info) {
 function showSessionCredsPrompt(sessionId) {
   const el = document.getElementById(`scp-${sessionId}`);
   if (el) {
-    // Ensure the parent live-browser-panel is visible even if liveView is off
-    const panel = document.getElementById(`slp-${sessionId}`);
-    if (panel) panel.style.display = 'block';
     el.style.display = 'block';
     document.getElementById(`scu-${sessionId}`)?.focus();
   }
