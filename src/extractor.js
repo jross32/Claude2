@@ -6,7 +6,7 @@ const { extractEntities } = require('./entity-extractor');
 
 async function extractPageData(page, url, opts = {}) {
   // ── 1. Core DOM + content extraction ──────────────────────────────────────
-  const data = await page.evaluate((pageUrl, lightMode) => {
+  const data = await page.evaluate(({ pageUrl, lightMode }) => {
     const origin = new URL(pageUrl).origin;
 
     function abs(src) {
@@ -535,7 +535,7 @@ async function extractPageData(page, url, opts = {}) {
       htmlSource,
       customElements: customElements_,
     };
-  }, url, !!opts.lightMode);
+  }, { pageUrl: url, lightMode: !!opts.lightMode });
 
   // ── 2. Screenshot (full page) — only when captureScreenshots is enabled ────
   if (opts.captureScreenshots) {
