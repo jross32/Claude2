@@ -47,7 +47,7 @@ function connectWS() {
 function handleSessionMessage(sessionId, msg) {
   switch (msg.type) {
     case 'log':             appendSessionLog(sessionId, msg.message, msg.level); break;
-    case 'progress':        updateSessionProgress(sessionId, msg.step, msg.percent); break;
+    case 'progress':        updateSessionProgress(sessionId, msg.step, msg.percent, msg); break;
     case 'siteInfo':        updateSessionSitePreview(sessionId, msg.data); break;
     case 'needsAuth':       showSessionCredsPrompt(sessionId); break;
     case 'needVerification':showSessionVerifyPrompt(sessionId); break;
@@ -645,6 +645,7 @@ function createSessionPanel(sessionId, name, faviconUrl, liveView) {
         <div class="session-mini-bar-wrap"><div class="session-mini-bar" id="smb-${sid}" style="width:0%"></div></div>
       </div>
       <span class="session-hdr-step" id="shs-${sid}">Starting...</span>
+      <span class="session-hdr-counts" id="shc-${sid}"></span>
       <span class="session-hdr-pct" id="shp-${sid}">0%</span>
       <button class="btn-xs session-log-toggle" id="slt-${sid}" title="Hide/show console">&#128221; Console</button>
       <button class="btn-xs session-collapse-btn" id="scb-${sid}" title="Collapse">&#9650;</button>
@@ -778,13 +779,26 @@ function appendLog(message, level = 'info') {
   if (ids.length > 0) appendSessionLog(ids[ids.length - 1], message, level);
 }
 
-function updateSessionProgress(sessionId, step, percent) {
-  const stepEl = document.getElementById(`shs-${sessionId}`);
-  const pctEl  = document.getElementById(`shp-${sessionId}`);
-  const barEl  = document.getElementById(`smb-${sessionId}`);
+function updateSessionProgress(sessionId, step, percent, extra = {}) {
+  const stepEl   = document.getElementById(`shs-${sessionId}`);
+  const pctEl    = document.getElementById(`shp-${sessionId}`);
+  const barEl    = document.getElementById(`smb-${sessionId}`);
+  const countEl  = document.getElementById(`shc-${sessionId}`);
   if (stepEl) stepEl.textContent = step;
-  if (pctEl)  pctEl.textContent = `${percent}%`;
-  if (barEl)  barEl.style.width = `${percent}%`;
+  if (percent !== null && percent !== undefined) {
+    if (pctEl) pctEl.textContent = `${percent}%`;
+    if (barEl) barEl.style.width = `${percent}%`;
+  }
+  if (countEl && extra.visited !== undefined) {
+    const visited = extra.visited;
+    const total   = extra.total;
+    const failed  = extra.failed || 0;
+    const queued  = extra.queued || 0;
+    let txt = `${visited}/${total} pages`;
+    if (queued > 0) txt += ` · ${queued} queued`;
+    if (failed > 0) txt += ` · ${failed} failed`;
+    countEl.textContent = txt;
+  }
 }
 
 function updateSessionSitePreview(sessionId, info) {

@@ -1221,6 +1221,13 @@ body.light .json-bool { color: #b45309; }
   flex-shrink: 0;
 }
 
+.session-hdr-counts {
+  font-size: 11px;
+  color: var(--text3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .session-hdr-pct {
   font-size: 12px;
   font-weight: 600;

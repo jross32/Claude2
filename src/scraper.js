@@ -187,8 +187,8 @@ class ScraperSession {
     }
   }
 
-  progress(step, percent) {
-    this.broadcast(this.sessionId, { type: 'progress', step, percent });
+  progress(step, percent, extra = {}) {
+    this.broadcast(this.sessionId, { type: 'progress', step, percent, ...extra });
   }
 
   async submitVerification(code) {
@@ -993,10 +993,24 @@ class ScraperSession {
       visited.add(norm);
 
       const pathname = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
-      this.progress(
-        `Crawling ${results.length + 1}${maxPages !== Infinity ? '/' + maxPages : ''}: ${pathname}`,
-        50 + Math.min(40, Math.floor((results.length / Math.max(maxPages === Infinity ? 200 : maxPages, 1)) * 40))
-      );
+      {
+        const done = results.length;
+        const inQueue = queue.length;
+        const totalDiscovered = done + inQueue;
+        this._fcMaxDiscovered = Math.max(this._fcMaxDiscovered || 0, totalDiscovered);
+        let pct;
+        if (maxPages !== Infinity) {
+          pct = Math.min(99, Math.round((done / maxPages) * 100));
+        } else {
+          pct = Math.min(99, Math.round((done / Math.max(this._fcMaxDiscovered, 1)) * 100));
+        }
+        const totalLabel = maxPages !== Infinity ? maxPages : totalDiscovered;
+        this.progress(
+          `Crawling ${pathname}`,
+          pct,
+          { visited: done, total: totalLabel, queued: inQueue, failed: this.failedPages.length }
+        );
+      }
 
       try {
         // Skip navigation if the page is already at this URL (e.g. post-auth dashboard)
@@ -1644,10 +1658,27 @@ class ScraperSession {
         };
         results.push(pageData);
         this.log(`[W${workerId}] [${results.length}] ${pathname}`);
-        this.progress(
-          `Crawling ${results.length}${maxPages !== Infinity ? '/' + maxPages : ''}: ${pathname}`,
-          50 + Math.min(40, Math.floor((results.length / Math.max(maxPages === Infinity ? 200 : maxPages, 1)) * 40))
-        );
+        {
+          const done = results.length;
+          const inQueue = queue.length;
+          const inProgress = shared.active;
+          const totalDiscovered = done + inQueue + inProgress;
+          // Running max prevents percentage going backwards as queue grows
+          shared.maxDiscovered = Math.max(shared.maxDiscovered || 0, totalDiscovered);
+          const failedCount = this.failedPages.length;
+          let pct;
+          if (maxPages !== Infinity) {
+            pct = Math.min(99, Math.round((done / maxPages) * 100));
+          } else {
+            pct = Math.min(99, Math.round((done / Math.max(shared.maxDiscovered, 1)) * 100));
+          }
+          const totalLabel = maxPages !== Infinity ? maxPages : totalDiscovered;
+          this.progress(
+            `Crawling ${pathname}`,
+            pct,
+            { visited: done, total: totalLabel, queued: inQueue, failed: failedCount }
+          );
+        }
 
         // Discover and enqueue new links (synchronous ops — safe between awaits)
         const newLinks = (pageData.links || [])
