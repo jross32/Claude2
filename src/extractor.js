@@ -72,19 +72,44 @@ async function extractPageData(page, url, opts = {}) {
         href: el.tagName === 'A' ? el.href : null,
       }));
 
-    // ── ALL LINKS ──
-    const links = Array.from(document.querySelectorAll('a[href]')).map(el => {
+    // ── ALL LINKS (a[href] + SPA data attrs + onclick URLs) ──
+    const _seenHrefs = new Set();
+    const links = [];
+    function _addLink(href, text, extra) {
+      if (!href) return;
+      let resolved;
+      try { resolved = new URL(href, pageUrl).href; } catch { return; }
+      if (_seenHrefs.has(resolved)) return;
+      _seenHrefs.add(resolved);
       let isInternal = false;
-      try { isInternal = new URL(el.href).origin === origin; } catch {}
-      return {
-        text: el.innerText.trim() || el.title || el.getAttribute('aria-label') || null,
-        href: el.href,
-        isInternal,
-        rel: el.rel || null,
-        target: el.target || null,
-        download: el.download || null,
-        type: el.type || null,
-      };
+      try { isInternal = new URL(resolved).origin === origin; } catch {}
+      links.push(Object.assign({ href: resolved, text: text || null, isInternal }, extra || {}));
+    }
+
+    // Standard <a href> links
+    Array.from(document.querySelectorAll('a[href]')).forEach(el => {
+      _addLink(el.href,
+        el.innerText.trim() || el.title || el.getAttribute('aria-label'),
+        { rel: el.rel || null, target: el.target || null, download: el.download || null, type: el.type || null });
+    });
+
+    // React SPA / data-href / data-url navigable elements
+    Array.from(document.querySelectorAll('[data-href],[data-url]')).forEach(el => {
+      _addLink(el.getAttribute('data-href') || el.getAttribute('data-url'),
+        el.innerText.trim() || el.title || el.getAttribute('aria-label'));
+    });
+
+    // onclick handler URL extraction (catches navigate('/path') and window.location patterns)
+    const _onclickRe = /['"]((?:https?:\/\/[^'"?\s]{2,}|\/[^'"?\s]{1,})[^'"]*)['"]/g;
+    Array.from(document.querySelectorAll('[onclick]')).forEach(el => {
+      const oc = el.getAttribute('onclick') || '';
+      let m;
+      _onclickRe.lastIndex = 0;
+      while ((m = _onclickRe.exec(oc)) !== null) {
+        // Skip obviously non-URL strings (JS identifiers, CSS values, etc.)
+        if (/^\/\/|^\/\*|\s/.test(m[1])) continue;
+        _addLink(m[1], el.innerText.trim() || null);
+      }
     });
 
     // ── ALL IMAGES (deep) ──

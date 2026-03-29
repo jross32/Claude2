@@ -1823,11 +1823,37 @@ class ScraperSession {
         await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
 
         // ── EARLY LINK DISCOVERY ──────────────────────────────────────────────
-        // Grab all <a href> links immediately (~50ms) and queue them NOW so idle
-        // workers have URLs to navigate while this worker does the heavy extraction.
-        // extractPageData() takes 2-5s; without this, all other workers starve.
+        // Grab all <a href> + data-href/data-url/onclick links immediately (~50ms)
+        // and queue them NOW so idle workers have URLs to navigate while this
+        // worker does the heavy extraction. extractPageData() takes 2-5s; without
+        // this, all other workers starve.
         try {
-          const earlyHrefs = await page.$$eval('a[href]', as => as.map(a => a.href).filter(Boolean));
+          const earlyHrefs = await page.evaluate(({ _origin, _pageUrl }) => {
+            const seen = new Set();
+            const out = [];
+            function push(raw) {
+              if (!raw) return;
+              let resolved;
+              try { resolved = new URL(raw, _pageUrl).href; } catch { return; }
+              if (seen.has(resolved)) return;
+              seen.add(resolved);
+              out.push(resolved);
+            }
+            Array.from(document.querySelectorAll('a[href]')).forEach(el => push(el.href));
+            Array.from(document.querySelectorAll('[data-href],[data-url]')).forEach(el => {
+              push(el.getAttribute('data-href') || el.getAttribute('data-url'));
+            });
+            const re = /['"]((?:https?:\/\/[^'"?\s]{2,}|\/[^'"?\s]{1,})[^'"]*)['"]/g;
+            Array.from(document.querySelectorAll('[onclick]')).forEach(el => {
+              const oc = el.getAttribute('onclick') || '';
+              let m; re.lastIndex = 0;
+              while ((m = re.exec(oc)) !== null) {
+                if (/^\/\/|^\/\*|\s/.test(m[1])) continue;
+                push(m[1]);
+              }
+            });
+            return out;
+          }, { _origin: origin, _pageUrl: url });
           let added = 0;
           earlyHrefs
             .filter(href => {
