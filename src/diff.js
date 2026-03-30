@@ -89,6 +89,20 @@ function diffScrapes(scrapeA, scrapeB) {
     removed: [...assetsA].filter((a) => !assetsB.has(a)),
   };
 
+  // Pre-computed summary counts so the frontend doesn't have to recount
+  result.summary = {
+    pages:    { added: result.pages.added.length, removed: result.pages.removed.length },
+    apiCalls: {
+      added:   result.apiCalls.graphql.added.length + result.apiCalls.rest.added.length,
+      removed: result.apiCalls.graphql.removed.length + result.apiCalls.rest.removed.length,
+    },
+    assets:   { added: result.assets.added.length, removed: result.assets.removed.length },
+    content:  {
+      added:   (result.textContent?.added.length || 0) + (result.links?.added.length || 0),
+      removed: (result.textContent?.removed.length || 0) + (result.links?.removed.length || 0),
+    },
+  };
+
   return result;
 }
 

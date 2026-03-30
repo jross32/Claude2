@@ -89,6 +89,7 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 // ---- Runs panel state ----
 let activeRunId = null;
 const _runDataCache = new Map(); // cache full run data keyed by run id
+let _comparePickA = null; // first run selected for quick compare from Runs panel
 
 // ---- Auth toggle ----
 // Auth section is shown automatically when a login form is detected — no manual toggle
@@ -2115,6 +2116,7 @@ async function loadRuns() {
 }
 
 function renderRunCards(runs) {
+  _comparePickA = null; // reset pending compare selection on each re-render
   const list = document.getElementById('runs-list');
   if (!list) return;
   if (!runs.length) {
@@ -2150,6 +2152,7 @@ function renderRunCards(runs) {
             ${r.source === 'server' && r.status !== 'complete'
               ? `<button class="btn-xs btn-success rc-resume" data-id="${escapeAttr(r.id)}" data-source="${r.source}">&#9654; Resume</button>`
               : ''}
+            <button class="btn-xs rc-compare" data-id="${escapeAttr(r.id)}" data-source="${r.source}">&#9870; Compare</button>
             <button class="btn-xs rc-expand" data-id="${escapeAttr(r.id)}" data-source="${r.source}">&#9660; URLs</button>
             <button class="btn-xs btn-danger rc-del" data-id="${escapeAttr(r.id)}" data-source="${r.source}">Delete</button>
           </div>
@@ -2199,6 +2202,45 @@ function renderRunCards(runs) {
       btn.disabled = true; btn.textContent = '...';
       try { await resumeRunById(btn.dataset.id); }
       catch (err) { showToast('Resume failed: ' + err.message); btn.disabled = false; btn.innerHTML = '&#9654; Resume'; }
+    });
+  });
+
+  // Quick compare — two-click pattern
+  list.querySelectorAll('.rc-compare').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+
+      if (!_comparePickA) {
+        // First selection
+        _comparePickA = id;
+        btn.textContent = '✓ Picked A';
+        btn.classList.add('btn-active');
+        showToast('Now click Compare on a second run');
+        return;
+      }
+
+      if (_comparePickA === id) {
+        // Cancel selection
+        _comparePickA = null;
+        btn.textContent = '⊷ Compare';
+        btn.classList.remove('btn-active');
+        showToast('Compare selection cleared');
+        return;
+      }
+
+      // Second selection — run the diff
+      const idA = _comparePickA;
+      const idB = id;
+      _comparePickA = null;
+      list.querySelectorAll('.rc-compare').forEach(b => {
+        b.innerHTML = '&#9870; Compare';
+        b.classList.remove('btn-active');
+      });
+
+      document.querySelector('[data-panel="diff"]').click();
+      await populateDiffDropdowns(idA, idB);
+      document.getElementById('btn-run-diff')?.click();
     });
   });
 }
@@ -2364,15 +2406,34 @@ async function resumeRunById(id) {
 }
 
 // ---- Diff panel ----
-function populateDiffDropdowns() {
-  const history = getHistory();
-  ['diff-a', 'diff-b'].forEach(id => {
-    const sel = document.getElementById(id);
+async function populateDiffDropdowns(preselectA, preselectB) {
+  let serverSaves = [];
+  try {
+    const res = await fetch('/api/saves');
+    if (res.ok) serverSaves = await res.json();
+  } catch (_) {}
+  const localHistory = getHistory();
+  const serverIds = new Set(serverSaves.map(s => s.sessionId));
+  const localOnly = localHistory.filter(e => !serverIds.has(e.id));
+  const allEntries = [
+    ...serverSaves.map(s => ({
+      id: s.sessionId, source: 'server',
+      label: `${s.startUrl || '(unknown)'} — ${new Date(s.lastSavedAt || s.startedAt).toLocaleString()} [${s.pageCount || 0} pages]`,
+    })),
+    ...localOnly.map(e => ({
+      id: e.id, source: 'local',
+      label: `${e.url || '(unknown)'} — ${new Date(e.ts).toLocaleString()} [${e.pageCount || 0} pages] (local)`,
+    })),
+  ];
+  ['diff-a', 'diff-b'].forEach((elId, idx) => {
+    const sel = document.getElementById(elId);
     if (!sel) return;
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">-- Select from history --</option>' +
-      history.map(e => `<option value="${escapeAttr(e.id)}">${escapeHTML(e.url || '(unknown)')} — ${new Date(e.ts).toLocaleString()}</option>`).join('');
-    if (prev) sel.value = prev;
+    sel.innerHTML = '<option value="">-- Select a run --</option>' +
+      allEntries.map(e =>
+        `<option value="${escapeAttr(e.id)}" data-source="${e.source}">${escapeHTML(e.label)}</option>`
+      ).join('');
+    const preselect = idx === 0 ? preselectA : preselectB;
+    if (preselect) sel.value = preselect;
   });
 }
 
@@ -2380,37 +2441,125 @@ function renderDiffResults(diff) {
   const container = document.getElementById('diff-results');
   if (!container) return;
   container.style.display = 'block';
-  if (!diff || (!diff.added?.length && !diff.removed?.length && !diff.changed?.length)) {
-    container.innerHTML = '<p style="padding:16px;color:var(--text3)">No differences found.</p>';
+
+  const noChanges =
+    !diff.pages?.added.length && !diff.pages?.removed.length &&
+    !diff.apiCalls?.graphql?.added.length && !diff.apiCalls?.graphql?.removed.length &&
+    !diff.apiCalls?.rest?.added.length && !diff.apiCalls?.rest?.removed.length &&
+    !diff.assets?.added.length && !diff.assets?.removed.length &&
+    !diff.textContent?.added.length && !diff.textContent?.removed.length;
+
+  if (noChanges) {
+    container.innerHTML = '<p style="padding:16px;color:var(--text3)">No differences found between these two runs.</p>';
     return;
   }
-  const rows = [
-    ...(diff.added || []).map(u => `<div class="cd-row diff-added">+ ${escapeHTML(u)}</div>`),
-    ...(diff.removed || []).map(u => `<div class="cd-row diff-removed">− ${escapeHTML(u)}</div>`),
-    ...(diff.changed || []).map(u => `<div class="cd-row diff-changed">~ ${escapeHTML(typeof u === 'string' ? u : (u.url || JSON.stringify(u)))}</div>`),
-  ];
-  container.innerHTML = `<div style="padding:12px 0">${rows.join('')}</div>`;
+
+  const s = diff.summary || {};
+
+  function deltaLabel(added, removed) {
+    const parts = [];
+    if (added)   parts.push(`<span class="diff-stat-add">+${added} added</span>`);
+    if (removed) parts.push(`<span class="diff-stat-rem">&#8722;${removed} removed</span>`);
+    return parts.join(' ') || '<span style="color:var(--text3)">unchanged</span>';
+  }
+
+  function buildList(items, cls, prefix) {
+    if (!items?.length) return '';
+    return items.map(u =>
+      `<div class="diff-item ${cls}">${escapeHTML(prefix)} ${escapeHTML(typeof u === 'string' ? u : JSON.stringify(u))}</div>`
+    ).join('');
+  }
+
+  function section(id, title, statsHtml, bodyHtml) {
+    if (!bodyHtml) return '';
+    return `<div class="diff-section">
+      <div class="diff-section-header" data-toggle="${id}">
+        <span class="diff-section-title">${title}</span>
+        <span class="diff-section-stats">${statsHtml}</span>
+        <span class="diff-toggle-icon">&#9660;</span>
+      </div>
+      <div class="diff-list" id="diff-sec-${id}">${bodyHtml}</div>
+    </div>`;
+  }
+
+  const pagesBody   = buildList(diff.pages?.added, 'diff-added', '+') + buildList(diff.pages?.removed, 'diff-removed', '−');
+  const apiBody     = buildList(diff.apiCalls?.graphql?.added, 'diff-added', '+ [GQL]') +
+                      buildList(diff.apiCalls?.graphql?.removed, 'diff-removed', '− [GQL]') +
+                      buildList(diff.apiCalls?.rest?.added, 'diff-added', '+ [REST]') +
+                      buildList(diff.apiCalls?.rest?.removed, 'diff-removed', '− [REST]');
+  const assetsBody  = buildList(diff.assets?.added, 'diff-added', '+') + buildList(diff.assets?.removed, 'diff-removed', '−');
+  let contentBody   = buildList(diff.textContent?.added, 'diff-added', '+') +
+                      buildList(diff.textContent?.removed, 'diff-removed', '−') +
+                      buildList(diff.links?.added, 'diff-added', '+ [link]') +
+                      buildList(diff.links?.removed, 'diff-removed', '− [link]') +
+                      buildList(diff.headings?.added, 'diff-added', '+ [h1]') +
+                      buildList(diff.headings?.removed, 'diff-removed', '− [h1]');
+  if (diff.title) contentBody += `<div class="diff-item diff-changed">~ title: "${escapeHTML(diff.title.from)}" → "${escapeHTML(diff.title.to)}"</div>`;
+
+  const summaryBar = `<div class="diff-summary-bar">
+    <div class="diff-summary-stat"><span class="diff-summary-val diff-stat-add">+${s.pages?.added || 0}</span><span class="diff-summary-lbl">pages added</span></div>
+    <div class="diff-summary-stat"><span class="diff-summary-val diff-stat-rem">&#8722;${s.pages?.removed || 0}</span><span class="diff-summary-lbl">pages removed</span></div>
+    <div class="diff-summary-stat"><span class="diff-summary-val diff-stat-add">+${s.apiCalls?.added || 0}</span><span class="diff-summary-lbl">api added</span></div>
+    <div class="diff-summary-stat"><span class="diff-summary-val diff-stat-rem">&#8722;${s.apiCalls?.removed || 0}</span><span class="diff-summary-lbl">api removed</span></div>
+    <div class="diff-summary-stat"><span class="diff-summary-val diff-stat-add">+${s.assets?.added || 0}</span><span class="diff-summary-lbl">assets added</span></div>
+    <div class="diff-summary-stat"><span class="diff-summary-val diff-stat-rem">&#8722;${s.assets?.removed || 0}</span><span class="diff-summary-lbl">assets removed</span></div>
+  </div>`;
+
+  container.innerHTML = summaryBar +
+    section('pages',   '&#128196; Pages',     deltaLabel(s.pages?.added,    s.pages?.removed),    pagesBody)   +
+    section('api',     '&#128257; API Calls',  deltaLabel(s.apiCalls?.added, s.apiCalls?.removed), apiBody)     +
+    section('assets',  '&#128444; Assets',     deltaLabel(s.assets?.added,   s.assets?.removed),   assetsBody)  +
+    section('content', '&#128221; Content',    deltaLabel(s.content?.added,  s.content?.removed),  contentBody);
+
+  container.querySelectorAll('.diff-section-header').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const body = document.getElementById(`diff-sec-${hdr.dataset.toggle}`);
+      const icon = hdr.querySelector('.diff-toggle-icon');
+      if (!body) return;
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      if (icon) icon.innerHTML = open ? '&#9654;' : '&#9660;';
+    });
+  });
+}
+
+async function _fetchRunForDiff(id, source) {
+  if (_runDataCache.has(id)) return _runDataCache.get(id);
+  if (source === 'server') {
+    const res = await fetch(`/api/saves/${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    _runDataCache.set(id, data);
+    return data;
+  }
+  const entry = getHistory().find(e => e.id === id);
+  if (!entry) throw new Error('Run not found in local history');
+  _runDataCache.set(id, entry.data);
+  return entry.data;
 }
 
 document.getElementById('btn-run-diff')?.addEventListener('click', async () => {
-  const history = getHistory();
-  const aId = document.getElementById('diff-a')?.value;
-  const bId = document.getElementById('diff-b')?.value;
-  const a = history.find(e => e.id === aId);
-  const b = history.find(e => e.id === bId);
-  if (!a || !b) return showToast('Select two results to compare');
+  const selA = document.getElementById('diff-a');
+  const selB = document.getElementById('diff-b');
+  const aId = selA?.value;
+  const bId = selB?.value;
+  if (!aId || !bId) return showToast('Select two runs to compare');
+  if (aId === bId) return showToast('Select two different runs');
   const btn = document.getElementById('btn-run-diff');
   btn.disabled = true; btn.textContent = 'Comparing...';
   try {
-    const res = await fetch('/api/diff', { method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ resultA: a.data, resultB: b.data }) });
+    const sourceA = selA.querySelector(`option[value="${CSS.escape(aId)}"]`)?.dataset.source || 'local';
+    const sourceB = selB.querySelector(`option[value="${CSS.escape(bId)}"]`)?.dataset.source || 'local';
+    const [dataA, dataB] = await Promise.all([_fetchRunForDiff(aId, sourceA), _fetchRunForDiff(bId, sourceB)]);
+    const res = await fetch('/api/diff', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resultA: dataA, resultB: dataB }) });
     if (!res.ok) throw new Error(await res.text());
     renderDiffResults(await res.json());
-  } catch(e) { showToast('Diff failed: ' + e.message); }
+  } catch (e) { showToast('Diff failed: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = '⊷ Compare'; }
 });
 
-document.querySelector('[data-panel="diff"]')?.addEventListener('click', populateDiffDropdowns);
+document.querySelector('[data-panel="diff"]')?.addEventListener('click', () => populateDiffDropdowns());
 
 // ---- Code generators ----
 function downloadFile(content, filename, type = 'text/plain') {
