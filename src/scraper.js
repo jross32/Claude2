@@ -388,12 +388,13 @@ class ScraperSession {
       await new Promise((resolve) => {
         let totalHeight = 0;
         const distance = 500;
+        const deadline = Date.now() + 30000; // scroll for up to 30s to reach actual page bottom
         const timer = setInterval(() => {
           // Guard: body can be null during SPA re-renders / pushState transitions
           if (!document.body) { clearInterval(timer); resolve(); return; }
           window.scrollBy(0, distance);
           totalHeight += distance;
-          if (totalHeight >= document.body.scrollHeight || totalHeight > 8000) {
+          if (totalHeight >= document.body.scrollHeight || Date.now() > deadline) {
             clearInterval(timer);
             window.scrollTo(0, 0);
             resolve();
@@ -401,7 +402,134 @@ class ScraperSession {
         }, 30);
       });
     }).catch(() => {}); // page may navigate away mid-scroll
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(500); // extra wait for lazy-loaded content to render
+  }
+
+  // Click through tabs, "load more" buttons, and pagination to surface links that are
+  // only visible after user interaction. Returns array of additional internal URLs found.
+  async _discoverViaInteraction(page, url, origin) {
+    const discovered = new Set();
+    const norm = u => u.split('#')[0].replace(/\/$/, '') || u;
+    const safe = u => {
+      try { return new URL(u).origin === origin && !/login|logout|signin|signout|sign-out|log-out/i.test(u); }
+      catch { return false; }
+    };
+    const harvestLinks = async () => {
+      const links = await page.evaluate(({ _origin, _base }) => {
+        const out = [];
+        document.querySelectorAll('a[href],[data-href],[data-url]').forEach(el => {
+          try {
+            const raw = el.href || el.getAttribute('data-href') || el.getAttribute('data-url');
+            const h = new URL(raw, _base).href;
+            if (h.startsWith(_origin)) out.push(h);
+          } catch {}
+        });
+        return out;
+      }, { _origin: origin, _base: page.url() }).catch(() => []);
+      links.forEach(h => discovered.add(h));
+    };
+
+    try {
+      // ── 1. "Load more" / "Show more" / "View all" buttons (expand hidden list items) ──
+      const loadMoreRe = /^(load\s*more|show\s*more|view\s*all|see\s*all|show\s*all)/i;
+      for (let pass = 0; pass < 8; pass++) {
+        const btns = await page.$$('button:not([disabled]), a[role="button"]').catch(() => []);
+        let clicked = false;
+        for (const btn of btns) {
+          try {
+            const text = await btn.evaluate(el => el.innerText?.trim() || el.getAttribute('aria-label') || '').catch(() => '');
+            if (!loadMoreRe.test(text)) continue;
+            if (!await btn.isVisible().catch(() => false)) continue;
+            const beforeUrl = norm(page.url());
+            await btn.click();
+            await page.waitForTimeout(700);
+            await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => {});
+            if (norm(page.url()) !== beforeUrl) {
+              const newUrl = page.url();
+              if (safe(newUrl)) discovered.add(newUrl);
+              await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+              await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
+            }
+            clicked = true;
+            break; // one button per pass — re-scan after DOM update
+          } catch {}
+        }
+        if (!clicked) break;
+      }
+      await harvestLinks(); // harvest after all "load more" expansions
+
+      // ── 2. Tab click-through (role="tab") ────────────────────────────────
+      const hasTabList = await page.$('[role="tablist"]').then(el => !!el).catch(() => false);
+      if (hasTabList) {
+        const tabs = await page.$$('[role="tab"]:not([aria-selected="true"]):not([aria-disabled="true"]):not([disabled])').catch(() => []);
+        for (const tab of tabs.slice(0, 10)) {
+          try {
+            const beforeUrl = norm(page.url());
+            await tab.click();
+            await page.waitForTimeout(600);
+            await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => {});
+            const afterUrl = page.url();
+            if (safe(afterUrl)) discovered.add(afterUrl);
+            await harvestLinks();
+            // If tab changed the URL, go back before clicking next tab
+            if (norm(afterUrl) !== beforeUrl) {
+              await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+              await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
+            }
+          } catch {}
+        }
+        // Restore to original URL after all tabs are clicked
+        if (norm(page.url()) !== norm(url)) {
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+          await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
+        }
+      }
+
+      // ── 3. Pagination "Next" button following ─────────────────────────────
+      // Follows paginated lists and harvests links from every page
+      const paginationSelectors = [
+        'a[rel="next"]',
+        '[aria-label="Go to next page"]:not([disabled])',
+        '[aria-label="next page" i]:not([disabled])',
+        'button[aria-label*="next" i]:not([disabled])',
+        '[class*="pagination"] [class*="next"]:not([disabled])',
+        '[class*="MuiPagination"] button[aria-label*="next" i]:not([disabled])',
+        '[data-testid*="pagination"] [class*="next"]:not([disabled])',
+      ];
+      for (let pageNum = 0; pageNum < 20; pageNum++) {
+        let nextBtn = null;
+        for (const sel of paginationSelectors) {
+          nextBtn = await page.$(sel).catch(() => null);
+          if (nextBtn) break;
+        }
+        if (!nextBtn) break;
+        try {
+          if (!await nextBtn.isVisible().catch(() => false)) break;
+          if (await nextBtn.isDisabled().catch(() => false)) break;
+          const beforeUrl = norm(page.url());
+          await nextBtn.click();
+          await page.waitForTimeout(800);
+          await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+          const afterUrl = page.url();
+          if (norm(afterUrl) === beforeUrl || !safe(afterUrl)) break;
+          discovered.add(afterUrl);
+          await harvestLinks();
+        } catch { break; }
+      }
+
+      // Restore to original URL if pagination left us elsewhere
+      if (norm(page.url()) !== norm(url)) {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+      }
+
+    } catch (err) {
+      this.log(`Interaction discovery error on ${url}: ${err.message}`, 'warn');
+      if (norm(page.url()) !== norm(url)) {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+      }
+    }
+
+    return [...discovered].filter(u => safe(u) && norm(u) !== norm(url));
   }
 
   // Detect and interact with all <select> dropdowns on the page; capture page data per option
@@ -1200,6 +1328,30 @@ class ScraperSession {
 
         this.log(`  +${toQueue.length} new links queued (${queue.length} total in queue)`, 'info');
 
+        // Interactive discovery: click tabs, "load more" buttons, and follow pagination
+        // to surface links only visible after user interaction
+        const interactLinks = await this._discoverViaInteraction(page, url, origin);
+        const newInteract = interactLinks.filter(href => {
+          const n = normalize(href);
+          if (visited.has(n) || queued.has(n)) return false;
+          if (isSkippable(href)) return false;
+          if (/\/login|\/signin|\/sign-in|\/logout|\/signout|\/log-out|\/sign-out/i.test(href)) return false;
+          return true;
+        });
+        if (newInteract.length > 0) {
+          newInteract.sort((a, b) => pathDepth(a) - pathDepth(b));
+          newInteract.forEach(href => {
+            const n = normalize(href);
+            queued.add(n);
+            discoveryOrder.set(n, discoveryCounter++);
+            const depth = pathDepth(href);
+            let lo = 0, hi = queue.length;
+            while (lo < hi) { const mid = (lo + hi) >> 1; pathDepth(queue[mid]) <= depth ? lo = mid + 1 : hi = mid; }
+            queue.splice(lo, 0, href);
+          });
+          this.log(`  +${newInteract.length} links via interaction (tabs/pagination/load-more)`, 'info');
+        }
+
         if (this._politeDelay > 0) await new Promise(r => setTimeout(r, this._politeDelay));
       } catch (err) {
         if (this._isPageClosed(err)) {
@@ -1964,6 +2116,31 @@ class ScraperSession {
             queue.splice(lo, 0, href);
           });
         if (shared._queueWaiters.length > 0) shared.notifyQueue();
+
+        // Interactive discovery: click tabs, "load more", and follow pagination
+        const interactLinks = await this._discoverViaInteraction(page, url, origin);
+        const newInteract = interactLinks.filter(href => {
+          const n = normalize(href);
+          if (visited.has(n) || queued.has(n)) return false;
+          if (isSkippable(href)) return false;
+          if (/\/login|\/signin|\/sign-in|\/logout|\/signout|\/log-out|\/sign-out/i.test(href)) return false;
+          return true;
+        });
+        if (newInteract.length > 0) {
+          newInteract.sort((a, b) => pathDepth(a) - pathDepth(b));
+          newInteract.forEach(href => {
+            const n = normalize(href);
+            queued.add(n);
+            shared.discoveryOrder.set(n, shared.discoveryCounter++);
+            if (!shared.referrers.has(n)) shared.referrers.set(n, url);
+            const depth = pathDepth(href);
+            let lo = 0, hi = queue.length;
+            while (lo < hi) { const mid = (lo + hi) >> 1; pathDepth(queue[mid]) <= depth ? lo = mid + 1 : hi = mid; }
+            queue.splice(lo, 0, href);
+          });
+          if (shared._queueWaiters.length > 0) shared.notifyQueue();
+          this.log(`[W${workerId}] +${newInteract.length} via interaction (tabs/pagination/load-more)`, 'info');
+        }
 
         if (this._politeDelay > 0) await new Promise(r => setTimeout(r, this._politeDelay));
       } catch (err) {

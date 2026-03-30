@@ -112,6 +112,30 @@ async function extractPageData(page, url, opts = {}) {
       }
     });
 
+    // [role="link"] / [role="menuitem"] semantic nav elements (React components as div/span/li)
+    Array.from(document.querySelectorAll('[role="link"]:not(a), [role="menuitem"]:not(a)')).forEach(el => {
+      const href = el.getAttribute('href') || el.getAttribute('data-href') ||
+                   el.getAttribute('data-url') || el.getAttribute('data-path') ||
+                   el.getAttribute('data-to');
+      if (href) _addLink(href, el.innerText.trim() || el.getAttribute('aria-label'));
+    });
+
+    // Mine inline scripts for React Router route path definitions
+    // Matches: path: "/foo", to: "/foo", href: "/foo" as JS object properties
+    const _scriptRouteRe = /(?:^|[,{(\s])(?:path|to|href)\s*:\s*["'`](\/[a-zA-Z0-9][a-zA-Z0-9\-_/.]*)[`'"]/gm;
+    Array.from(document.querySelectorAll('script:not([src])')).forEach(script => {
+      const src = script.textContent || '';
+      let m;
+      _scriptRouteRe.lastIndex = 0;
+      while ((m = _scriptRouteRe.exec(src)) !== null) {
+        const p = m[1];
+        // Skip static assets, API endpoints, and build artifacts
+        if (/\.(js|css|png|jpg|gif|svg|woff2?|ttf|eot|ico|map|json|xml)$/i.test(p)) continue;
+        if (/^\/static\/|^\/assets\/|^\/api\/|^\/_next\/|^\/cdn-cgi\//i.test(p)) continue;
+        _addLink(p, null);
+      }
+    });
+
     // ── ALL IMAGES (deep) ──
     const images = Array.from(document.querySelectorAll('img, [style*="background-image"], picture source, [data-src], [data-lazy]')).map(el => {
       const tag = el.tagName.toLowerCase();
