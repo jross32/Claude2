@@ -86,6 +86,10 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
   });
 });
 
+// ---- Runs panel state ----
+let activeRunId = null;
+const _runDataCache = new Map(); // cache full run data keyed by run id
+
 // ---- Auth toggle ----
 // Auth section is shown automatically when a login form is detected — no manual toggle
 
@@ -920,6 +924,7 @@ function onPartialResults(sessionId, msg) {
 function onSessionComplete(sessionId, data) {
   scrapedData = data;
   saveToHistory(data);
+  loadRuns(); // refresh runs badge + card list
   updateSessionProgress(sessionId, 'Complete ✓', 100);
   appendSessionLog(sessionId, 'Scraping complete!', 'success');
   finalizeSession(sessionId, true);
@@ -2052,6 +2057,312 @@ document.getElementById('btn-clear-history')?.addEventListener('click', () => {
 
 document.querySelector('[data-panel="history"]')?.addEventListener('click', renderHistory);
 
+// ============================================================
+// ---- Runs Panel (unified history + server saves) ----
+// ============================================================
+
+document.querySelector('[data-panel="runs"]')?.addEventListener('click', loadRuns);
+document.getElementById('btn-refresh-runs')?.addEventListener('click', loadRuns);
+document.getElementById('btn-runs-clear')?.addEventListener('click', () => {
+  activeRunId = null;
+  const banner = document.getElementById('runs-active-banner');
+  if (banner) banner.style.display = 'none';
+  document.querySelectorAll('.run-card').forEach(c => c.classList.remove('run-card--active'));
+});
+
+async function loadRuns() {
+  const list = document.getElementById('runs-list');
+  if (!list) return;
+
+  let serverSaves = [];
+  try {
+    const res = await fetch('/api/saves');
+    if (res.ok) serverSaves = await res.json();
+  } catch (_) {}
+
+  // Merge with localStorage history, deduplicating by sessionId
+  const localHistory = getHistory();
+  const serverIds = new Set(serverSaves.map(s => s.sessionId));
+  const localOnly = localHistory.filter(e => !serverIds.has(e.id));
+
+  const runs = [
+    ...serverSaves.map(s => ({
+      id: s.sessionId, source: 'server',
+      url: s.startUrl || '(unknown)',
+      ts: s.lastSavedAt || s.startedAt,
+      pageCount: s.pageCount || 0,
+      apiCount: 0,
+      assetCount: 0,
+      status: s.status || 'complete',
+      options: s.options || {},
+    })),
+    ...localOnly.map(e => ({
+      id: e.id, source: 'local',
+      url: e.url || '(unknown)',
+      ts: e.ts,
+      pageCount: e.pageCount || 0,
+      apiCount: e.apiCount || 0,
+      assetCount: e.data?.assets?.length || 0,
+      status: 'complete',
+      options: {},
+    })),
+  ].sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+  const badge = document.getElementById('runs-badge');
+  if (badge) { badge.textContent = runs.length; badge.style.display = runs.length ? 'inline-block' : 'none'; }
+
+  renderRunCards(runs);
+}
+
+function renderRunCards(runs) {
+  const list = document.getElementById('runs-list');
+  if (!list) return;
+  if (!runs.length) {
+    list.innerHTML = '<p class="empty-hint" style="padding:32px 0;text-align:center">No runs yet. Complete a scrape to see it here.</p>';
+    return;
+  }
+
+  const statusClass = { complete: 'chip-ok', stopped: 'chip-warn', running: 'chip-info' };
+
+  list.innerHTML = `<div class="runs-grid">${runs.map(r => {
+    const hostname = (() => { try { return new URL(r.url).hostname; } catch { return r.url; } })();
+    const initial = hostname.replace(/^www\./, '')[0]?.toUpperCase() || '?';
+    const dateStr = new Date(r.ts).toLocaleString();
+    const isActive = r.id === activeRunId;
+    return `
+      <div class="run-card${isActive ? ' run-card--active' : ''}" data-id="${escapeAttr(r.id)}" data-source="${r.source}">
+        <div class="run-card-top">
+          <div class="run-avatar">${escapeHTML(initial)}</div>
+          <div class="run-card-meta">
+            <div class="run-card-hostname">${escapeHTML(hostname)}</div>
+            <div class="run-card-fullurl" title="${escapeAttr(r.url)}">${escapeHTML(r.url)}</div>
+          </div>
+          <span class="cd-chip ${statusClass[r.status] || 'chip-log'}">${escapeHTML(r.status)}</span>
+        </div>
+        <div class="run-stats">
+          <div class="run-stat"><span class="run-stat-val">${r.pageCount}</span><span class="run-stat-lbl">pages</span></div>
+          ${r.apiCount > 0 ? `<div class="run-stat"><span class="run-stat-val">${r.apiCount}</span><span class="run-stat-lbl">api calls</span></div>` : ''}
+          ${r.assetCount > 0 ? `<div class="run-stat"><span class="run-stat-val">${r.assetCount}</span><span class="run-stat-lbl">assets</span></div>` : ''}
+        </div>
+        <div class="run-card-footer">
+          <span class="run-date">${escapeHTML(dateStr)}</span>
+          <div class="run-actions">
+            ${r.source === 'server' && r.status !== 'complete'
+              ? `<button class="btn-xs btn-success rc-resume" data-id="${escapeAttr(r.id)}" data-source="${r.source}">&#9654; Resume</button>`
+              : ''}
+            <button class="btn-xs rc-expand" data-id="${escapeAttr(r.id)}" data-source="${r.source}">&#9660; URLs</button>
+            <button class="btn-xs btn-danger rc-del" data-id="${escapeAttr(r.id)}" data-source="${r.source}">Delete</button>
+          </div>
+        </div>
+        <div class="run-url-list" id="run-urls-${escapeAttr(r.id)}" style="display:none"></div>
+      </div>`;
+  }).join('')}</div>`;
+
+  // Click card body → load run into all tabs
+  list.querySelectorAll('.run-card').forEach(card => {
+    card.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      openRun(card.dataset.id, card.dataset.source);
+    });
+  });
+
+  // Expand/collapse URL list
+  list.querySelectorAll('.rc-expand').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleRunUrls(btn.dataset.id, btn.dataset.source, btn);
+    });
+  });
+
+  // Delete
+  list.querySelectorAll('.rc-del').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!confirm('Delete this run?')) return;
+      if (btn.dataset.source === 'server') {
+        try { await fetch(`/api/saves/${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' }); }
+        catch (err) { showToast('Delete failed: ' + err.message); return; }
+      } else {
+        const h = getHistory().filter(en => en.id !== btn.dataset.id);
+        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch {}
+      }
+      if (activeRunId === btn.dataset.id) activeRunId = null;
+      _runDataCache.delete(btn.dataset.id);
+      loadRuns();
+    });
+  });
+
+  // Resume
+  list.querySelectorAll('.rc-resume').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      btn.disabled = true; btn.textContent = '...';
+      try { await resumeRunById(btn.dataset.id); }
+      catch (err) { showToast('Resume failed: ' + err.message); btn.disabled = false; btn.innerHTML = '&#9654; Resume'; }
+    });
+  });
+}
+
+async function toggleRunUrls(id, source, btn) {
+  const container = document.getElementById(`run-urls-${id}`);
+  if (!container) return;
+
+  if (container.style.display !== 'none') {
+    container.style.display = 'none';
+    btn.innerHTML = '&#9660; URLs';
+    return;
+  }
+
+  container.style.display = 'block';
+  btn.innerHTML = '&#9650; URLs';
+
+  if (_runDataCache.has(id)) {
+    renderRunUrls(container, _runDataCache.get(id));
+    return;
+  }
+
+  container.innerHTML = '<p class="run-url-loading">Loading…</p>';
+  try {
+    let fullData;
+    if (source === 'server') {
+      const res = await fetch(`/api/saves/${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(await res.text());
+      fullData = await res.json();
+    } else {
+      const entry = getHistory().find(e => e.id === id);
+      if (!entry) throw new Error('Not found in local history');
+      fullData = { pages: entry.data?.pages || [], apiCalls: entry.data?.apiCalls || {}, assets: entry.data?.assets || [] };
+    }
+    _runDataCache.set(id, fullData);
+    renderRunUrls(container, fullData);
+  } catch (err) {
+    container.innerHTML = `<p class="run-url-loading" style="color:var(--danger)">Failed: ${escapeHTML(err.message)}</p>`;
+  }
+}
+
+function renderRunUrls(container, data) {
+  const pages = data.pages || [];
+  const graphqlCalls = data.apiCalls?.graphql || [];
+  const restCalls = data.apiCalls?.rest || [];
+  const assets = data.assets || [];
+
+  if (!pages.length && !graphqlCalls.length && !restCalls.length) {
+    container.innerHTML = '<p class="run-url-loading">No data captured yet.</p>';
+    return;
+  }
+
+  // Map API calls and assets per page URL
+  const apiByUrl = new Map();
+  [...graphqlCalls, ...restCalls].forEach(call => {
+    const u = call.pageUrl || '';
+    apiByUrl.set(u, (apiByUrl.get(u) || 0) + 1);
+  });
+  const assetsByUrl = new Map();
+  assets.forEach(a => {
+    const u = a.pageUrl || '';
+    assetsByUrl.set(u, (assetsByUrl.get(u) || 0) + 1);
+  });
+
+  const rows = pages.map(p => {
+    const url = p.meta?.url || p.url || '';
+    const path = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
+    const title = p.meta?.title || '';
+    const apiCount = apiByUrl.get(url) || 0;
+    const assetCount = assetsByUrl.get(url) || 0;
+    return `<div class="run-url-row">
+      <div class="run-url-path" title="${escapeAttr(url)}">${escapeHTML(path)}</div>
+      <div class="run-url-caps">
+        <span class="run-cap run-cap-page" title="${escapeAttr(title)}">&#128196; ${escapeHTML((title || 'page').substring(0, 28))}${(title || '').length > 28 ? '…' : ''}</span>
+        ${apiCount ? `<span class="run-cap run-cap-api">&#128257; ${apiCount} API</span>` : ''}
+        ${assetCount ? `<span class="run-cap run-cap-asset">&#128444; ${assetCount}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="run-url-scroll">${rows || '<p class="run-url-loading">No pages recorded.</p>'}</div>`;
+}
+
+async function openRun(id, source) {
+  showToast('Loading run…');
+  try {
+    let fullData;
+    if (_runDataCache.has(id)) {
+      fullData = _runDataCache.get(id);
+    } else if (source === 'server') {
+      const res = await fetch(`/api/saves/${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(await res.text());
+      fullData = await res.json();
+      _runDataCache.set(id, fullData);
+    } else {
+      const entry = getHistory().find(e => e.id === id);
+      if (!entry) throw new Error('Run not found');
+      fullData = entry.data;
+      _runDataCache.set(id, fullData);
+    }
+
+    const data = {
+      pages: fullData.pages || [],
+      apiCalls: fullData.apiCalls || { graphql: [], rest: [] },
+      assets: fullData.assets || [],
+      failedPages: fullData.failedPages || [],
+      meta: { scrapedAt: fullData.lastSavedAt, targetUrl: fullData.startUrl },
+      visitedUrls: fullData.visitedUrls || [],
+    };
+
+    scrapedData = data;
+    activeRunId = id;
+
+    renderResults(data);
+    renderAPICalls(data.apiCalls);
+    renderAssets(data.assets);
+    enableRefactor(data);
+
+    const pageCount = data.pages?.length || 0;
+    const apiCount = (data.apiCalls?.graphql?.length || 0) + (data.apiCalls?.rest?.length || 0);
+    const rb = document.getElementById('results-badge');
+    if (rb) { rb.textContent = pageCount; rb.style.display = pageCount ? 'inline-block' : 'none'; }
+    const ab = document.getElementById('api-badge');
+    if (ab) { ab.textContent = apiCount; ab.style.display = apiCount ? 'inline-block' : 'none'; }
+
+    document.querySelectorAll('.run-card').forEach(c => c.classList.toggle('run-card--active', c.dataset.id === id));
+
+    const hostname = (() => { try { return new URL(fullData.startUrl || '').hostname; } catch { return fullData.startUrl || id; } })();
+    const banner = document.getElementById('runs-active-banner');
+    const label = document.getElementById('runs-active-label');
+    if (banner && label) { label.textContent = `Viewing: ${hostname} — ${pageCount} pages, ${apiCount} API calls`; banner.style.display = 'flex'; }
+
+    document.querySelector('[data-panel="results"]').click();
+    showToast(`Loaded — ${pageCount} pages, ${apiCount} API calls`);
+  } catch (e) { showToast('Load failed: ' + e.message); }
+}
+
+async function resumeRunById(id) {
+  const res = await fetch(`/api/saves/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(await res.text());
+  const save = await res.json();
+  const opts = save.options || {};
+  const url = save.startUrl || '';
+  const r = await fetch('/api/scrape', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url, fullCrawl: opts.fullCrawl !== false, maxPages: opts.maxPages || 0,
+      captureSpeed: opts.captureSpeed || 3, workerCount: opts.workerCount || 0,
+      autoScroll: opts.autoScroll || false, politeDelay: opts.politeDelay || 0,
+      captureGraphQL: opts.captureGraphQL !== false, captureREST: opts.captureREST !== false,
+      captureAssets: opts.captureAssets !== false, captureAllRequests: opts.captureAllRequests || false,
+      capturePageUrls: true, resumeFrom: id,
+    }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const { sessionId } = await r.json();
+  const displayName = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+  const favicon = `/api/favicon?url=${encodeURIComponent(url)}`;
+  createSessionPanel(sessionId, displayName, favicon, false);
+  activeSessions.set(sessionId, { name: displayName, faviconUrl: favicon, liveView: false, expanded: true });
+  appendSessionLog(sessionId, `Resuming from save ${id}`, 'info');
+  document.querySelector('[data-panel="scraper"]').click();
+}
+
 // ---- Diff panel ----
 function populateDiffDropdowns() {
   const history = getHistory();
@@ -2357,6 +2668,7 @@ document.getElementById('btn-refresh-saves')?.addEventListener('click', loadSave
 
 // ---- Initialize panels that need data on load ----
 renderHistory();
+loadRuns();
 
 // ---- Utilities ----
 function downloadJSON(data, filename) {

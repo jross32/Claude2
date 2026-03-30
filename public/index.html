@@ -41,11 +41,9 @@
         <button class="nav-item" data-panel="schedule">
           <span class="nav-icon">&#128336;</span> Schedule
         </button>
-        <button class="nav-item" data-panel="history">
-          <span class="nav-icon">&#128202;</span> History
-        </button>
-        <button class="nav-item" data-panel="saves">
-          <span class="nav-icon">&#128190;</span> Saves
+        <button class="nav-item" data-panel="runs">
+          <span class="nav-icon">&#128202;</span> Runs
+          <span class="badge" id="runs-badge" style="display:none">0</span>
         </button>
         <button class="nav-item" data-panel="apa-api">
           <span class="nav-icon">&#128306;</span> APA API
@@ -775,6 +773,24 @@
         </div>
         <div id="saves-list">
           <p class="empty-hint">No saved scrapes yet. Start a full crawl to see auto-saves here.</p>
+        </div>
+      </section>
+
+      <!-- ===== RUNS PANEL ===== -->
+      <section class="panel" id="panel-runs">
+        <div class="panel-header">
+          <h1>Runs</h1>
+          <p class="subtitle">Every scrape saved locally — click a card to load it into all tabs</p>
+          <div class="panel-actions">
+            <button class="btn-secondary" id="btn-refresh-runs">&#8635; Refresh</button>
+          </div>
+        </div>
+        <div id="runs-active-banner" class="runs-active-banner" style="display:none">
+          <span id="runs-active-label"></span>
+          <button class="btn-xs btn-secondary" id="btn-runs-clear">&#10005; Clear</button>
+        </div>
+        <div id="runs-list">
+          <p class="empty-hint" style="padding:32px 0;text-align:center">No runs yet. Complete a scrape to see it here.</p>
         </div>
       </section>
 
