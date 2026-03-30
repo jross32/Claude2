@@ -5,7 +5,10 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node --max-old-space-size=4096 src/server.js",
-    "dev": "nodemon --max-old-space-size=4096 src/server.js"
+    "dev": "nodemon --max-old-space-size=4096 src/server.js",
+    "save": "node autosave.js",
+    "test": "node tests/run.js smoke",
+    "test:all": "node tests/run.js all"
   },
   "dependencies": {
     "body-parser": "^1.20.2",

@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-03-30T19:29:55.880Z",
+  "git_commit": "d06719f",
+  "suite": "unit",
+  "tests": [],
+  "summary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 51,
+    "avg_duration_ms": 0
+  }
+}

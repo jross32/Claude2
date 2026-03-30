@@ -25,6 +25,7 @@ const { inferSchema } = require('./schema-inferrer');
 const { diffScrapes } = require('./diff');
 const { createSchedule, deleteSchedule, listSchedules } = require('./scheduler');
 const { generateReact, extractCSS, generateMarkdown, generateSitemap } = require('./generators');
+const gitAutosave = require('./git-autosave');
 
 const app = express();
 const server = http.createServer(app);
@@ -514,4 +515,5 @@ app.post('/api/schema', (req, res) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
+  gitAutosave.start();
 });

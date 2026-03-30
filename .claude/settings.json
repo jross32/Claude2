@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Write(C:\\Users\\justi\\Claude2\\**)",
+      "Edit(C:\\Users\\justi\\Claude2\\**)",
+      "Read(C:\\Users\\justi\\Claude2\\**)",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Claude_Preview__preview_stop",
+      "mcp__Claude_Preview__preview_screenshot",
+      "mcp__Claude_Preview__preview_list"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/syntax-check.js"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/update-skills-reference.js"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/secret-scan.js"
+          }
+        ]
+      }
+    ]
+  }
+}

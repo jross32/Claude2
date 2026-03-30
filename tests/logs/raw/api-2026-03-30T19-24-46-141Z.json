@@ -1,0 +1,112 @@
+{
+  "timestamp": "2026-03-30T19:24:46.138Z",
+  "git_commit": "d06719f",
+  "suite": "api",
+  "tests": [
+    {
+      "name": "GET /api/session/check with valid url → 200 + { exists: boolean }",
+      "status": "pass",
+      "duration_ms": 8,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "exists": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/session/check for poolplayers.com → exists field present",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "exists": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "DELETE /api/session with url → 200 + { cleared: boolean }",
+      "status": "fail",
+      "duration_ms": 8,
+      "error": "Expected 200, got 500",
+      "input": {},
+      "output": {},
+      "stack_trace": "Error: Expected 200, got 500\n    at C:\\Users\\justi\\Claude2\\tests\\api\\session.test.js:35:35\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:22)\n    at async main (C:\\Users\\justi\\Claude2\\tests\\api\\session.test.js:33:3)",
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/site-credentials for unknown site → { found: false }",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "found": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/site-credentials for poolplayers.com → { found: true, username: string }",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "found": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] GET /api/session/check with no url → { exists: false }",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "exists": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] DELETE /api/session with no url → does not 500",
+      "status": "fail",
+      "duration_ms": 4,
+      "error": "Server crashed with no url param",
+      "input": {},
+      "output": {},
+      "stack_trace": "Error: Server crashed with no url param\n    at C:\\Users\\justi\\Claude2\\tests\\api\\session.test.js:76:35\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:22)\n    at async main (C:\\Users\\justi\\Claude2\\tests\\api\\session.test.js:74:3)",
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] GET /api/site-credentials with no url → does not 500",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "passed": 6,
+    "failed": 2,
+    "skipped": 0,
+    "duration_ms": 3622,
+    "avg_duration_ms": 453
+  }
+}

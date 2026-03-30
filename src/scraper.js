@@ -303,6 +303,25 @@ class ScraperSession {
 
   async _dismissPopups(page, waitMs = 5000) {
     const tryDismiss = async () => {
+      // ── PRE-STEP: tick "Don't ask me again" checkbox inside any visible modal ──
+      await page.evaluate(() => {
+        const containers = [
+          document.querySelector('#modal'),
+          document.querySelector('[role="dialog"]'),
+          ...Array.from(document.querySelectorAll('[class*="modal"],[class*="Modal"],[class*="dialog"],[class*="Dialog"]')),
+        ].filter(Boolean);
+        const checkboxKws = ["don't ask", "don't show", "do not ask", "not again"];
+        for (const container of containers) {
+          for (const label of container.querySelectorAll('label')) {
+            const t = (label.textContent || '').toLowerCase();
+            if (checkboxKws.some(kw => t.includes(kw))) {
+              const cb = label.querySelector('input[type="checkbox"]') || (label.htmlFor && document.getElementById(label.htmlFor));
+              if (cb && !cb.checked) cb.click();
+            }
+          }
+        }
+      }).catch(() => {});
+
       // ── PRIMARY: el.click() from page context — fires all JS/React handlers directly ──
       const dismissed = await page.evaluate(() => {
         const texts = ['no thanks', 'no, thanks', 'not now', 'maybe later', 'skip', 'dismiss', "don't show", "don't ask"];
@@ -417,9 +436,18 @@ class ScraperSession {
     const harvestLinks = async () => {
       const links = await page.evaluate(({ _origin, _base }) => {
         const out = [];
-        document.querySelectorAll('a[href],[data-href],[data-url]').forEach(el => {
+        // Include [role="link"] and React-router data attributes in addition to plain <a href>
+        document.querySelectorAll(
+          'a[href],[data-href],[data-url],[role="link"],[data-route],[data-path],[data-to]'
+        ).forEach(el => {
           try {
-            const raw = el.href || el.getAttribute('data-href') || el.getAttribute('data-url');
+            const raw = el.href
+              || el.getAttribute('data-href')
+              || el.getAttribute('data-url')
+              || el.getAttribute('data-route')
+              || el.getAttribute('data-path')
+              || el.getAttribute('data-to');
+            if (!raw) return;
             const h = new URL(raw, _base).href;
             if (h.startsWith(_origin)) out.push(h);
           } catch {}
@@ -521,6 +549,63 @@ class ScraperSession {
       if (norm(page.url()) !== norm(url)) {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
       }
+
+      // ── 4. SPA nav button/div click-through ──────────────────────────────
+      // Finds buttons and non-link elements inside navigation containers that drive
+      // React-router / SPA navigation via onClick, then clicks each to surface routes.
+      const navItems = await page.evaluate(({ _origin }) => {
+        const skipTexts = /logout|log.?out|sign.?out|delete|remove|cancel|close/i;
+        const navContainers = Array.from(document.querySelectorAll(
+          'nav, [role="navigation"], [role="menu"], [role="menubar"], aside, ' +
+          '[class*="sidebar"], [class*="Sidebar"], [class*="NavMenu"], [class*="navMenu"], ' +
+          '[class*="nav-menu"], [class*="menu-list"], [class*="MenuList"]'
+        ));
+        const items = [];
+        for (const container of navContainers) {
+          for (const el of container.querySelectorAll(
+            'button:not([disabled]), [role="menuitem"], [role="option"], ' +
+            'li > div, li > span, [class*="nav-item"], [class*="NavItem"], [class*="menu-item"]'
+          )) {
+            // Skip plain links — those are already caught by harvestLinks
+            if (el.tagName === 'A' && el.href) continue;
+            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+            if (text.length < 2 || skipTexts.test(text)) continue;
+            const box = el.getBoundingClientRect();
+            if (box.width === 0 || box.height === 0) continue;
+            items.push({ text, x: box.x + box.width / 2, y: box.y + box.height / 2 });
+          }
+        }
+        // Deduplicate by text (case-insensitive)
+        const seen = new Set();
+        return items.filter(it => {
+          const k = it.text.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        }).slice(0, 25);
+      }, { _origin: origin }).catch(() => []);
+
+      for (const item of navItems) {
+        if (this.stopped) break;
+        try {
+          const beforeUrl = norm(page.url());
+          await page.mouse.move(item.x, item.y);
+          await page.mouse.click(item.x, item.y);
+          await page.waitForTimeout(600);
+          await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+          const afterUrl = page.url();
+          if (safe(afterUrl)) discovered.add(afterUrl);
+          await harvestLinks();
+          // Restore if click navigated away from origin page
+          if (norm(afterUrl) !== beforeUrl) {
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+            await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
+          }
+        } catch {}
+      }
+
+      // Final harvest after all interaction passes
+      await harvestLinks();
 
     } catch (err) {
       this.log(`Interaction discovery error on ${url}: ${err.message}`, 'warn');
@@ -2539,3 +2624,4 @@ class ScraperSession {
 }
 
 module.exports = ScraperSession;
+module.exports.clearSession = clearSession;
