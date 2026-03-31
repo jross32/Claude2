@@ -83,8 +83,42 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     btn.classList.add('active');
     const panelId = `panel-${btn.dataset.panel}`;
     document.getElementById(panelId)?.classList.add('active');
+    // Close mobile sidebar drawer when a nav item is tapped
+    document.body.classList.remove('sidebar-open');
   });
 });
+
+// ── Mobile sidebar drawer ────────────────────────────────────────────────────
+(function () {
+  const hamburger = document.getElementById('btn-hamburger');
+  const overlay   = document.getElementById('sidebar-overlay');
+  function openSidebar()  { document.body.classList.add('sidebar-open'); }
+  function closeSidebar() { document.body.classList.remove('sidebar-open'); }
+  hamburger?.addEventListener('click', openSidebar);
+  overlay?.addEventListener('click', closeSidebar);
+  // Swipe-left to close
+  let _touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { _touchStartX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!document.body.classList.contains('sidebar-open')) return;
+    if (_touchStartX - e.changedTouches[0].clientX > 60) closeSidebar();
+  }, { passive: true });
+})();
+
+// ── Theme toggle (sidebar + mobile topbar button) ────────────────────────────
+(function () {
+  const isDark = localStorage.getItem('wsp_theme') !== 'light';
+  if (!isDark) document.body.classList.add('light');
+
+  function toggleTheme() {
+    document.body.classList.toggle('light');
+    const isLight = document.body.classList.contains('light');
+    localStorage.setItem('wsp_theme', isLight ? 'light' : 'dark');
+  }
+
+  document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleTheme);
+  document.getElementById('btn-theme-toggle-mobile')?.addEventListener('click', toggleTheme);
+})();
 
 // ---- Runs panel state ----
 let activeRunId = null;
@@ -199,7 +233,6 @@ function openPresetModal(editIdx = -1) {
     setImagesUI(!!p.captureImages, p.imageLimit);
     setAvoidTags(p.avoidTags || ['logout', 'cart']);
     document.getElementById('preset-scroll').checked = p.autoScroll !== false;
-    document.getElementById('preset-dropdowns').checked = !!p.captureDropdowns;
     document.getElementById('preset-screenshots').checked = !!p.captureScreenshots;
     document.getElementById('preset-capture-speed').value = p.captureSpeed || 1;
     document.getElementById('preset-capture-speed-val').textContent = p.captureSpeed || 1;
@@ -223,7 +256,6 @@ function openPresetModal(editIdx = -1) {
     setImagesUI(captImgOn, document.getElementById('image-limit').value);
     setAvoidTags([...document.querySelectorAll('.avoid-tag:checked')].map(el => el.value));
     document.getElementById('preset-scroll').checked = document.getElementById('auto-scroll').checked;
-    document.getElementById('preset-dropdowns').checked = document.getElementById('capture-dropdowns').checked;
     document.getElementById('preset-screenshots').checked = document.getElementById('capture-screenshots').checked;
     const csVal = document.getElementById('capture-speed').value || 1;
     document.getElementById('preset-capture-speed').value = csVal;
@@ -296,7 +328,6 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
     imageLimit: captureImages ? (parseInt(document.getElementById('preset-image-limit').value) || 0) : 0,
     avoidTags: [...document.querySelectorAll('.preset-avoid-tag:checked')].map(el => el.value),
     autoScroll: document.getElementById('preset-scroll').checked,
-    captureDropdowns: document.getElementById('preset-dropdowns').checked,
     captureScreenshots: document.getElementById('preset-screenshots').checked,
     captureSpeed: parseInt(document.getElementById('preset-capture-speed').value, 10) || 1,
     workerCount: parseInt(document.getElementById('worker-count')?.value, 10) || 0,
@@ -367,7 +398,6 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   document.querySelectorAll('.avoid-tag').forEach(cb => { cb.checked = avoidTags.includes(cb.value); });
   renderAvoidPills('avoid-links-pills', '.avoid-tag');
   document.getElementById('auto-scroll').checked = preset.autoScroll !== false;
-  document.getElementById('capture-dropdowns').checked = !!preset.captureDropdowns;
   document.getElementById('capture-screenshots').checked = !!preset.captureScreenshots;
   const presetCsVal = preset.captureSpeed || 1;
   document.getElementById('capture-speed').value = presetCsVal;
@@ -603,7 +633,6 @@ async function startScrapeSession(name, faviconUrl) {
     captureImages: document.getElementById('capture-images').checked,
     imageLimit: parseInt(document.getElementById('image-limit').value, 10) || 0,
     autoScroll: document.getElementById('auto-scroll').checked,
-    captureDropdowns: document.getElementById('capture-dropdowns').checked,
     captureScreenshots: document.getElementById('capture-screenshots').checked,
     captureSpeed: parseInt(document.getElementById('capture-speed').value, 10) || 1,
     workerCount: parseInt(document.getElementById('worker-count').value, 10) || 0,

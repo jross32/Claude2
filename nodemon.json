@@ -1,0 +1,5 @@
+{
+  "watch": ["src/", "public/"],
+  "ignore": [".git/", "scrape-saves/", "references/", "tests/logs/", "node_modules/"],
+  "ext": "js,json,html,css"
+}

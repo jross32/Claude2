@@ -23,7 +23,7 @@ let _running = false;
 
 function git(...args) {
   return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd: REPO_ROOT }, (err, stdout, stderr) => {
+    execFile('git', args, { cwd: REPO_ROOT, maxBuffer: 50 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr.trim() || err.message));
       resolve(stdout.trim());
     });
@@ -54,8 +54,9 @@ async function autosave() {
   try {
     clearStaleLock();
 
-    // Stage everything (respects .gitignore)
-    await git('add', '-A');
+    // Stage only project source files — never references/ or scrape-saves/
+    const toStage = ['src/', 'public/', 'tests/', 'scripts/', '.claude/', 'CLAUDE.md', 'package.json', 'package-lock.json', 'autosave.js', '.gitignore'];
+    await git('add', '--', ...toStage);
 
     // Check if there's anything to commit
     const status = await git('status', '--porcelain');

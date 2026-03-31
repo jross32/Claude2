@@ -1233,11 +1233,9 @@ class ScraperSession {
     const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots, lightMode: true });
     const results = [pageData];
 
-    // Interact with dropdowns and capture each state
-    if (captureDropdowns) {
-      const dropdownResults = await this._interactDropdowns(page, url);
-      results.push(...dropdownResults);
-    }
+    // Always interact with dropdowns — captures new data exposed by each selection
+    const dropdownResults = await this._interactDropdowns(page, url);
+    results.push(...dropdownResults);
 
     if (depth > 1) {
       const links = (pageData.links || [])
@@ -1345,14 +1343,12 @@ class ScraperSession {
         await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
         const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots, lightMode: true });
 
-        // Interact with dropdowns and capture each state
-        if (captureDropdowns) {
-          const dropdownResults = await this._interactDropdowns(page, url);
-          dropdownResults.forEach(dr => {
-            dr._crawl = { depth: pathDepth(url), index: results.length + 1, pathname, section: getSection(url), discoveryOrder: 0, parent: null, inboundCount: 0 };
-            results.push(dr);
-          });
-        }
+        // Always interact with dropdowns — captures new data exposed by each selection
+        const dropdownResults = await this._interactDropdowns(page, url);
+        dropdownResults.forEach(dr => {
+          dr._crawl = { depth: pathDepth(url), index: results.length + 1, pathname, section: getSection(url), discoveryOrder: 0, parent: null, inboundCount: 0 };
+          results.push(dr);
+        });
 
         // Attach crawl metadata to each page
         pageData._crawl = {
@@ -2122,10 +2118,9 @@ class ScraperSession {
         const pageData = await extractPageData(page, url, { captureScreenshots: this._captureScreenshots, lightMode: true });
         if (!pageData) { shared.active--; continue; }
 
-        if (captureDropdowns) {
-          const dr = await this._interactDropdowns(page, url);
-          results.push(...dr);
-        }
+        // Always interact with dropdowns — captures new data exposed by each selection
+        const dr = await this._interactDropdowns(page, url);
+        results.push(...dr);
 
         pageData._crawl = {
           depth: pathDepth(url),

@@ -6,7 +6,7 @@ All available slash commands for this project.
 > To change a skill, edit its `.claude/commands/[name].md` file.
 > To add a skill, create a new `.claude/commands/[name].md` — this file will regenerate automatically.
 
-_Last updated: 2026-03-30 · 6 skills_
+_Last updated: 2026-03-31 · 6 skills_
 
 ---
 

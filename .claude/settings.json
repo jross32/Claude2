@@ -5,6 +5,8 @@
       "Write(C:\\Users\\justi\\Claude2\\**)",
       "Edit(C:\\Users\\justi\\Claude2\\**)",
       "Read(C:\\Users\\justi\\Claude2\\**)",
+      "Write(C:\\Users\\justi\\Claude2\\.claude\\**)",
+      "Edit(C:\\Users\\justi\\Claude2\\.claude\\**)",
       "mcp__Claude_Preview__preview_start",
       "mcp__Claude_Preview__preview_stop",
       "mcp__Claude_Preview__preview_screenshot",

@@ -55,8 +55,17 @@
       </div>
     </aside>
 
+    <!-- Mobile sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <!-- Main content -->
     <main class="main">
+      <!-- Mobile top bar -->
+      <div class="mobile-topbar">
+        <button class="btn-hamburger" id="btn-hamburger" aria-label="Open menu">&#9776;</button>
+        <span class="mobile-logo">WebScraper<span class="accent">Pro</span></span>
+        <button class="btn-theme-toggle" id="btn-theme-toggle-mobile" title="Toggle theme">&#9728;</button>
+      </div>
 
       <!-- ===== SCRAPER PANEL ===== -->
       <section class="panel active" id="panel-scraper">
@@ -182,10 +191,6 @@
                 <span>Auto-scroll (trigger lazy loads)</span>
               </label>
               <label class="checkbox-label">
-                <input type="checkbox" id="capture-dropdowns" />
-                <span>Interact with dropdowns (capture all options)</span>
-              </label>
-              <label class="checkbox-label">
                 <input type="checkbox" id="capture-screenshots" />
                 <span>Capture page screenshots (slower, larger results)</span>
               </label>
@@ -234,13 +239,13 @@
               <label class="live-view-toggle-label">
                 <span>Live Browser View</span>
                 <span class="hint" style="margin-left:6px">stream screenshots in-page</span>
-                <button type="button" id="live-view-btn" class="live-view-toggle-btn active" data-active="true">
+                <button type="button" id="live-view-btn" class="live-view-toggle-btn" data-active="false">
                   <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                  <span class="toggle-label-text" id="live-view-label">ON</span>
+                  <span class="toggle-label-text" id="live-view-label">OFF</span>
                 </button>
               </label>
             </div>
-            <input type="hidden" id="live-view" value="true" />
+            <input type="hidden" id="live-view" value="false" />
             <div class="field">
               <label for="slow-motion">
                 Slow Motion
@@ -337,9 +342,8 @@
                 <label>Browser Options</label>
                 <div class="checkboxes">
                   <label class="checkbox-label"><input type="checkbox" id="preset-scroll" checked /><span>Auto-scroll</span></label>
-                  <label class="checkbox-label"><input type="checkbox" id="preset-liveview" checked /><span>&#127909; Live Browser View</span></label>
+                  <label class="checkbox-label"><input type="checkbox" id="preset-liveview" /><span>&#127909; Live Browser View</span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-fullcrawl" /><span>&#127760; Full site crawl</span></label>
-                  <label class="checkbox-label"><input type="checkbox" id="preset-dropdowns" /><span>Interact with dropdowns</span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-screenshots" /><span>Capture page screenshots</span></label>
                   <label class="checkbox-label"><input type="checkbox" id="preset-limitdepth" /><span>Limit scrape depth
                     <span id="preset-depth-wrap" style="display:none;margin-left:8px">

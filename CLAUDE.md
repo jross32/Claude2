@@ -299,6 +299,65 @@ const TESTING = {
 
 ---
 
+## Frontend Conventions
+
+These rules keep the UI consistent when new tabs, panels, or features are added.
+**Follow them any time `public/` is touched.**
+
+### Breakpoint System (6 tiers — never collapse to fewer)
+
+| Name | Range | Key behaviors |
+|------|-------|---------------|
+| `xs` | `< 480px` | Sidebar drawer (position:fixed, slides in), 1-col checkboxes, 44px tap targets |
+| `sm` | `480–767px` | Sidebar drawer, 2-col checkboxes |
+| `md` | `768–1023px` | 64px icon-only sidebar, 2-col checkboxes |
+| `lg` | `1024–1279px` | 200px sidebar visible, 3-col checkboxes, `clamp()` padding |
+| `xl` | `1280–1535px` | 220px sidebar, flex-wrap checkboxes |
+| `2xl` | `≥ 1536px` | 240px sidebar, fluid `clamp()` sizing, auto-fill checkboxes |
+| `4K` | `≥ 2560px` | Font `clamp(16px, 0.75vw, 22px)`, `max-width: 1400px` container |
+
+### Adding a New Nav Tab / Panel
+
+1. Add a `<button class="nav-item" data-panel="your-panel-id">` inside `.sidebar` in `index.html`.
+2. Add a matching `<section class="panel" id="panel-your-panel-id">` inside `.main` in `index.html`.
+3. The existing nav-item click handler in `app.js` activates panels automatically — no JS changes needed unless the panel has interactive logic.
+4. The mobile topbar is global — new panels do **not** get their own mobile header.
+
+### CSS Rules for New UI
+
+- **Colors:** Always use CSS variables (`--bg`, `--surface`, `--accent`, `--text`, `--border`, etc.). Never hardcode hex/rgb values in new rules.
+- **Checkbox groups:** Wrap in `<div class="checkboxes">` — the responsive grid is handled automatically.
+- **Form sections:** Use `.form-card` > `.form-section` pattern.
+- **Buttons:** Use `.btn-primary`, `.btn-secondary`, `.btn-danger` etc. Touch targets (min 44×44px) are handled by the class.
+- **Typography:** Use `clamp()` at `2xl`+ breakpoints for fluid sizing. Never use fixed `px` font sizes that won't scale.
+- **New layout regions:** Must include responsive rules for at least `xs` (mobile) and `xl` (desktop) breakpoints.
+
+### Verification Rule
+
+After any non-trivial frontend change, verify at **two widths minimum**:
+- `375px` (iPhone SE — smallest common phone)
+- `1280px` (standard laptop)
+
+If using the preview tool: `preview_resize` to each width and take a screenshot. Flag any overflow, clipped content, or broken layout before committing.
+
+### Smoke Test (Responsive)
+
+`tests/smoke/` includes a responsive layout check at 375px and 1280px using Playwright.
+Run it after significant `public/` changes to catch regressions automatically.
+
+```js
+// ── FRONTEND CONVENTIONS (edit me) ────────────────────────────────────────
+const FRONTEND_CONVENTIONS = {
+  breakpointTiers:        6,       // never collapse — always xs/sm/md/lg/xl/2xl (+ 4K)
+  alwaysUseCSSVars:       true,    // no hardcoded colors ever
+  verifyAtWidths:         [375, 1280],  // px — minimum check after frontend changes
+  newPanelPattern:        'data-panel + matching section.panel',
+  mobileTopbarIsGlobal:   true,    // one topbar for all panels — don't add per-panel headers
+};
+```
+
+---
+
 ## references/ Folder
 
 This folder contains repos and reference material Justin will point to when needed.
