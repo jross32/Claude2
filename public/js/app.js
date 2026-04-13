@@ -1757,6 +1757,24 @@ document.getElementById('btn-copy-json').addEventListener('click', () => {
   showToast('JSON copied to clipboard!');
 });
 
+document.getElementById('btn-download-har').addEventListener('click', () => {
+  if (!scrapedData?.har) return showToast('No HAR data — run a scrape first');
+  downloadJSON(scrapedData.har, 'network.har');
+});
+
+document.getElementById('btn-split-view').addEventListener('click', function () {
+  const layout = document.getElementById('results-layout');
+  const screenshotWrap = document.getElementById('screenshot-wrap');
+  if (!layout) return;
+  const on = layout.classList.toggle('split-view');
+  this.innerHTML = on ? '&#9700; Single View' : '&#9700; Split View';
+  if (on) {
+    screenshotWrap.style.display = 'block';
+  } else {
+    if (!scrapedData?.pages?.[0]?.screenshot) screenshotWrap.style.display = 'none';
+  }
+});
+
 // ---- API Calls rendering ----
 function extractGQLName(call) {
   // 1. Use operationName from the request body
