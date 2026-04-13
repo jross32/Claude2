@@ -1,25 +1,28 @@
 # Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-13T22:27:58.300Z
-**Commit:** `e3987aa`
-**Duration:** 3520ms
+**Run:** 2026-04-13T22:28:01.216Z
+**Commit:** `7f3fadc`
+**Duration:** 2558ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 6 | 6 | 0 | 0 |
+| 9 | 9 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/saves → 200 + array | pass | 383ms | |
-| ✅ | GET /api/saves items have expected shape | pass | 333ms | |
-| ✅ | GET /api/saves/:id with unknown id → 404 + error | pass | 5ms | |
-| ✅ | DELETE /api/saves/:id with unknown id → 200 + { ok: true } | pass | 5ms | |
-| ✅ | [chaos] GET /api/saves/:id with empty id segment → 404 | pass | 306ms | |
-| ✅ | [chaos] DELETE /api/saves/:id with special chars in id | pass | 2ms | |
+| ✅ | GET /api/schedules → 200 + array | pass | 16ms | |
+| ✅ | POST /api/schedules with valid data → 200 + { id, message } | pass | 33ms | |
+| ✅ | GET /api/schedules after create → contains new schedule | pass | 4ms | |
+| ✅ | DELETE /api/schedules/:id for existing → 200 + message | pass | 4ms | |
+| ✅ | GET /api/schedules after delete → schedule is gone | pass | 4ms | |
+| ✅ | DELETE /api/schedules/:id for unknown → 404 | pass | 3ms | |
+| ✅ | [chaos] POST /api/schedules with no cronExpr → 400 | pass | 5ms | |
+| ✅ | [chaos] POST /api/schedules with no scrapeOptions → 400 | pass | 3ms | |
+| ✅ | [chaos] POST /api/schedules with invalid cron → 400 | pass | 4ms | |
 
 
