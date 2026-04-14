@@ -13,39 +13,40 @@
       <div class="logo">
         <span class="logo-icon">&#9741;</span>
         <span class="logo-text">WebScraper<span class="accent">Pro</span></span>
+        <button class="sidebar-collapse-btn" id="btn-sidebar-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">&#9664;</button>
       </div>
       <nav class="nav">
-        <button class="nav-item active" data-panel="scraper">
+        <button class="nav-item active" data-panel="scraper" title="Scraper">
           <span class="nav-icon">&#128247;</span> Scraper
         </button>
-        <button class="nav-item" data-panel="results">
+        <button class="nav-item" data-panel="results" title="Results">
           <span class="nav-icon">&#128196;</span> Results
           <span class="badge" id="results-badge" style="display:none">0</span>
         </button>
-        <button class="nav-item" data-panel="api-calls">
+        <button class="nav-item" data-panel="api-calls" title="API Calls">
           <span class="nav-icon">&#128257;</span> API Calls
           <span class="badge" id="api-badge" style="display:none">0</span>
         </button>
-        <button class="nav-item" data-panel="assets">
+        <button class="nav-item" data-panel="assets" title="Assets">
           <span class="nav-icon">&#128444;</span> Assets
         </button>
-        <button class="nav-item" data-panel="refactor">
+        <button class="nav-item" data-panel="refactor" title="Refactor">
           <span class="nav-icon">&#9998;</span> Refactor
         </button>
-        <button class="nav-item" data-panel="batch">
+        <button class="nav-item" data-panel="batch" title="Batch">
           <span class="nav-icon">&#128295;</span> Batch
         </button>
-        <button class="nav-item" data-panel="diff">
+        <button class="nav-item" data-panel="diff" title="Diff">
           <span class="nav-icon">&#9870;</span> Diff
         </button>
-        <button class="nav-item" data-panel="schedule">
+        <button class="nav-item" data-panel="schedule" title="Schedule">
           <span class="nav-icon">&#128336;</span> Schedule
         </button>
-        <button class="nav-item" data-panel="runs">
+        <button class="nav-item" data-panel="runs" title="Runs">
           <span class="nav-icon">&#128202;</span> Runs
           <span class="badge" id="runs-badge" style="display:none">0</span>
         </button>
-        <button class="nav-item" data-panel="apa-api">
+        <button class="nav-item" data-panel="apa-api" title="APA API">
           <span class="nav-icon">&#128306;</span> APA API
         </button>
       </nav>
@@ -155,45 +156,61 @@
               <span style="font-size:0.75rem;color:var(--text3)">(wait between pages)</span>
             </div>
 
-            <div class="checkboxes">
-              <label class="checkbox-label">
-                <input type="checkbox" id="capture-urls" checked />
-                <span>Capture Visited URLs</span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="capture-graphql" checked />
-                <span>Capture GraphQL Calls</span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="capture-rest" checked />
-                <span>Capture REST API Calls</span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="capture-assets" />
-                <span>Capture Asset URLs (images, fonts, scripts)</span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="capture-all-requests" />
-                <span>Capture ALL network requests (full HAR)</span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="capture-images" />
-                <span>Download images as base64
-                  <span id="images-inline-wrap" style="display:none;margin-left:8px">
-                    — <input type="number" id="image-limit" min="0" value="0" style="width:60px;display:inline-block;padding:2px 6px"
-                      title="0 = unlimited" />
-                    <span class="hint">max (0 = unlimited)</span>
+            <div class="capture-modes-row">
+              <div class="capture-mode-summary">
+                <span class="capture-mode-label">Capture Mode:</span>
+                <span class="capture-mode-current" id="capture-mode-current">Default</span>
+              </div>
+              <button class="btn-secondary btn-sm" id="btn-capture-modes" type="button">&#9881; Capture Modes</button>
+            </div>
+            <div class="capture-mode-hint">Choose a preset to simplify capture settings. Select <strong>Custom</strong> to edit what gets captured.</div>
+
+            <!-- Hidden capture inputs (kept for payload compatibility) -->
+            <div class="capture-options-hidden" id="capture-options-hidden" style="display:none">
+              <div class="checkboxes">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-urls" checked />
+                  <span>Capture Visited URLs</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-graphql" checked />
+                  <span>Capture GraphQL Calls</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-rest" checked />
+                  <span>Capture REST API Calls</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-assets" />
+                  <span>Capture Asset URLs (images, fonts, scripts)</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-all-requests" />
+                  <span>Capture ALL network requests (full HAR)</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-images" />
+                  <span>Download images as base64
+                    <span id="images-inline-wrap" style="display:none;margin-left:8px">
+                      — <input type="number" id="image-limit" min="0" value="0" style="width:60px;display:inline-block;padding:2px 6px"
+                        title="0 = unlimited" />
+                      <span class="hint">max (0 = unlimited)</span>
+                    </span>
                   </span>
-                </span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="auto-scroll" checked />
-                <span>Auto-scroll (trigger lazy loads)</span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="capture-screenshots" />
-                <span>Capture page screenshots (slower, larger results)</span>
-              </label>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="auto-scroll" checked />
+                  <span>Auto-scroll (trigger lazy loads)</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-screenshots" />
+                  <span>Capture page screenshots (slower, larger results)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Crawl scope (visible) -->
+            <div class="checkboxes capture-scope">
               <label class="checkbox-label" id="full-crawl-label" title="Follows every internal link on the site, ordered by path depth. Ignores the depth slider.">
                 <input type="checkbox" id="full-crawl" />
                 <span>&#127760; Full site crawl (every internal link)</span>
@@ -384,6 +401,45 @@
             <div class="modal-footer">
               <button class="btn-secondary" id="btn-confirm-cancel">Cancel</button>
               <button class="btn-primary" id="btn-confirm-run">&#9654; Yes, Run It</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Capture Modes Modal -->
+        <div class="modal-backdrop" id="capture-modes-backdrop" style="display:none">
+          <div class="modal-box capture-modes-modal" id="capture-modes-modal">
+            <div class="modal-header">
+              <span id="capture-modes-title">&#9881; Capture Modes</span>
+              <button class="modal-close" id="btn-capture-modes-close">&#10005;</button>
+            </div>
+            <div class="modal-body">
+              <!-- List view -->
+              <div id="capture-modes-list-view">
+                <div class="cm-list" id="cm-list"></div>
+              </div>
+
+              <!-- Detail view -->
+              <div id="capture-modes-detail-view" style="display:none">
+                <div class="cm-detail-header">
+                  <div class="cm-detail-icon" id="cm-detail-icon"></div>
+                  <div class="cm-detail-meta">
+                    <div class="cm-detail-name" id="cm-detail-name"></div>
+                    <div class="cm-detail-sub" id="cm-detail-sub"></div>
+                  </div>
+                </div>
+                <div class="cm-detail-desc" id="cm-detail-desc"></div>
+                <div class="cm-options" id="cm-options"></div>
+                <div class="cm-notice" id="cm-notice" aria-live="polite">
+                  To enable/disable capture options, choose "Custom" for a Capture Option.
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer cm-footer">
+              <button class="btn-secondary" id="btn-cm-back" type="button" style="display:none">&#9664; Back</button>
+              <div class="cm-footer-right">
+                <button class="btn-secondary" id="btn-cm-cancel" type="button">Close</button>
+                <button class="btn-primary" id="btn-cm-primary" type="button" style="display:none">Use this mode</button>
+              </div>
             </div>
           </div>
         </div>

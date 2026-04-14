@@ -120,6 +120,46 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
   document.getElementById('btn-theme-toggle-mobile')?.addEventListener('click', toggleTheme);
 })();
 
+// ── Desktop sidebar collapse (default closed) ────────────────────────────────
+(function () {
+  const btn = document.getElementById('btn-sidebar-collapse');
+  const mq = window.matchMedia('(min-width: 1024px)');
+
+  function updateBtn(collapsed) {
+    if (!btn) return;
+    btn.innerHTML = collapsed ? '&#9654;' : '&#9664;';
+    const title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+  }
+
+  function applyFromStorage() {
+    if (!mq.matches) {
+      document.body.classList.remove('sidebar-collapsed');
+      updateBtn(false);
+      return;
+    }
+    const stored = localStorage.getItem('wsp_sidebar_collapsed');
+    const collapsed = stored !== 'false'; // default: collapsed
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    updateBtn(collapsed);
+  }
+
+  btn?.addEventListener('click', () => {
+    if (!mq.matches) return;
+    const nextCollapsed = !document.body.classList.contains('sidebar-collapsed');
+    document.body.classList.toggle('sidebar-collapsed', nextCollapsed);
+    localStorage.setItem('wsp_sidebar_collapsed', nextCollapsed ? 'true' : 'false');
+    updateBtn(nextCollapsed);
+  });
+
+  // Keep state sensible when resizing across the desktop breakpoint
+  if (mq.addEventListener) mq.addEventListener('change', applyFromStorage);
+  else mq.addListener?.(applyFromStorage);
+
+  applyFromStorage();
+})();
+
 // ---- Runs panel state ----
 let activeRunId = null;
 const _runDataCache = new Map(); // cache full run data keyed by run id
@@ -399,6 +439,7 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   renderAvoidPills('avoid-links-pills', '.avoid-tag');
   document.getElementById('auto-scroll').checked = preset.autoScroll !== false;
   document.getElementById('capture-screenshots').checked = !!preset.captureScreenshots;
+  syncCaptureModeLabel();
   const presetCsVal = preset.captureSpeed || 1;
   document.getElementById('capture-speed').value = presetCsVal;
   const presetWc = preset.workerCount || 0;
