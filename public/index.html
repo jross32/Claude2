@@ -171,7 +171,10 @@
                 <span class="capture-mode-label">Capture Mode:</span>
                 <span class="capture-mode-current" id="capture-mode-current">Default</span>
               </div>
-              <button class="btn-secondary btn-sm" id="btn-capture-modes" type="button">&#9881; Capture Modes</button>
+              <div class="capture-modes-actions">
+                <button class="btn-primary capture-modes-btn" id="btn-capture-modes" type="button">&#9881; Capture Modes</button>
+                <button class="btn-secondary capture-help-btn" id="btn-scraper-help" type="button" title="Help">&#10067; Help</button>
+              </div>
             </div>
             <div class="capture-mode-hint">Choose a preset to simplify capture settings. Select <strong>Custom</strong> to edit what gets captured.</div>
 
@@ -450,6 +453,22 @@
                 <button class="btn-secondary" id="btn-cm-cancel" type="button">Close</button>
                 <button class="btn-primary" id="btn-cm-primary" type="button" style="display:none">Use this mode</button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scraper Help Modal -->
+        <div class="modal-backdrop" id="scraper-help-backdrop" style="display:none">
+          <div class="modal-box help-modal" id="scraper-help-modal">
+            <div class="modal-header">
+              <span>&#10067; Scraper Help</span>
+              <button class="modal-close" id="btn-scraper-help-close">&#10005;</button>
+            </div>
+            <div class="modal-body">
+              <div id="scraper-help-content"></div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-secondary" id="btn-scraper-help-dismiss" type="button">Close</button>
             </div>
           </div>
         </div>

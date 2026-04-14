@@ -1147,6 +1147,103 @@ function _iconSvg(kind) {
   })();
 })();
 
+// ── Scraper help modal ───────────────────────────────────────────────────────
+(function initScraperHelpUI() {
+  const btn = document.getElementById('btn-scraper-help');
+  const backdrop = document.getElementById('scraper-help-backdrop');
+  const closeBtn = document.getElementById('btn-scraper-help-close');
+  const dismissBtn = document.getElementById('btn-scraper-help-dismiss');
+  const content = document.getElementById('scraper-help-content');
+
+  if (!btn || !backdrop || !content) return;
+
+  function badge(label) {
+    return `<span class="preset-badge">${escapeHTML(label)}</span>`;
+  }
+
+  function summarizeBadges(preset) {
+    if (preset.id === 'custom') return badge('Editable');
+    const o = preset.options || {};
+    const b = [];
+    if (o.capturePageUrls) b.push(badge('URLs'));
+    if (o.captureGraphQL) b.push(badge('GraphQL'));
+    if (o.captureREST) b.push(badge('REST'));
+    if (o.captureAssets) b.push(badge('Assets'));
+    if (o.captureAllRequests) b.push(badge('Network (HAR)'));
+    if (o.captureImages) b.push(badge('Images'));
+    if (o.captureScreenshots) b.push(badge('Screenshots'));
+    if (o.autoScroll) b.push(badge('Auto-scroll'));
+    return b.join('');
+  }
+
+  function renderHelp() {
+    const modes = _CAPTURE_PRESETS.map(p => `
+      <div class="help-mode-card">
+        <div class="help-mode-icon">${_iconSvg(p.icon)}</div>
+        <div>
+          <div class="help-mode-title">${escapeHTML(p.name)}</div>
+          <div class="help-mode-short">${escapeHTML(p.short || '')}</div>
+          <div class="help-mode-badges">${summarizeBadges(p)}</div>
+          <div class="help-mode-desc">${escapeHTML(p.description || '')}</div>
+        </div>
+      </div>
+    `).join('');
+
+    const customOpts = _CAPTURE_OPTION_META.map(m => `<li><strong>${escapeHTML(m.label)}:</strong> ${escapeHTML(m.tooltip)}</li>`).join('');
+
+    content.innerHTML = `
+      <div class="help-section">
+        <div class="help-note">
+          <strong>Tip:</strong> Start with <strong>Default</strong>, then switch modes based on your goal (site mapping, API discovery, media collection, or full forensic capture).
+        </div>
+
+        <div>
+          <h3 class="help-h3">Quick Start</h3>
+          <ol class="help-ol">
+            <li>Enter a URL in <strong>Target Website</strong> (optional: click <strong>Detect</strong> to preview the site).</li>
+            <li>Click <strong>Capture Modes</strong> to pick a preset, or use <strong>Custom</strong> to choose exactly what to capture.</li>
+            <li>Set crawl scope: <strong>Max Pages</strong>, <strong>Full site crawl</strong>, and/or <strong>Limit scrape depth</strong>. Use <strong>Skip Links</strong> to avoid logout/cart pages.</li>
+            <li>Click <strong>Start Scraping</strong>. If the site requires login, follow the in-app prompt.</li>
+            <li>Review outputs in <strong>Results</strong>, <strong>API Calls</strong>, and <strong>Assets</strong>. Use <strong>Saved Scrapes</strong> → <strong>Save Current</strong> to reuse settings later.</li>
+          </ol>
+        </div>
+
+        <div>
+          <h3 class="help-h3">Capture Modes</h3>
+          <div class="help-modes-grid">
+            ${modes}
+          </div>
+        </div>
+
+        <div>
+          <h3 class="help-h3">Custom Capture Options</h3>
+          <ul class="help-ul">
+            ${customOpts}
+            <li><strong>Image limit:</strong> When downloading images, set max images per run (0 = unlimited).</li>
+          </ul>
+        </div>
+      </div>
+    `;
+  }
+
+  function openHelp() {
+    renderHelp();
+    backdrop.style.display = 'flex';
+  }
+
+  function closeHelp() {
+    backdrop.style.display = 'none';
+  }
+
+  btn.addEventListener('click', openHelp);
+  closeBtn?.addEventListener('click', closeHelp);
+  dismissBtn?.addEventListener('click', closeHelp);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeHelp(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && backdrop.style.display === 'flex') closeHelp();
+  });
+})();
+
 // ---- Avoid Links toggle ----
 document.getElementById('avoid-links-toggle').addEventListener('click', () => {
   const panel = document.getElementById('avoid-links-panel');
