@@ -609,6 +609,544 @@ document.getElementById('capture-images').addEventListener('change', function ()
 document.getElementById('image-limit').addEventListener('click', e => e.stopPropagation());
 document.getElementById('image-limit').addEventListener('mousedown', e => e.stopPropagation());
 
+// ── Capture Modes (presets + custom) ─────────────────────────────────────────
+const CAPTURE_MODE_KEY = 'wsp_capture_mode';
+const CAPTURE_CUSTOM_KEY = 'wsp_capture_custom';
+
+const _CAPTURE_FORM_IDS = {
+  capturePageUrls: 'capture-urls',
+  captureGraphQL: 'capture-graphql',
+  captureREST: 'capture-rest',
+  captureAssets: 'capture-assets',
+  captureAllRequests: 'capture-all-requests',
+  captureImages: 'capture-images',
+  autoScroll: 'auto-scroll',
+  captureScreenshots: 'capture-screenshots',
+  imageLimit: 'image-limit',
+};
+
+const _CAPTURE_OPTION_META = [
+  {
+    key: 'capturePageUrls',
+    label: 'Capture Visited URLs',
+    tooltip: 'Saves the list of pages visited so you can review coverage and export a sitemap.',
+  },
+  {
+    key: 'captureGraphQL',
+    label: 'Capture GraphQL Calls',
+    tooltip: 'Intercepts GraphQL requests/responses so you can replay queries and extract structured data.',
+  },
+  {
+    key: 'captureREST',
+    label: 'Capture REST API Calls',
+    tooltip: 'Intercepts REST/JSON endpoints so you can reproduce requests and build clean exports.',
+  },
+  {
+    key: 'captureAssets',
+    label: 'Capture Asset URLs',
+    tooltip: 'Collects asset URLs like images, fonts, and scripts discovered during the crawl.',
+  },
+  {
+    key: 'captureAllRequests',
+    label: 'Capture ALL network requests (full HAR)',
+    tooltip: 'Records the full network log (HAR-like) for deep debugging and analysis.',
+  },
+  {
+    key: 'captureImages',
+    label: 'Download images as base64',
+    tooltip: 'Downloads images and embeds them as base64 so the export is self-contained.',
+  },
+  {
+    key: 'autoScroll',
+    label: 'Auto-scroll (trigger lazy loads)',
+    tooltip: 'Scrolls pages automatically to trigger lazy-loaded content before capture.',
+  },
+  {
+    key: 'captureScreenshots',
+    label: 'Capture page screenshots',
+    tooltip: 'Captures screenshots for visual QA (slower and produces larger results).',
+  },
+];
+
+const _CAPTURE_PRESETS = [
+  {
+    id: 'default',
+    name: 'Default',
+    short: 'Balanced coverage for most sites.',
+    description: 'A sensible starting point that captures the essentials without creating huge exports. It focuses on URLs plus GraphQL/REST APIs so you can quickly find structured data. Use this for most projects unless you have a specific goal like media collection or full network tracing.',
+    options: {
+      capturePageUrls: true,
+      captureGraphQL: true,
+      captureREST: true,
+      captureAssets: false,
+      captureAllRequests: false,
+      captureImages: false,
+      autoScroll: true,
+      captureScreenshots: false,
+      imageLimit: 0,
+    },
+    icon: 'spark',
+    lock: true,
+  },
+  {
+    id: 'sitemap',
+    name: 'Site Map',
+    short: 'Just the crawl coverage + URLs.',
+    description: 'Great for quickly mapping a site and understanding what the crawler can reach. It captures visited URLs so you can see coverage and prioritize pages to scrape later. This mode avoids heavy exports (no APIs, no HAR, no media).',
+    options: {
+      capturePageUrls: true,
+      captureGraphQL: false,
+      captureREST: false,
+      captureAssets: false,
+      captureAllRequests: false,
+      captureImages: false,
+      autoScroll: true,
+      captureScreenshots: false,
+      imageLimit: 0,
+    },
+    icon: 'map',
+    lock: true,
+  },
+  {
+    id: 'api',
+    name: 'API Detective',
+    short: 'APIs + full network log for debugging.',
+    description: 'Designed to discover and debug APIs powering the site. It captures GraphQL and REST calls and records all network requests so you can trace redirects, headers, and hidden endpoints. Use this when you need maximum visibility into network traffic and data sources.',
+    options: {
+      capturePageUrls: true,
+      captureGraphQL: true,
+      captureREST: true,
+      captureAssets: false,
+      captureAllRequests: true,
+      captureImages: false,
+      autoScroll: true,
+      captureScreenshots: false,
+      imageLimit: 0,
+    },
+    icon: 'nodes',
+    lock: true,
+  },
+  {
+    id: 'media',
+    name: 'Media Collector',
+    short: 'Assets + images for media-heavy sites.',
+    description: 'Optimized for collecting media from pages (images and asset URLs). It turns on asset capture and image downloads while keeping API capture off to reduce noise. Use this for galleries, product catalogs, or sites where media is the main target.',
+    options: {
+      capturePageUrls: true,
+      captureGraphQL: false,
+      captureREST: false,
+      captureAssets: true,
+      captureAllRequests: false,
+      captureImages: true,
+      autoScroll: true,
+      captureScreenshots: false,
+      imageLimit: 0,
+    },
+    icon: 'image',
+    lock: true,
+  },
+  {
+    id: 'everything',
+    name: 'Everything',
+    short: 'Turns on all capture options.',
+    description: 'Maximum capture for deep investigation and complete exports. It enables URLs, GraphQL, REST, assets, full network requests, image downloads, and screenshots. Use this when you need a full forensic snapshot — expect slower runs and larger results.',
+    options: {
+      capturePageUrls: true,
+      captureGraphQL: true,
+      captureREST: true,
+      captureAssets: true,
+      captureAllRequests: true,
+      captureImages: true,
+      autoScroll: true,
+      captureScreenshots: true,
+      imageLimit: 0,
+    },
+    icon: 'stack',
+    lock: true,
+  },
+  {
+    id: 'custom',
+    name: 'Custom',
+    short: 'Pick exactly what to capture.',
+    description: 'Use Custom to enable or disable individual capture options. This is the mode to use when you are tuning performance, reducing export size, or targeting only specific data sources. Your selections are saved so your preferred setup persists across reloads.',
+    options: null,
+    icon: 'sliders',
+    lock: false,
+  },
+];
+
+function _getCaptureModeById(id) {
+  return _CAPTURE_PRESETS.find(p => p.id === id) || _CAPTURE_PRESETS[0];
+}
+
+function _coerceBool(v) { return v === true; }
+
+function _readCaptureOptionsFromForm() {
+  const getCb = (id) => !!document.getElementById(id)?.checked;
+  const img = parseInt(document.getElementById(_CAPTURE_FORM_IDS.imageLimit)?.value, 10);
+  const imageLimit = Number.isFinite(img) ? Math.max(0, img) : 0;
+  return {
+    capturePageUrls: getCb(_CAPTURE_FORM_IDS.capturePageUrls),
+    captureGraphQL: getCb(_CAPTURE_FORM_IDS.captureGraphQL),
+    captureREST: getCb(_CAPTURE_FORM_IDS.captureREST),
+    captureAssets: getCb(_CAPTURE_FORM_IDS.captureAssets),
+    captureAllRequests: getCb(_CAPTURE_FORM_IDS.captureAllRequests),
+    captureImages: getCb(_CAPTURE_FORM_IDS.captureImages),
+    autoScroll: getCb(_CAPTURE_FORM_IDS.autoScroll),
+    captureScreenshots: getCb(_CAPTURE_FORM_IDS.captureScreenshots),
+    imageLimit,
+  };
+}
+
+function _applyCaptureOptionsToForm(opts) {
+  const setCb = (id, on) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = !!on;
+  };
+
+  setCb(_CAPTURE_FORM_IDS.capturePageUrls, opts.capturePageUrls);
+  setCb(_CAPTURE_FORM_IDS.captureGraphQL, opts.captureGraphQL);
+  setCb(_CAPTURE_FORM_IDS.captureREST, opts.captureREST);
+  setCb(_CAPTURE_FORM_IDS.captureAssets, opts.captureAssets);
+  setCb(_CAPTURE_FORM_IDS.captureAllRequests, opts.captureAllRequests);
+  setCb(_CAPTURE_FORM_IDS.captureImages, opts.captureImages);
+  setCb(_CAPTURE_FORM_IDS.autoScroll, opts.autoScroll);
+  setCb(_CAPTURE_FORM_IDS.captureScreenshots, opts.captureScreenshots);
+
+  const imgLimit = document.getElementById(_CAPTURE_FORM_IDS.imageLimit);
+  if (imgLimit) imgLimit.value = String(Number.isFinite(opts.imageLimit) ? Math.max(0, opts.imageLimit) : 0);
+
+  // Keep inline image-limit UI consistent (even though capture UI is hidden)
+  const wrap = document.getElementById('images-inline-wrap');
+  if (wrap) wrap.style.display = opts.captureImages ? 'inline' : 'none';
+}
+
+function _captureOptionsEqual(a, b) {
+  if (!a || !b) return false;
+  return (
+    _coerceBool(a.capturePageUrls) === _coerceBool(b.capturePageUrls) &&
+    _coerceBool(a.captureGraphQL) === _coerceBool(b.captureGraphQL) &&
+    _coerceBool(a.captureREST) === _coerceBool(b.captureREST) &&
+    _coerceBool(a.captureAssets) === _coerceBool(b.captureAssets) &&
+    _coerceBool(a.captureAllRequests) === _coerceBool(b.captureAllRequests) &&
+    _coerceBool(a.captureImages) === _coerceBool(b.captureImages) &&
+    _coerceBool(a.autoScroll) === _coerceBool(b.autoScroll) &&
+    _coerceBool(a.captureScreenshots) === _coerceBool(b.captureScreenshots) &&
+    (parseInt(a.imageLimit, 10) || 0) === (parseInt(b.imageLimit, 10) || 0)
+  );
+}
+
+function _setCaptureModeLabel(name) {
+  const el = document.getElementById('capture-mode-current');
+  if (el) el.textContent = name || 'Default';
+}
+
+function _setStoredCaptureMode(id) {
+  localStorage.setItem(CAPTURE_MODE_KEY, id);
+}
+
+function _getStoredCaptureMode() {
+  const raw = (localStorage.getItem(CAPTURE_MODE_KEY) || 'default').toLowerCase();
+  return _CAPTURE_PRESETS.some(p => p.id === raw) ? raw : 'default';
+}
+
+function _readStoredCustomOptions() {
+  try {
+    const raw = localStorage.getItem(CAPTURE_CUSTOM_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const base = { ..._CAPTURE_PRESETS[0].options };
+    return {
+      ...base,
+      capturePageUrls: _coerceBool(parsed.capturePageUrls),
+      captureGraphQL: _coerceBool(parsed.captureGraphQL),
+      captureREST: _coerceBool(parsed.captureREST),
+      captureAssets: _coerceBool(parsed.captureAssets),
+      captureAllRequests: _coerceBool(parsed.captureAllRequests),
+      captureImages: _coerceBool(parsed.captureImages),
+      autoScroll: _coerceBool(parsed.autoScroll),
+      captureScreenshots: _coerceBool(parsed.captureScreenshots),
+      imageLimit: Number.isFinite(parseInt(parsed.imageLimit, 10)) ? Math.max(0, parseInt(parsed.imageLimit, 10)) : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function _writeStoredCustomOptions(opts) {
+  try {
+    localStorage.setItem(CAPTURE_CUSTOM_KEY, JSON.stringify({
+      capturePageUrls: !!opts.capturePageUrls,
+      captureGraphQL: !!opts.captureGraphQL,
+      captureREST: !!opts.captureREST,
+      captureAssets: !!opts.captureAssets,
+      captureAllRequests: !!opts.captureAllRequests,
+      captureImages: !!opts.captureImages,
+      autoScroll: !!opts.autoScroll,
+      captureScreenshots: !!opts.captureScreenshots,
+      imageLimit: Number.isFinite(opts.imageLimit) ? Math.max(0, opts.imageLimit) : 0,
+    }));
+  } catch {}
+}
+
+// Public (used by saved-scrape preset loader)
+function syncCaptureModeLabel() {
+  const labelEl = document.getElementById('capture-mode-current');
+  if (!labelEl) return;
+  const current = _readCaptureOptionsFromForm();
+  const match = _CAPTURE_PRESETS.find(p => p.id !== 'custom' && _captureOptionsEqual(current, p.options));
+  if (match) {
+    _setCaptureModeLabel(match.name);
+    _setStoredCaptureMode(match.id);
+    return;
+  }
+  _setCaptureModeLabel('Custom');
+  _setStoredCaptureMode('custom');
+  _writeStoredCustomOptions(current);
+}
+
+function _iconSvg(kind) {
+  // Simple inline SVG icons (no external assets)
+  switch (kind) {
+    case 'map':
+      return `<svg class="cm-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 6l6-2 6 2 6-2v16l-6 2-6-2-6 2V6z"/><path d="M9 4v16M15 6v16"/>
+      </svg>`;
+    case 'nodes':
+      return `<svg class="cm-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="6" cy="7" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="12" cy="17" r="2"/>
+        <path d="M8 8l3 7M16 8l-3 7M8 7h8"/>
+      </svg>`;
+    case 'image':
+      return `<svg class="cm-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 13l2-2 4 4 3-3 2 2"/><circle cx="9" cy="9" r="1.5"/>
+      </svg>`;
+    case 'stack':
+      return `<svg class="cm-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>
+      </svg>`;
+    case 'sliders':
+      return `<svg class="cm-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 6h10"/><path d="M4 18h14"/><path d="M4 12h6"/><circle cx="16" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>
+      </svg>`;
+    case 'spark':
+    default:
+      return `<svg class="cm-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2z"/><path d="M4 14l.9 3.1L8 18l-3.1.9L4 22l-.9-3.1L0 18l3.1-.9L4 14z"/>
+      </svg>`;
+  }
+}
+
+(function initCaptureModesUI() {
+  const btn = document.getElementById('btn-capture-modes');
+  const backdrop = document.getElementById('capture-modes-backdrop');
+  const modal = document.getElementById('capture-modes-modal');
+  const closeBtn = document.getElementById('btn-capture-modes-close');
+  const cancelBtn = document.getElementById('btn-cm-cancel');
+  const backBtn = document.getElementById('btn-cm-back');
+  const primaryBtn = document.getElementById('btn-cm-primary');
+  const listView = document.getElementById('capture-modes-list-view');
+  const detailView = document.getElementById('capture-modes-detail-view');
+  const listEl = document.getElementById('cm-list');
+  const detailIcon = document.getElementById('cm-detail-icon');
+  const detailName = document.getElementById('cm-detail-name');
+  const detailSub = document.getElementById('cm-detail-sub');
+  const detailDesc = document.getElementById('cm-detail-desc');
+  const optionsEl = document.getElementById('cm-options');
+  const noticeEl = document.getElementById('cm-notice');
+
+  if (!btn || !backdrop || !modal || !listView || !detailView || !listEl || !optionsEl) {
+    // UI not present (older build)
+    return;
+  }
+
+  let _activeModeId = null;
+  let _draftCustom = null;
+  let _noticeTimer = null;
+
+  function showNotice() {
+    if (!noticeEl) return;
+    noticeEl.classList.add('show');
+    if (_noticeTimer) clearTimeout(_noticeTimer);
+    _noticeTimer = setTimeout(() => noticeEl.classList.remove('show'), 2500);
+  }
+
+  function openModal() {
+    backdrop.style.display = 'flex';
+    showList();
+    renderList();
+  }
+
+  function closeModal() {
+    backdrop.style.display = 'none';
+    _activeModeId = null;
+    _draftCustom = null;
+    if (_noticeTimer) { clearTimeout(_noticeTimer); _noticeTimer = null; }
+    noticeEl?.classList.remove('show');
+  }
+
+  function showList() {
+    listView.style.display = 'block';
+    detailView.style.display = 'none';
+    backBtn.style.display = 'none';
+    primaryBtn.style.display = 'none';
+    _activeModeId = null;
+    _draftCustom = null;
+    noticeEl?.classList.remove('show');
+  }
+
+  function showDetail(modeId) {
+    const mode = _getCaptureModeById(modeId);
+    _activeModeId = mode.id;
+    noticeEl?.classList.remove('show');
+
+    listView.style.display = 'none';
+    detailView.style.display = 'block';
+    backBtn.style.display = 'inline-flex';
+    primaryBtn.style.display = 'inline-flex';
+    primaryBtn.textContent = mode.id === 'custom' ? 'Save Custom' : 'Use this mode';
+
+    if (detailIcon) detailIcon.innerHTML = _iconSvg(mode.icon).replace('cm-card-icon', 'cm-detail-icon');
+    if (detailName) detailName.textContent = mode.name;
+    if (detailSub) detailSub.textContent = mode.short || '';
+    if (detailDesc) detailDesc.textContent = mode.description || '';
+
+    const opts = mode.id === 'custom' ? (_draftCustom || _readCaptureOptionsFromForm()) : mode.options;
+    if (mode.id === 'custom') _draftCustom = { ...opts };
+
+    // Render option checkboxes
+    optionsEl.innerHTML = _CAPTURE_OPTION_META.map(meta => {
+      const checked = !!opts[meta.key];
+      const locked = mode.id !== 'custom';
+
+      const isImages = meta.key === 'captureImages';
+      const showInline = isImages && checked;
+      const imageLimitVal = Number.isFinite(parseInt(opts.imageLimit, 10)) ? parseInt(opts.imageLimit, 10) : 0;
+      const inlineHtml = isImages ? `
+        <span class="cm-option-inline" style="${showInline ? '' : 'display:none'}" data-inline="images">
+          <span style="font-size:12px;color:var(--text3)">max</span>
+          <input type="number" min="0" value="${imageLimitVal}" data-key="imageLimit" ${locked ? 'readonly' : ''} title="0 = unlimited" />
+          <span style="font-size:12px;color:var(--text3)">(0 = unlimited)</span>
+        </span>
+      ` : '';
+
+      return `
+        <label class="cm-option ${locked ? 'cm-option-locked' : ''}" data-key="${escapeAttr(meta.key)}">
+          <input type="checkbox" data-key="${escapeAttr(meta.key)}" ${checked ? 'checked' : ''} />
+          <span class="cm-option-label">${escapeHTML(meta.label)}</span>
+          ${inlineHtml}
+          <span class="cm-tooltip">${escapeHTML(meta.tooltip)}</span>
+        </label>
+      `;
+    }).join('');
+
+    // Prevent number input from toggling the checkbox label
+    optionsEl.querySelectorAll('input[type="number"][data-key="imageLimit"]').forEach(inp => {
+      inp.addEventListener('click', (e) => e.stopPropagation());
+      inp.addEventListener('mousedown', (e) => e.stopPropagation());
+    });
+
+    // Custom: wire change handlers to update draft state
+    if (mode.id === 'custom') {
+      optionsEl.querySelectorAll('input[type="checkbox"][data-key]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const key = cb.dataset.key;
+          if (!key) return;
+          _draftCustom[key] = cb.checked;
+          // Toggle image-limit inline UI when images is flipped
+          if (key === 'captureImages') {
+            const wrap = cb.closest('.cm-option')?.querySelector('[data-inline="images"]');
+            if (wrap) wrap.style.display = cb.checked ? 'inline-flex' : 'none';
+          }
+        });
+      });
+      const imgLimitInput = optionsEl.querySelector('input[type="number"][data-key="imageLimit"]');
+      imgLimitInput?.addEventListener('input', () => {
+        const v = parseInt(imgLimitInput.value, 10);
+        _draftCustom.imageLimit = Number.isFinite(v) ? Math.max(0, v) : 0;
+      });
+    }
+  }
+
+  function renderList() {
+    const currentModeId = _getStoredCaptureMode();
+    listEl.innerHTML = _CAPTURE_PRESETS.map(p => `
+      <div class="cm-card ${p.id === currentModeId ? 'active' : ''}" data-id="${escapeAttr(p.id)}">
+        ${_iconSvg(p.icon)}
+        <div class="cm-card-meta">
+          <div class="cm-card-name">${escapeHTML(p.name)}</div>
+          <div class="cm-card-desc">${escapeHTML(p.short || '')}</div>
+        </div>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.cm-card').forEach(card => {
+      card.addEventListener('click', () => showDetail(card.dataset.id));
+    });
+  }
+
+  function applyMode(modeId) {
+    const mode = _getCaptureModeById(modeId);
+    if (mode.id === 'custom') {
+      const custom = _draftCustom || _readCaptureOptionsFromForm();
+      _applyCaptureOptionsToForm(custom);
+      _writeStoredCustomOptions(custom);
+      _setStoredCaptureMode('custom');
+      syncCaptureModeLabel();
+      closeModal();
+      return;
+    }
+
+    _applyCaptureOptionsToForm(mode.options);
+    _setStoredCaptureMode(mode.id);
+    syncCaptureModeLabel();
+    closeModal();
+  }
+
+  // Open/close wiring
+  btn.addEventListener('click', openModal);
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && backdrop.style.display === 'flex') closeModal();
+  });
+  backBtn?.addEventListener('click', () => { showList(); renderList(); });
+  primaryBtn?.addEventListener('click', () => { if (_activeModeId) applyMode(_activeModeId); });
+
+  // Locked presets: intercept attempts to toggle in detail view and show notice
+  optionsEl.addEventListener('click', (e) => {
+    if (!_activeModeId || _activeModeId === 'custom') return;
+    const row = e.target.closest('.cm-option');
+    if (!row) return;
+    e.preventDefault();
+    e.stopPropagation();
+    showNotice();
+  }, true);
+  optionsEl.addEventListener('change', (e) => {
+    if (!_activeModeId || _activeModeId === 'custom') return;
+    const row = e.target.closest?.('.cm-option');
+    if (!row) return;
+    e.stopPropagation();
+    // Keyboard toggles can still fire change — re-render then notify
+    showDetail(_activeModeId);
+    showNotice();
+  }, true);
+
+  // Apply stored mode on load
+  (function applyStoredModeOnLoad() {
+    const modeId = _getStoredCaptureMode();
+    if (modeId === 'custom') {
+      const stored = _readStoredCustomOptions();
+      if (stored) _applyCaptureOptionsToForm(stored);
+    } else {
+      const m = _getCaptureModeById(modeId);
+      if (m?.options) _applyCaptureOptionsToForm(m.options);
+    }
+    syncCaptureModeLabel();
+  })();
+})();
+
 // ---- Avoid Links toggle ----
 document.getElementById('avoid-links-toggle').addEventListener('click', () => {
   const panel = document.getElementById('avoid-links-panel');
