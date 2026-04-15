@@ -1022,15 +1022,12 @@ class ScraperSession {
 
     // Support PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var (used when bundled browser version differs)
     const launchOpts = {
-      headless: true,
+      headless: 'new',
       slowMo: slowMotion ? parseInt(slowMotion) : 0,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
-        '--allow-running-insecure-content',
-        '--ignore-certificate-errors',
       ],
     };
     if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
