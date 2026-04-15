@@ -931,6 +931,20 @@ class ScraperSession {
     if (targetUrls.length === 0) throw new Error('No URL(s) provided');
 
     const primaryUrl = targetUrls[0];
+    this._partialPageCount = 0;
+    this._setStatus(SCRAPE_STATES.RUNNING, {
+      targetUrl: primaryUrl,
+      startedAt: nowIso(),
+      step: 'Preparing scrape',
+      percent: 0,
+      visited: 0,
+      total: Number.isFinite(maxPages) && maxPages > 0 ? maxPages : null,
+      queued: 0,
+      needsAuth: false,
+      needsVerification: false,
+      lastError: null,
+      partialPageCount: 0,
+    });
 
     // ── Autosave / resume setup ──────────────────────────────────────────────
     this._saveId = saveId || null;
@@ -948,6 +962,12 @@ class ScraperSession {
         const savePath = path.join(SAVES_DIR, `${resumeFrom}.json`);
         if (fs.existsSync(savePath)) {
           resumeData = JSON.parse(fs.readFileSync(savePath, 'utf8'));
+          this._partialPageCount = resumeData.pages?.length || 0;
+          this._setStatus(null, {
+            partialPageCount: this._partialPageCount,
+            visited: resumeData.visitedUrls?.length || 0,
+            failed: resumeData.failedPages?.length || 0,
+          });
           this.log(`Resuming save ${resumeFrom}: ${resumeData.pages?.length || 0} pages already captured`, 'info');
           this.graphqlCalls.push(...(resumeData.apiCalls?.graphql || []));
           this.restCalls.push(...(resumeData.apiCalls?.rest || []));
@@ -1045,6 +1065,7 @@ class ScraperSession {
           await this.browser.close().catch(() => {});
           this.browser = null;
           const pageData = await this._staticScrape(primaryUrl);
+          this._partialPageCount = 1;
           this.progress('Done (static fallback)', 100);
           this.log('Static scrape complete.', 'success');
           return {
@@ -1330,9 +1351,13 @@ class ScraperSession {
 
       this.progress('Done', 100);
       this.log('Scraping complete!', 'success');
+      this.markComplete(result);
       return result;
 
     } finally {
+      if (this.stopped) {
+        this.markStopped();
+      }
       // Always write a final save — even if stop() closed the browser mid-crawl
       if (this._saveId) {
         this._savePages = allResults;
