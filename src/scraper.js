@@ -953,6 +953,7 @@ class ScraperSession {
       maxPages,
       saveId,
       resumeFrom,
+      proxy,
     } = options;
 
     this._captureScreenshots = captureScreenshots || false;
