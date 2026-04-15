@@ -11,6 +11,7 @@
     "test:all": "node tests/run.js all"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
