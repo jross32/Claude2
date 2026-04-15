@@ -1,0 +1,260 @@
+{
+  "timestamp": "2026-04-15T21:00:21.762Z",
+  "git_commit": "8429d34",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "MCP server exports 40 tools",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 40
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP tool names are unique",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "uniqueCount": 40
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "New MCP tools are present",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "added": 21
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "All MCP tools include title and annotations",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "annotatedTools": 40
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "research_url schema exposes auto/fast/deep modes",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "modeEnum": [
+          "auto",
+          "fast",
+          "deep"
+        ],
+        "includeEvidenceType": "boolean"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Read-only MCP tools expose readOnlyHint",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "readOnlyTool": "search_scrape_text"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Fixed resources and resource templates are exported",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "fixed": 2,
+        "templates": 4,
+        "prompts": 4
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "truncateText limits long strings",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "result": "abcdefghij…"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "searchSavedPages returns snippets and match counts",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "matches": 4,
+        "snippets": 4
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "research question router classifies extractive and deep prompts",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "extractive": "extractive",
+        "deep": "reasoning-heavy",
+        "forcedFast": "fast-ollama"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "buildResearchEvidence respects fast profile budget and ranks matches first",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "rankedUrl": "https://example.com/releases",
+        "totalChars": 261
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "analyzeResearchQuestion skips Ollama for extractive auto mode",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "routeUsed": "extractive",
+        "analysisMethod": "keyword-extraction"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "analyzeResearchQuestion falls back cleanly when Ollama returns null",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "routeUsed": "deep-ollama",
+        "evidenceCount": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "normalizeCompletedScrapeResult converts saved scrapes into result shape",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "totalPages": 1,
+        "title": "Docs Home"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "toResearchPage reads saved-page meta fields",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "url": "https://example.com/about",
+        "title": "About Example"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "createToolSuccess includes structuredContent",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "structured": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "createToolFailure includes standardized error shape",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "code": "not_found",
+        "retryable": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Prompt builder references narrow MCP reads",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "preview": "Use get_scrape_status on abc123 first, then prefer scrape://save/abc123/summary,"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Resource URI parser understands templated scrape URIs",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "summaryKind": "savePage",
+        "activeKind": "activeSession"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 19,
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 32,
+    "avg_duration_ms": 2
+  }
+}
