@@ -5,13 +5,33 @@
  */
 
 const http   = require('http');
+const net = require('net');
 const { spawn } = require('child_process');
 const path   = require('path');
 
 const ROOT = path.join(__dirname, '../..');
-const PORT = 3001;
+let PORT = null;
 
 let serverProcess = null;
+
+function getPort() {
+  if (!PORT) throw new Error('API test server has not been started yet');
+  return PORT;
+}
+
+async function findOpenPort(startPort = 3311, attempts = 40) {
+  for (let offset = 0; offset < attempts; offset++) {
+    const candidate = startPort + offset;
+    const available = await new Promise((resolve) => {
+      const tester = net.createServer()
+        .once('error', () => resolve(false))
+        .once('listening', () => tester.close(() => resolve(true)))
+        .listen(candidate, '127.0.0.1');
+    });
+    if (available) return candidate;
+  }
+  throw new Error(`Could not find an open port starting at ${startPort}`);
+}
 
 function waitForServer(port, timeout = 15000) {
   const start = Date.now();
@@ -29,6 +49,7 @@ function waitForServer(port, timeout = 15000) {
 }
 
 async function start() {
+  PORT = await findOpenPort(Number(process.env.TEST_SERVER_PORT || 3311));
   serverProcess = spawn('node', ['--max-old-space-size=4096', 'src/server.js'], {
     cwd: ROOT,
     env: { ...process.env, PORT: String(PORT) },
@@ -44,7 +65,7 @@ function stop() {
 
 function get(urlPath) {
   return new Promise((resolve, reject) => {
-    const req = http.get(`http://localhost:${PORT}${urlPath}`, { timeout: 6000 }, (res) => {
+    const req = http.get(`http://localhost:${getPort()}${urlPath}`, { timeout: 6000 }, (res) => {
       let data = ''; res.on('data', c => data += c); res.on('end', () => resolve({ status: res.statusCode, body: data }));
     });
     req.on('error', reject);
@@ -56,7 +77,7 @@ function post(urlPath, body) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
     const req = http.request({
-      hostname: 'localhost', port: PORT, path: urlPath, method: 'POST',
+      hostname: 'localhost', port: getPort(), path: urlPath, method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
       timeout: 6000,
     }, (res) => {
@@ -71,7 +92,7 @@ function post(urlPath, body) {
 function del(urlPath) {
   return new Promise((resolve, reject) => {
     const req = http.request({
-      hostname: 'localhost', port: PORT, path: urlPath, method: 'DELETE', timeout: 6000,
+      hostname: 'localhost', port: getPort(), path: urlPath, method: 'DELETE', timeout: 6000,
     }, (res) => {
       let data = ''; res.on('data', c => data += c); res.on('end', () => resolve({ status: res.statusCode, body: data }));
     });
@@ -83,4 +104,4 @@ function del(urlPath) {
 
 function json(res) { return JSON.parse(res.body); }
 
-module.exports = { start, stop, get, post, del, json, PORT };
+module.exports = { start, stop, get, post, del, json, getPort };
