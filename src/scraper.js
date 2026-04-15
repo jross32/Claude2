@@ -1072,8 +1072,8 @@ class ScraperSession {
       if (savedSession) this.log('Restoring saved session state...', 'info');
 
       const context = await this.browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        viewport: { width: 1440, height: 900 },
+        userAgent: _sessionUA,
+        viewport: _sessionViewport,
         ignoreHTTPSErrors: true,
         ...(savedSession ? { storageState: savedSession } : {}),
       });
