@@ -7,6 +7,16 @@
 const { TestRunner } = require('../runner');
 const { start, stop, get, post, json } = require('./_server');
 
+async function waitFor(predicate, timeoutMs = 12000, intervalMs = 250) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const value = await predicate();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`Condition not met within ${timeoutMs}ms`);
+}
+
 async function main() {
   const runner = new TestRunner('api');
   await start();
@@ -33,6 +43,30 @@ async function main() {
     setOutput({ status: res.status, sessionId: body.sessionId });
   });
 
+  await runner.run('GET /api/scrape/active returns active session snapshots', async ({ setOutput }) => {
+    if (!liveSessionId) throw new Error('Expected live session from previous test');
+    const res = await get('/api/scrape/active');
+    if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
+    const body = json(res);
+    if (!Array.isArray(body)) throw new Error('Expected an array response');
+    const match = body.find((entry) => entry.sessionId === liveSessionId);
+    if (!match) throw new Error(`Active session ${liveSessionId} not found`);
+    if (!('state' in match) || !('partialPageCount' in match)) {
+      throw new Error('Expected live snapshot fields');
+    }
+    setOutput({ count: body.length, state: match.state });
+  });
+
+  await runner.run('GET /api/scrape/:id/status returns live session snapshot', async ({ setOutput }) => {
+    if (!liveSessionId) throw new Error('Expected live session from previous test');
+    const res = await get(`/api/scrape/${liveSessionId}/status`);
+    if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
+    const body = json(res);
+    if (body.sessionId !== liveSessionId) throw new Error('Expected matching sessionId');
+    if (!body.state || !body.startedAt || !body.updatedAt) throw new Error('Missing expected status fields');
+    setOutput({ state: body.state, step: body.step });
+  });
+
   // ── Session lifecycle endpoints ────────────────────────────────────────────
 
   await runner.run('POST /api/scrape/:id/stop for active session → 200', async ({ setOutput }) => {
@@ -45,6 +79,29 @@ async function main() {
     setOutput({ status: res.status });
   });
 
+  await runner.run('GET /api/scrape/:id/status falls back after active session is removed', async ({ setOutput }) => {
+    if (!liveSessionId) throw new Error('Expected live session from previous test');
+
+    await waitFor(async () => {
+      const activeRes = await get('/api/scrape/active');
+      if (activeRes.status !== 200) return false;
+      const active = json(activeRes);
+      return !active.some((entry) => entry.sessionId === liveSessionId);
+    }, 12000, 300);
+
+    const res = await waitFor(async () => {
+      const statusRes = await get(`/api/scrape/${liveSessionId}/status`);
+      if (statusRes.status !== 200) return false;
+      const body = json(statusRes);
+      return body.state === 'stopped' || body.state === 'complete' || body.state === 'error'
+        ? { body, status: statusRes.status }
+        : false;
+    }, 12000, 300);
+
+    if (res.body.sessionId !== liveSessionId) throw new Error('Expected saved session fallback payload');
+    setOutput({ status: res.status, state: res.body.state });
+  });
+
   await runner.run('POST /api/scrape/:id/stop for unknown session → 404', async ({ setOutput }) => {
     const res = await post('/api/scrape/fake-session-id-999/stop', {});
     if (res.status !== 404) throw new Error(`Expected 404, got ${res.status}`);
@@ -55,6 +112,12 @@ async function main() {
 
   await runner.run('POST /api/scrape/:id/pause for unknown session → 404', async ({ setOutput }) => {
     const res = await post('/api/scrape/fake-session-id-999/pause', {});
+    if (res.status !== 404) throw new Error(`Expected 404, got ${res.status}`);
+    setOutput({ status: res.status });
+  });
+
+  await runner.run('GET /api/scrape/:id/status for unknown session → 404', async ({ setOutput }) => {
+    const res = await get('/api/scrape/fake-session-id-999/status');
     if (res.status !== 404) throw new Error(`Expected 404, got ${res.status}`);
     setOutput({ status: res.status });
   });

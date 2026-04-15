@@ -269,7 +269,10 @@ class ScraperSession {
   getStatusSnapshot() {
     return {
       ...this._statusSnapshot,
-      failed: this.failedPages.length,
+      failed: Math.max(
+        Number.isFinite(this._statusSnapshot.failed) ? this._statusSnapshot.failed : 0,
+        this.failedPages.length
+      ),
       partialPageCount: this._partialPageCount,
       graphqlCallCount: this.graphqlCalls.length,
       restCallCount: this.restCalls.length,

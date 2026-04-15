@@ -1,31 +1,38 @@
 # Test Results — unit
 
-**Status:** ✅ HEALTHY
-**Run:** 2026-04-15T04:36:13.391Z
-**Commit:** `ea6940e`
-**Duration:** 31ms
+**Status:** ❌ FAILING
+**Run:** 2026-04-15T08:11:44.247Z
+**Commit:** `8399692`
+**Duration:** 14ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 12 | 12 | 0 | 0 |
+| 5 | 4 | 1 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | inferSchema returns object with jsonSchema and typescript | pass | 8ms | |
-| ✅ | jsonSchema has $schema and definitions | pass | 3ms | |
-| ✅ | typescript field is a non-empty string | pass | 1ms | |
-| ✅ | definitions contains an entry for each valid call | pass | 2ms | |
-| ✅ | typescript output contains interface or type keyword | pass | 1ms | |
-| ✅ | inferred schema for user object is object type at top level | pass | 0ms | |
-| ✅ | works with a single GraphQL call | pass | 1ms | |
-| ✅ | [chaos] null input → jsonSchema null + fallback typescript string | pass | 0ms | |
-| ✅ | [chaos] empty array → jsonSchema null + fallback string | pass | 0ms | |
-| ✅ | [chaos] call with no response body → gracefully skipped | pass | 0ms | |
-| ✅ | [chaos] call with null response data → gracefully handled | pass | 0ms | |
-| ✅ | [chaos] malformed body string → operation name falls back gracefully | pass | 0ms | |
+| ✅ | ScraperSession exposes initial live status snapshot | pass | 3ms | |
+| ❌ | progress updates live counters and step metadata | fail | 1ms | |
+| ✅ | pause and resume update state snapshot | pass | 2ms | |
+| ✅ | credential and verification waits toggle flags without leaking secrets | pass | 2ms | |
+| ✅ | markComplete and markError shape terminal snapshot fields | pass | 1ms | |
 
+## Errors
 
+### ❌ progress updates live counters and step metadata
+```
+Progress counters did not update correctly
+Error: Progress counters did not update correctly
+    at C:\Users\justi\Claude2\tests\unit\scraper-status.test.js:27:13
+    at TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:28)
+    at main (C:\Users\justi\Claude2\tests\unit\scraper-status.test.js:21:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+```
+## Suggested Next Steps
+
+- Run `/new-test` to dig into failing tests
+- Check `tests/logs/raw/` for full history
