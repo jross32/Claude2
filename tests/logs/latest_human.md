@@ -1,24 +1,28 @@
-# Test Results — unit
+# Test Results — smoke
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-15T10:27:26.419Z
-**Commit:** `afc638b`
-**Duration:** 13ms
+**Run:** 2026-04-15T11:07:56.824Z
+**Commit:** `ba855ca`
+**Duration:** 28064ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 5 | 5 | 0 | 0 |
+| 9 | 9 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | ScraperSession exposes initial live status snapshot | pass | 3ms | |
-| ✅ | progress updates live counters and step metadata | pass | 0ms | |
-| ✅ | pause and resume update state snapshot | pass | 2ms | |
-| ✅ | credential and verification waits toggle flags without leaking secrets | pass | 2ms | |
-| ✅ | markComplete and markError shape terminal snapshot fields | pass | 1ms | |
+| ✅ | Chromium launches in headless mode | pass | 2524ms | |
+| ✅ | Browser can open a new page | pass | 757ms | |
+| ✅ | Browser reports correct version string | pass | 0ms | |
+| ✅ | Multiple pages open and close independently | pass | 652ms | |
+| ✅ | Browser closes cleanly | pass | 793ms | |
+| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 5757ms | |
+| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 2461ms | |
+| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 3043ms | |
+| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 12067ms | |
 
 

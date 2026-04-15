@@ -90,6 +90,18 @@ async function main() {
     setOutput({ jsErrors: 0 });
   });
 
+  await runner.run('playwright-extra can launch with stealth plugin enabled', async ({ setOutput }) => {
+    const { chromium: extraChromium } = require('playwright-extra');
+    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+    extraChromium.use(StealthPlugin());
+
+    const b = await extraChromium.launch({ headless: true });
+    const page = await b.newPage();
+    await page.goto('about:blank');
+    await b.close();
+    setOutput({ stealthLaunch: true });
+  });
+
   // Safety — ensure browser is closed even if a test threw early
   if (browser) await browser.close().catch(() => {});
 
