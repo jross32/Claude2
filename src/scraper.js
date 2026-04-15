@@ -1054,7 +1054,17 @@ class ScraperSession {
         }
       } catch {}
     }
+    // Per-scrape proxy (takes precedence over env var proxy)
+    if (proxy && proxy.server) {
+      launchOpts.proxy = { server: proxy.server };
+      if (proxy.username) launchOpts.proxy.username = proxy.username;
+      if (proxy.password) launchOpts.proxy.password = proxy.password;
+    }
     this.browser = await chromium.launch(launchOpts);
+
+    // Pick a random UA and viewport for this session
+    const _sessionUA = _randomUA();
+    const _sessionViewport = _randomViewport();
 
     let allResults = [];
     try {
