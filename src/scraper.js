@@ -1,9 +1,8 @@
-const { chromium } = require('playwright');
-let _stealthFn = null;
+const { chromium } = require('playwright-extra');
 try {
-  _stealthFn = require('playwright-stealth').stealth;
+  const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+  chromium.use(StealthPlugin());
 } catch {}
-// _stealthFn(page) — call after creating a page to apply stealth patches
 
 // ── User-agent pool (realistic Chrome on Windows strings) ─────────────────
 const _UA_POOL = [
@@ -1076,7 +1075,6 @@ class ScraperSession {
       this.context = context;
 
       const page = await context.newPage();
-      if (_stealthFn) await _stealthFn(page);
 
       // Native dialog dismissal only (alert/confirm/prompt boxes)
       page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
@@ -2193,7 +2191,6 @@ class ScraperSession {
       ...(savedSession ? { storageState: savedSession } : {}),
     });
     const page = await context.newPage();
-    if (_stealthFn) await _stealthFn(page);
     page.on('dialog', async (d) => { try { await d.dismiss(); } catch {} });
 
     const captures = {
@@ -2521,7 +2518,6 @@ class ScraperSession {
         const pages = await Promise.allSettled(
           Array.from({ length: pagesInCtx }, async () => {
             const page = await ctx.newPage();
-            if (_stealthFn) await _stealthFn(page);
             page.on('dialog', async (d) => { try { await d.dismiss(); } catch {} });
             const captures = {
               graphqlCalls: [], restCalls: [], assets: [], allRequests: [],
