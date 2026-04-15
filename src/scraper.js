@@ -1066,9 +1066,10 @@ class ScraperSession {
           this.browser = null;
           const pageData = await this._staticScrape(primaryUrl);
           this._partialPageCount = 1;
+          this._setStatus(null, { partialPageCount: this._partialPageCount });
           this.progress('Done (static fallback)', 100);
           this.log('Static scrape complete.', 'success');
-          return {
+          const result = {
             meta: {
               scrapedAt: new Date().toISOString(),
               targetUrl: primaryUrl,
@@ -1095,6 +1096,8 @@ class ScraperSession {
             consoleLogs: [],
             errors: [],
           };
+          this.markComplete(result);
+          return result;
         }
         throw navErr;
       }
@@ -1402,6 +1405,7 @@ class ScraperSession {
     // Always interact with dropdowns — captures new data exposed by each selection
     const dropdownResults = await this._interactDropdowns(page, url);
     results.push(...dropdownResults);
+    this._incrementPartialPageCount(results.length);
 
     if (depth > 1) {
       const links = (pageData.links || [])
@@ -1437,6 +1441,8 @@ class ScraperSession {
       const norm = (u) => u.split('#')[0].replace(/\/$/, '') || u;
       (resumeData.visitedUrls || []).forEach(u => { const n = norm(u); visited.add(n); queued.add(n); });
       results.push(...(resumeData.pages || []));
+      this._partialPageCount = results.length;
+      this._setStatus(null, { partialPageCount: this._partialPageCount });
       this.log(`Resume: loaded ${results.length} pages, skipping ${visited.size} URLs`, 'info');
     }
 
@@ -1515,6 +1521,7 @@ class ScraperSession {
           dr._crawl = { depth: pathDepth(url), index: results.length + 1, pathname, section: getSection(url), discoveryOrder: 0, parent: null, inboundCount: 0 };
           results.push(dr);
         });
+        this._incrementPartialPageCount(dropdownResults.length);
 
         // Attach crawl metadata to each page
         pageData._crawl = {
@@ -1528,6 +1535,7 @@ class ScraperSession {
         };
 
         results.push(pageData);
+        this._incrementPartialPageCount();
         this.log(`[${results.length}] (depth ${pageData._crawl.depth}) ${pathname}`);
 
         // Collect new internal links
@@ -2287,6 +2295,7 @@ class ScraperSession {
         // Always interact with dropdowns — captures new data exposed by each selection
         const dr = await this._interactDropdowns(page, url);
         results.push(...dr);
+        this._incrementPartialPageCount(dr.length);
 
         pageData._crawl = {
           depth: pathDepth(url),
@@ -2298,6 +2307,7 @@ class ScraperSession {
           inboundCount: 0,
         };
         results.push(pageData);
+        this._incrementPartialPageCount();
         this.log(`[W${workerId}] [${results.length}] ${pathname}`);
         {
           const done = results.length;
@@ -2435,6 +2445,8 @@ class ScraperSession {
       const norm = (u) => u.split('#')[0].replace(/\/$/, '') || u;
       (resumeData.visitedUrls || []).forEach(u => { const n = norm(u); shared.visited.add(n); shared.queued.add(n); });
       shared.results.push(...(resumeData.pages || []));
+      this._partialPageCount = shared.results.length;
+      this._setStatus(null, { partialPageCount: this._partialPageCount });
       this.log(`Resume: loaded ${shared.results.length} pages, skipping ${shared.visited.size} URLs`, 'info');
     }
 
