@@ -374,6 +374,7 @@ app.post('/api/scrape', async (req, res) => {
     fullCrawl,
     maxPages,
     resumeFrom,
+    proxy,
   } = req.body;
 
   if (!url && (!urls || urls.length === 0)) {
