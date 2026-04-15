@@ -38,6 +38,17 @@ app.use(express.static(path.join(__dirname, '../public')));
 // Active scraping sessions
 const sessions = new Map();
 
+const SCRAPE_STATUS_STATES = {
+  RUNNING: 'running',
+  PAUSED: 'paused',
+  WAITING_AUTH: 'waiting_auth',
+  WAITING_VERIFICATION: 'waiting_verification',
+  STOPPING: 'stopping',
+  COMPLETE: 'complete',
+  STOPPED: 'stopped',
+  ERROR: 'error',
+};
+
 // WebSocket connection for real-time progress
 wss.on('connection', (ws) => {
   ws.id = uuidv4();
@@ -60,6 +71,118 @@ const KNOWN_SITES = [
     password: process.env.APA_PASSWORD,
   },
 ];
+
+function sanitizeSessionSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return null;
+  return {
+    sessionId: snapshot.sessionId || '',
+    state: snapshot.state || SCRAPE_STATUS_STATES.RUNNING,
+    targetUrl: snapshot.targetUrl || '',
+    startedAt: snapshot.startedAt || null,
+    updatedAt: snapshot.updatedAt || null,
+    step: snapshot.step || '',
+    percent: Number.isFinite(snapshot.percent) ? snapshot.percent : 0,
+    visited: Number.isFinite(snapshot.visited) ? snapshot.visited : 0,
+    total: Number.isFinite(snapshot.total) ? snapshot.total : null,
+    queued: Number.isFinite(snapshot.queued) ? snapshot.queued : 0,
+    failed: Number.isFinite(snapshot.failed) ? snapshot.failed : 0,
+    partialPageCount: Number.isFinite(snapshot.partialPageCount) ? snapshot.partialPageCount : 0,
+    graphqlCallCount: Number.isFinite(snapshot.graphqlCallCount) ? snapshot.graphqlCallCount : 0,
+    restCallCount: Number.isFinite(snapshot.restCallCount) ? snapshot.restCallCount : 0,
+    needsAuth: !!snapshot.needsAuth,
+    needsVerification: !!snapshot.needsVerification,
+    lastError: snapshot.lastError || null,
+  };
+}
+
+function mapSavedStatus(status) {
+  const value = String(status || '').toLowerCase();
+  if (!value) return SCRAPE_STATUS_STATES.COMPLETE;
+  if (value.includes('paused')) return SCRAPE_STATUS_STATES.PAUSED;
+  if (value.includes('verification')) return SCRAPE_STATUS_STATES.WAITING_VERIFICATION;
+  if (value.includes('auth')) return SCRAPE_STATUS_STATES.WAITING_AUTH;
+  if (value.includes('stopping')) return SCRAPE_STATUS_STATES.STOPPING;
+  if (value.includes('stopped')) return SCRAPE_STATUS_STATES.STOPPED;
+  if (value.includes('error') || value.includes('fail')) return SCRAPE_STATUS_STATES.ERROR;
+  if (value.includes('run')) return SCRAPE_STATUS_STATES.RUNNING;
+  return SCRAPE_STATUS_STATES.COMPLETE;
+}
+
+function statusStepLabel(state) {
+  switch (state) {
+    case SCRAPE_STATUS_STATES.PAUSED: return 'Paused';
+    case SCRAPE_STATUS_STATES.WAITING_AUTH: return 'Waiting for credentials';
+    case SCRAPE_STATUS_STATES.WAITING_VERIFICATION: return 'Waiting for verification';
+    case SCRAPE_STATUS_STATES.STOPPING: return 'Stopping scrape';
+    case SCRAPE_STATUS_STATES.STOPPED: return 'Scrape stopped';
+    case SCRAPE_STATUS_STATES.ERROR: return 'Scrape error';
+    case SCRAPE_STATUS_STATES.RUNNING: return 'Scrape in progress';
+    default: return 'Saved scrape ready';
+  }
+}
+
+function buildSavedSessionSnapshot(save) {
+  const pages = Array.isArray(save?.pages) ? save.pages : [];
+  const visitedUrls = Array.isArray(save?.visitedUrls) ? save.visitedUrls : [];
+  const failedPages = Array.isArray(save?.failedPages) ? save.failedPages : [];
+  const graphqlCalls = Array.isArray(save?.apiCalls?.graphql) ? save.apiCalls.graphql : [];
+  const restCalls = Array.isArray(save?.apiCalls?.rest) ? save.apiCalls.rest : [];
+  const state = mapSavedStatus(save?.status);
+  const requestedTotal = Number.isFinite(Number(save?.options?.maxPages)) && Number(save.options.maxPages) > 0
+    ? Number(save.options.maxPages)
+    : null;
+  const visited = visitedUrls.length || pages.length;
+  const partialPageCount = pages.length;
+  const total = requestedTotal ?? partialPageCount ?? null;
+  const completedUnits = Math.max(visited, partialPageCount);
+  const percent = state === SCRAPE_STATUS_STATES.COMPLETE
+    ? 100
+    : total && total > 0
+      ? Math.min(99, Math.round((completedUnits / total) * 100))
+      : partialPageCount > 0
+        ? 90
+        : 0;
+
+  return sanitizeSessionSnapshot({
+    sessionId: save?.sessionId || '',
+    state,
+    targetUrl: save?.startUrl || save?.options?.url || '',
+    startedAt: save?.startedAt || null,
+    updatedAt: save?.lastSavedAt || save?.startedAt || null,
+    step: statusStepLabel(state),
+    percent,
+    visited,
+    total,
+    queued: total && total > visited ? total - visited : 0,
+    failed: failedPages.length,
+    partialPageCount,
+    graphqlCallCount: graphqlCalls.length,
+    restCallCount: restCalls.length,
+    needsAuth: false,
+    needsVerification: false,
+    lastError: state === SCRAPE_STATUS_STATES.ERROR
+      ? failedPages[failedPages.length - 1]?.reason || 'Saved scrape recorded an error'
+      : null,
+  });
+}
+
+function loadSaveById(sessionId) {
+  const file = path.join(SAVES_DIR, `${sessionId}.json`);
+  if (!fs.existsSync(file)) return null;
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function getActiveSessionSnapshots() {
+  return Array.from(sessions.values())
+    .map((session) => {
+      try {
+        return sanitizeSessionSnapshot(session.getStatusSnapshot?.());
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
 
 // Lightweight site detection — fetch title + favicon without launching a scrape
 // Proxy a favicon so the frontend avoids CORS issues and can resolve it from any URL
@@ -281,10 +404,10 @@ app.post('/api/scrape', async (req, res) => {
     if (sessions.has(sessionId)) {
       const s = sessions.get(sessionId);
       try { s.stop(); } catch {}
-      sessions.delete(sessionId);
       broadcast(sessionId, { type: 'error', message: 'Session auto-cleaned after 45 minute timeout' });
     }
   }, CLEANUP_MS);
+  cleanupTimer.unref?.();
 
   scraper
     .run({
@@ -323,14 +446,48 @@ app.post('/api/scrape', async (req, res) => {
       clearTimeout(cleanupTimer);
       // Auto-attach HAR to result
       try { result.har = exportHAR(result); } catch {}
+      try { scraper.markComplete(result); } catch {}
       broadcast(sessionId, { type: 'complete', data: result });
       sessions.delete(sessionId);
     })
     .catch((err) => {
       clearTimeout(cleanupTimer);
-      broadcast(sessionId, { type: 'error', message: err.message });
+      if (scraper.stopped) {
+        try { scraper.markStopped(); } catch {}
+        broadcast(sessionId, { type: 'stopped', message: 'Scrape stopped' });
+      } else {
+        try { scraper.markError(err); } catch {}
+        broadcast(sessionId, { type: 'error', message: err.message });
+      }
       sessions.delete(sessionId);
     });
+});
+
+app.get('/api/scrape/active', (req, res) => {
+  try {
+    res.json(getActiveSessionSnapshots());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/scrape/:sessionId/status', (req, res) => {
+  try {
+    const liveSession = sessions.get(req.params.sessionId);
+    if (liveSession?.getStatusSnapshot) {
+      const snapshot = sanitizeSessionSnapshot(liveSession.getStatusSnapshot());
+      if (snapshot) return res.json(snapshot);
+    }
+
+    const save = loadSaveById(req.params.sessionId);
+    if (save) {
+      return res.json(buildSavedSessionSnapshot(save));
+    }
+
+    return res.status(404).json({ error: 'Session not found' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // ---- Saves API ----
@@ -350,9 +507,9 @@ app.get('/api/saves', (req, res) => {
 
 app.get('/api/saves/:id', (req, res) => {
   try {
-    const file = path.join(SAVES_DIR, `${req.params.id}.json`);
-    if (!fs.existsSync(file)) return res.status(404).json({ error: 'Save not found' });
-    res.json(JSON.parse(fs.readFileSync(file, 'utf8')));
+    const save = loadSaveById(req.params.id);
+    if (!save) return res.status(404).json({ error: 'Save not found' });
+    res.json(save);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -369,7 +526,6 @@ app.post('/api/scrape/:sessionId/stop', (req, res) => {
   const scraper = sessions.get(req.params.sessionId);
   if (scraper) {
     scraper.stop();
-    sessions.delete(req.params.sessionId);
     res.json({ message: 'Session stopped' });
   } else {
     res.status(404).json({ error: 'Session not found' });
