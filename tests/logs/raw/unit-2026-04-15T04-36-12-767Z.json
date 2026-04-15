@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-04-15T04:36:12.764Z",
+  "git_commit": "ea6940e",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "MCP server exports 29 tools",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 29
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP tool names are unique",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "uniqueCount": 29
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "New MCP tools are present",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "added": 10
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "truncateText limits long strings",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "result": "abcdefghij…"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "summariseResult trims preview payloads",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "graphqlCalls": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 9,
+    "avg_duration_ms": 2
+  }
+}

@@ -1,103 +1,144 @@
 {
-  "timestamp": "2026-04-15T04:36:13.391Z",
+  "timestamp": "2026-04-15T04:36:11.519Z",
   "git_commit": "ea6940e",
   "suite": "unit",
   "tests": [
     {
-      "name": "inferSchema returns object with jsonSchema and typescript",
+      "name": "exportHAR returns object with log key",
       "status": "pass",
-      "duration_ms": 8,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
         "keys": [
-          "jsonSchema",
-          "typescript"
+          "log"
         ]
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "jsonSchema has $schema and definitions",
+      "name": "har.log has version \"1.2\"",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
-        "keys": [
-          "GetUser",
-          "GetPosts"
+        "version": "1.2"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "har.log has creator and browser fields",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "creator": "WebScraperPro",
+        "browser": "Chromium"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "har.log.entries is an array",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 2
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "entries contain one entry per graphql + rest call",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 2
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "each entry has required HAR fields",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "fields": [
+          "startedDateTime",
+          "time",
+          "request",
+          "response",
+          "cache",
+          "timings"
         ]
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "typescript field is a non-empty string",
+      "name": "entry request has method and url",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
-        "length": 145
+        "method": "POST",
+        "url": "https://api.example.com/graphql"
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "definitions contains an entry for each valid call",
+      "name": "entry response has status",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
-        "definitions": [
-          "GetUser",
-          "GetPosts"
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "entry has _type set to \"graphql\" or \"rest\"",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "types": [
+          "graphql",
+          "rest"
         ]
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "typescript output contains interface or type keyword",
+      "name": "request headers are converted to name/value pairs",
       "status": "pass",
       "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
-        "snippet": "interface GetUser {\n  user: { id: string; name: string };\n}\n\ninterface GetPosts "
+        "count": 1
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "inferred schema for user object is object type at top level",
-      "status": "pass",
-      "duration_ms": 0,
-      "error": null,
-      "input": {},
-      "output": {
-        "type": "object"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "works with a single GraphQL call",
-      "status": "pass",
-      "duration_ms": 1,
-      "error": null,
-      "input": {},
-      "output": {
-        "ok": true
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "[chaos] null input → jsonSchema null + fallback typescript string",
+      "name": "entry with no request body → postData absent",
       "status": "pass",
       "duration_ms": 0,
       "error": null,
@@ -109,7 +150,7 @@
       "screenshot": null
     },
     {
-      "name": "[chaos] empty array → jsonSchema null + fallback string",
+      "name": "[chaos] empty apiCalls → 0 entries",
       "status": "pass",
       "duration_ms": 0,
       "error": null,
@@ -121,7 +162,7 @@
       "screenshot": null
     },
     {
-      "name": "[chaos] call with no response body → gracefully skipped",
+      "name": "[chaos] missing apiCalls key → 0 entries, no crash",
       "status": "pass",
       "duration_ms": 0,
       "error": null,
@@ -133,9 +174,9 @@
       "screenshot": null
     },
     {
-      "name": "[chaos] call with null response data → gracefully handled",
+      "name": "[chaos] call with no url → entry still built",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 5,
       "error": null,
       "input": {},
       "output": {
@@ -145,7 +186,7 @@
       "screenshot": null
     },
     {
-      "name": "[chaos] malformed body string → operation name falls back gracefully",
+      "name": "[chaos] call with no response → entry still built",
       "status": "pass",
       "duration_ms": 0,
       "error": null,
@@ -158,11 +199,11 @@
     }
   ],
   "summary": {
-    "total": 12,
-    "passed": 12,
+    "total": 15,
+    "passed": 15,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 31,
-    "avg_duration_ms": 3
+    "duration_ms": 17,
+    "avg_duration_ms": 1
   }
 }

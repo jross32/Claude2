@@ -1,27 +1,31 @@
-# Test Results — api
+# Test Results — unit
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-13T22:28:12.033Z
-**Commit:** `c026bbe`
-**Duration:** 3200ms
+**Run:** 2026-04-15T04:36:13.391Z
+**Commit:** `ea6940e`
+**Duration:** 31ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 8 | 8 | 0 | 0 |
+| 12 | 12 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/session/check with valid url → 200 + { exists: boolean } | pass | 27ms | |
-| ✅ | GET /api/session/check for poolplayers.com → exists field present | pass | 5ms | |
-| ✅ | DELETE /api/session with url → 200 + { cleared: boolean } | pass | 5ms | |
-| ✅ | GET /api/site-credentials for unknown site → { found: false } | pass | 4ms | |
-| ✅ | GET /api/site-credentials for poolplayers.com → { found: true, username: string } | pass | 5ms | |
-| ✅ | [chaos] GET /api/session/check with no url → { exists: false } | pass | 4ms | |
-| ✅ | [chaos] DELETE /api/session with no url → does not 500 | pass | 3ms | |
-| ✅ | [chaos] GET /api/site-credentials with no url → does not 500 | pass | 4ms | |
+| ✅ | inferSchema returns object with jsonSchema and typescript | pass | 8ms | |
+| ✅ | jsonSchema has $schema and definitions | pass | 3ms | |
+| ✅ | typescript field is a non-empty string | pass | 1ms | |
+| ✅ | definitions contains an entry for each valid call | pass | 2ms | |
+| ✅ | typescript output contains interface or type keyword | pass | 1ms | |
+| ✅ | inferred schema for user object is object type at top level | pass | 0ms | |
+| ✅ | works with a single GraphQL call | pass | 1ms | |
+| ✅ | [chaos] null input → jsonSchema null + fallback typescript string | pass | 0ms | |
+| ✅ | [chaos] empty array → jsonSchema null + fallback string | pass | 0ms | |
+| ✅ | [chaos] call with no response body → gracefully skipped | pass | 0ms | |
+| ✅ | [chaos] call with null response data → gracefully handled | pass | 0ms | |
+| ✅ | [chaos] malformed body string → operation name falls back gracefully | pass | 0ms | |
 
 

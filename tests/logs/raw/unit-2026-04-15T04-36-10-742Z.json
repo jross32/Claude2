@@ -1,91 +1,133 @@
 {
-  "timestamp": "2026-04-15T04:36:13.391Z",
+  "timestamp": "2026-04-15T04:36:10.739Z",
   "git_commit": "ea6940e",
   "suite": "unit",
   "tests": [
     {
-      "name": "inferSchema returns object with jsonSchema and typescript",
-      "status": "pass",
-      "duration_ms": 8,
-      "error": null,
-      "input": {},
-      "output": {
-        "keys": [
-          "jsonSchema",
-          "typescript"
-        ]
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "jsonSchema has $schema and definitions",
-      "status": "pass",
-      "duration_ms": 3,
-      "error": null,
-      "input": {},
-      "output": {
-        "keys": [
-          "GetUser",
-          "GetPosts"
-        ]
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "typescript field is a non-empty string",
-      "status": "pass",
-      "duration_ms": 1,
-      "error": null,
-      "input": {},
-      "output": {
-        "length": 145
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "definitions contains an entry for each valid call",
+      "name": "extracts email addresses from text",
       "status": "pass",
       "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
-        "definitions": [
-          "GetUser",
-          "GetPosts"
+        "emails": [
+          "hello@example.com",
+          "support@corp.org"
         ]
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "typescript output contains interface or type keyword",
+      "name": "deduplicates repeated emails",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "emails": [
+          "info@test.com"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extracts US phone numbers",
       "status": "pass",
       "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
-        "snippet": "interface GetUser {\n  user: { id: string; name: string };\n}\n\ninterface GetPosts "
+        "phones": [
+          " (555) 123-4567",
+          " 800-555-0199"
+        ]
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "inferred schema for user object is object type at top level",
+      "name": "extracts https URLs",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "urls": [
+          "https://example.com",
+          "https://docs.example.com/guide"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "filters linkedin and github URLs into socials",
       "status": "pass",
       "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
-        "type": "object"
+        "github": [
+          "https://github.com/user"
+        ],
+        "linkedin": [
+          "https://linkedin.com/in/user"
+        ]
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "works with a single GraphQL call",
+      "name": "extracts twitter handles",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "twitter": [
+          "@example",
+          "@support_team"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extracts street addresses",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "addresses": [
+          "123 Main Street downtown"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "always returns all keys in result shape",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "keys": [
+          "emails",
+          "phones",
+          "urls",
+          "socials",
+          "addresses"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] empty string → all empty arrays",
       "status": "pass",
       "duration_ms": 1,
       "error": null,
@@ -97,7 +139,7 @@
       "screenshot": null
     },
     {
-      "name": "[chaos] null input → jsonSchema null + fallback typescript string",
+      "name": "[chaos] null input → all empty arrays",
       "status": "pass",
       "duration_ms": 0,
       "error": null,
@@ -109,7 +151,7 @@
       "screenshot": null
     },
     {
-      "name": "[chaos] empty array → jsonSchema null + fallback string",
+      "name": "[chaos] number input → all empty arrays",
       "status": "pass",
       "duration_ms": 0,
       "error": null,
@@ -121,33 +163,9 @@
       "screenshot": null
     },
     {
-      "name": "[chaos] call with no response body → gracefully skipped",
+      "name": "[chaos] very long string with no entities → no crash",
       "status": "pass",
-      "duration_ms": 0,
-      "error": null,
-      "input": {},
-      "output": {
-        "ok": true
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "[chaos] call with null response data → gracefully handled",
-      "status": "pass",
-      "duration_ms": 0,
-      "error": null,
-      "input": {},
-      "output": {
-        "ok": true
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "[chaos] malformed body string → operation name falls back gracefully",
-      "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 31987,
       "error": null,
       "input": {},
       "output": {
@@ -162,7 +180,7 @@
     "passed": 12,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 31,
-    "avg_duration_ms": 3
+    "duration_ms": 32027,
+    "avg_duration_ms": 2669
   }
 }
