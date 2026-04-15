@@ -67,6 +67,21 @@ async function main() {
     setOutput({ annotatedTools: TOOLS.length });
   });
 
+  await runner.run('research_url schema exposes auto/fast/deep modes', ({ setOutput }) => {
+    const researchTool = TOOLS.find((tool) => tool.name === 'research_url');
+    const modeEnum = researchTool?.inputSchema?.properties?.mode?.enum || [];
+    const includeEvidence = researchTool?.inputSchema?.properties?.includeEvidence;
+
+    if (!modeEnum.includes('auto') || !modeEnum.includes('fast') || !modeEnum.includes('deep')) {
+      throw new Error(`Unexpected mode enum: ${JSON.stringify(modeEnum)}`);
+    }
+    if (!includeEvidence || includeEvidence.type !== 'boolean') {
+      throw new Error('includeEvidence flag missing from research_url schema');
+    }
+
+    setOutput({ modeEnum, includeEvidenceType: includeEvidence.type });
+  });
+
   await runner.run('Read-only MCP tools expose readOnlyHint', ({ setOutput }) => {
     const searchTool = TOOLS.find((tool) => tool.name === 'search_scrape_text');
     if (!searchTool?.annotations?.readOnlyHint) throw new Error('search_scrape_text should be read-only');
@@ -127,6 +142,92 @@ async function main() {
     if (results[0].matchCount < 2) throw new Error(`Expected multiple matches, got ${results[0].matchCount}`);
     if (!results[0].snippets.length) throw new Error('Expected snippets for matching page');
     setOutput({ matches: results[0].matchCount, snippets: results[0].snippets.length });
+  });
+
+  await runner.run('research question router classifies extractive and deep prompts', ({ setOutput }) => {
+    const extractive = __private__.determineResearchStrategy('When is Black Bolt & White Flare releasing?', 'auto');
+    const deep = __private__.determineResearchStrategy('Compare the major upcoming releases and explain the likely trends.', 'auto');
+    const forcedFast = __private__.determineResearchStrategy('Summarize the page for me.', 'fast');
+
+    if (extractive.routeUsed !== 'extractive') throw new Error(`Expected extractive route, got ${extractive.routeUsed}`);
+    if (deep.routeUsed !== 'reasoning-heavy') throw new Error(`Expected reasoning-heavy route, got ${deep.routeUsed}`);
+    if (forcedFast.routeUsed !== 'fast-ollama') throw new Error(`Expected fast override, got ${forcedFast.routeUsed}`);
+
+    setOutput({ extractive: extractive.routeUsed, deep: deep.routeUsed, forcedFast: forcedFast.routeUsed });
+  });
+
+  await runner.run('buildResearchEvidence respects fast profile budget and ranks matches first', ({ setOutput }) => {
+    const evidence = __private__.buildResearchEvidence([
+      {
+        url: 'https://example.com/releases',
+        title: 'Upcoming Releases',
+        fullText: 'Black Bolt releases July 18 2025. Mega Evolution releases September 26 2025.',
+        headings: { h1: ['Upcoming Releases'], h2: ['Release Calendar'] },
+        links: [{ href: 'https://example.com/releases/black-bolt', text: 'Black Bolt' }],
+      },
+      {
+        url: 'https://example.com/about',
+        title: 'About the site',
+        fullText: 'General site information and contact details.',
+        headings: { h1: ['About'], h2: [] },
+        links: [],
+      },
+    ], 'When does Black Bolt release?', 'fast');
+
+    if (!evidence.promptPages.length) throw new Error('Expected prompt pages');
+    if (evidence.publicEvidence[0].url !== 'https://example.com/releases') {
+      throw new Error(`Expected release page first, got ${evidence.publicEvidence[0].url}`);
+    }
+    const totalChars = evidence.promptPages.reduce((sum, page) => sum + page.fullText.length, 0);
+    if (totalChars > __private__.getResearchProfile('fast').maxTotalChars) {
+      throw new Error(`Fast evidence exceeded budget: ${totalChars}`);
+    }
+
+    setOutput({ rankedUrl: evidence.publicEvidence[0].url, totalChars });
+  });
+
+  await runner.run('analyzeResearchQuestion skips Ollama for extractive auto mode', async ({ setOutput }) => {
+    let called = false;
+    const result = await __private__.analyzeResearchQuestion([
+      {
+        url: 'https://example.com/releases',
+        title: 'Upcoming Releases',
+        fullText: 'Black Bolt releases July 18 2025.',
+        headings: { h1: ['Upcoming Releases'], h2: [] },
+        links: [{ href: 'https://example.com/releases/black-bolt', text: 'Black Bolt' }],
+      },
+    ], 'When does Black Bolt release?', {
+      mode: 'auto',
+      analyzeWithOllamaImpl: async () => {
+        called = true;
+        return null;
+      },
+    });
+
+    if (called) throw new Error('Expected extractive auto mode to skip Ollama');
+    if (result.routeUsed !== 'extractive') throw new Error(`Unexpected routeUsed: ${result.routeUsed}`);
+    setOutput({ routeUsed: result.routeUsed, analysisMethod: result.analysisMethod });
+  });
+
+  await runner.run('analyzeResearchQuestion falls back cleanly when Ollama returns null', async ({ setOutput }) => {
+    const result = await __private__.analyzeResearchQuestion([
+      {
+        url: 'https://example.com/releases',
+        title: 'Upcoming Releases',
+        fullText: 'Black Bolt releases July 18 2025. Mega Evolution releases September 26 2025.',
+        headings: { h1: ['Upcoming Releases'], h2: ['Release Calendar'] },
+        links: [],
+      },
+    ], 'Summarize the release page and explain the key themes.', {
+      mode: 'deep',
+      includeEvidence: true,
+      analyzeWithOllamaImpl: async () => null,
+    });
+
+    if (result.routeUsed !== 'deep-ollama') throw new Error(`Expected deep override route, got ${result.routeUsed}`);
+    if (result.analysisMethod !== 'keyword-extraction') throw new Error(`Expected keyword fallback, got ${result.analysisMethod}`);
+    if (!Array.isArray(result.evidence) || !result.evidence.length) throw new Error('Expected evidence in response');
+    setOutput({ routeUsed: result.routeUsed, evidenceCount: result.evidence.length });
   });
 
   await runner.run('normalizeCompletedScrapeResult converts saved scrapes into result shape', ({ setOutput }) => {

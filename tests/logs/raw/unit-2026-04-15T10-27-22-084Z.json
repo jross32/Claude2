@@ -1,0 +1,279 @@
+{
+  "timestamp": "2026-04-15T10:27:22.080Z",
+  "git_commit": "afc638b",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "generateReact returns a string",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "length": 577
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateReact output contains React import",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateReact output includes page heading text",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateReact only includes internal links",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateReact with null → returns fallback string",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "result": "// No page data available"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateReact with empty object → no crash",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extractCSS returns a string",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "length": 579
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extractCSS output contains :root block",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] extractCSS with null → returns fallback string",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "result": "/* No page data available */"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] extractCSS with empty object → no crash",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateMarkdown returns a string",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "length": 225
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateMarkdown output contains h1 heading marker",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateMarkdown includes page title",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateMarkdown includes links section",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateMarkdown with null → returns fallback string",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "result": "# No page data available\n"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateMarkdown with empty object → no crash",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateSitemap returns XML string",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "length": 201
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateSitemap includes all page URLs",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateSitemap escapes & in URLs",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateSitemap with null → returns empty sitemap",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateSitemap with empty array → returns empty urlset",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateSitemap with pages missing meta → no crash",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 22,
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 19,
+    "avg_duration_ms": 1
+  }
+}

@@ -1,9 +1,9 @@
 # Test Results — unit
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-15T10:10:27.797Z
-**Commit:** `cb2b3dd`
-**Duration:** 12ms
+**Run:** 2026-04-15T10:27:26.419Z
+**Commit:** `afc638b`
+**Duration:** 13ms
 
 ## Summary
 
@@ -17,8 +17,8 @@
 |--|------|--------|----------|--|
 | ✅ | ScraperSession exposes initial live status snapshot | pass | 3ms | |
 | ✅ | progress updates live counters and step metadata | pass | 0ms | |
-| ✅ | pause and resume update state snapshot | pass | 1ms | |
-| ✅ | credential and verification waits toggle flags without leaking secrets | pass | 1ms | |
+| ✅ | pause and resume update state snapshot | pass | 2ms | |
+| ✅ | credential and verification waits toggle flags without leaking secrets | pass | 2ms | |
 | ✅ | markComplete and markError shape terminal snapshot fields | pass | 1ms | |
 
 
