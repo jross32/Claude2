@@ -1,4 +1,32 @@
-const { chromium } = require('playwright');
+const { chromium: _chromiumBase } = require('playwright');
+let chromium;
+try {
+  const { chromium: chromiumExtra } = require('playwright-extra');
+  const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+  chromiumExtra.use(StealthPlugin());
+  chromium = chromiumExtra;
+} catch {
+  chromium = _chromiumBase; // fallback if stealth plugin not installed
+}
+
+// ── User-agent pool (realistic Chrome on Windows strings) ─────────────────
+const _UA_POOL = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+];
+const _VIEWPORT_POOL = [
+  { width: 1920, height: 1080 },
+  { width: 1366, height: 768 },
+  { width: 1280, height: 800 },
+  { width: 1440, height: 900 },
+  { width: 1536, height: 864 },
+];
+const _randomUA = () => _UA_POOL[Math.floor(Math.random() * _UA_POOL.length)];
+const _randomViewport = () => _VIEWPORT_POOL[Math.floor(Math.random() * _VIEWPORT_POOL.length)];
 const { extractPageData } = require('./extractor');
 const { handleAuth } = require('./auth');
 const fs = require('fs');
