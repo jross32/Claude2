@@ -32,14 +32,16 @@ const NEW_TOOL_NAMES = [
   'get_tech_stack',
   'find_graphql_endpoints',
   'preflight_url',
+  'research_url',
+  'http_fetch',
 ];
 
 async function main() {
   const runner = new TestRunner('unit');
 
-  await runner.run('MCP server exports 38 tools', ({ setOutput }) => {
+  await runner.run('MCP server exports 40 tools', ({ setOutput }) => {
     if (!Array.isArray(TOOLS)) throw new Error('TOOLS export missing');
-    if (TOOLS.length !== 38) throw new Error(`Expected 38 tools, got ${TOOLS.length}`);
+    if (TOOLS.length !== 40) throw new Error(`Expected 40 tools, got ${TOOLS.length}`);
     setOutput({ count: TOOLS.length });
   });
 
@@ -125,6 +127,48 @@ async function main() {
     if (results[0].matchCount < 2) throw new Error(`Expected multiple matches, got ${results[0].matchCount}`);
     if (!results[0].snippets.length) throw new Error('Expected snippets for matching page');
     setOutput({ matches: results[0].matchCount, snippets: results[0].snippets.length });
+  });
+
+  await runner.run('normalizeCompletedScrapeResult converts saved scrapes into result shape', ({ setOutput }) => {
+    const normalized = __private__.normalizeCompletedScrapeResult({
+      sessionId: 'save-123',
+      startUrl: 'https://example.com/docs',
+      startedAt: '2026-04-15T00:00:00.000Z',
+      lastSavedAt: '2026-04-15T00:00:05.000Z',
+      pages: [{
+        meta: { url: 'https://example.com/docs', title: 'Docs Home' },
+        headings: { h1: [{ text: 'Docs' }], h2: [] },
+        fullText: 'Documentation landing page',
+        images: [{ src: 'https://example.com/logo.png' }],
+      }],
+      apiCalls: {
+        graphql: [{ url: 'https://example.com/graphql' }],
+        rest: [{ url: 'https://example.com/api/items' }],
+      },
+      assets: [{ url: 'https://example.com/app.js' }],
+      cookies: [{ name: 'crumb', domain: 'example.com' }],
+      securityHeaders: { server: 'Example' },
+      failedPages: [],
+    });
+
+    if (normalized.meta.targetUrl !== 'https://example.com/docs') throw new Error('Expected targetUrl from save');
+    if (normalized.meta.totalPages !== 1) throw new Error(`Expected totalPages 1, got ${normalized.meta.totalPages}`);
+    if (normalized.siteInfo.title !== 'Docs Home') throw new Error('Expected siteInfo title from first page');
+    if (normalized.pages.length !== 1) throw new Error('Expected pages to be preserved');
+    setOutput({ totalPages: normalized.meta.totalPages, title: normalized.siteInfo.title });
+  });
+
+  await runner.run('toResearchPage reads saved-page meta fields', ({ setOutput }) => {
+    const page = __private__.toResearchPage({
+      meta: { url: 'https://example.com/about', title: 'About Example' },
+      fullText: 'About page body',
+      headings: { h1: [{ text: 'About' }], h2: [] },
+    });
+
+    if (page.url !== 'https://example.com/about') throw new Error('Expected URL from page.meta.url');
+    if (page.title !== 'About Example') throw new Error('Expected title from page.meta.title');
+    if (page.fullText !== 'About page body') throw new Error('Expected full text to be preserved');
+    setOutput({ url: page.url, title: page.title });
   });
 
   await runner.run('createToolSuccess includes structuredContent', ({ setOutput }) => {
