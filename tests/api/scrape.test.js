@@ -122,6 +122,46 @@ async function main() {
     setOutput({ status: res.status });
   });
 
+  await runner.run('POST /api/ai/chat with no question → 400', async ({ setOutput }) => {
+    const res = await post('/api/ai/chat', { source: 'current', scrapeData: { pages: [] } });
+    if (res.status !== 400) throw new Error(`Expected 400, got ${res.status}`);
+    const body = json(res);
+    if (!body.error) throw new Error('Expected error field');
+    setOutput({ status: res.status, error: body.error });
+  });
+
+  await runner.run('POST /api/ai/chat analyzes current scrape data without Ollama for extractive questions', async ({ setOutput }) => {
+    const res = await post('/api/ai/chat', {
+      source: 'current',
+      question: 'What are the store hours?',
+      mode: 'auto',
+      scrapeData: {
+        startUrl: 'https://example.com/store',
+        meta: { targetUrl: 'https://example.com/store' },
+        pages: [{
+          meta: {
+            url: 'https://example.com/store',
+            title: 'Example Store',
+            description: 'Store details',
+          },
+          fullText: 'Example Store is open every day from 8:00 AM to 9:00 PM.',
+          headings: { h1: [{ text: 'Store hours' }], h2: [] },
+          links: [],
+        }],
+        apiCalls: { graphql: [], rest: [] },
+        visitedUrls: ['https://example.com/store'],
+        failedPages: [],
+      },
+    });
+
+    if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
+    const body = json(res);
+    if (body.source !== 'current') throw new Error(`Expected current source, got ${body.source}`);
+    if (body.routeUsed !== 'extractive') throw new Error(`Expected extractive route, got ${body.routeUsed}`);
+    if (!String(body.answer || '').includes('8:00 AM')) throw new Error(`Unexpected answer: ${body.answer}`);
+    setOutput({ routeUsed: body.routeUsed, confidence: body.confidence });
+  });
+
   await runner.run('POST /api/scrape/:id/resume for unknown session → 404', async ({ setOutput }) => {
     const res = await post('/api/scrape/fake-session-id-999/resume', {});
     if (res.status !== 404) throw new Error(`Expected 404, got ${res.status}`);

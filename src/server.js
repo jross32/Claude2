@@ -26,6 +26,14 @@ const { diffScrapes } = require('./diff');
 const { createSchedule, deleteSchedule, listSchedules } = require('./scheduler');
 const { generateReact, extractCSS, generateMarkdown, generateSitemap } = require('./generators');
 const gitAutosave = require('./git-autosave');
+const {
+  handleTool: handleMcpTool,
+  __private__: {
+    analyzeResearchQuestion,
+    normalizeCompletedScrapeResult,
+    toResearchPage,
+  },
+} = require('../mcp-server');
 
 const app = express();
 const server = http.createServer(app);
@@ -182,6 +190,76 @@ function getActiveSessionSnapshots() {
       }
     })
     .filter(Boolean);
+}
+
+function buildAiContextPage(result) {
+  if (!result || typeof result !== 'object') return null;
+
+  const graphqlCalls = Array.isArray(result.apiCalls?.graphql) ? result.apiCalls.graphql : [];
+  const restCalls = Array.isArray(result.apiCalls?.rest) ? result.apiCalls.rest : [];
+  const cookies = Array.isArray(result.cookies) ? result.cookies : [];
+  const securityHeaders = result.securityHeaders && typeof result.securityHeaders === 'object'
+    ? Object.entries(result.securityHeaders)
+        .map(([name, value]) => `${name}: ${String(value)}`)
+        .slice(0, 20)
+    : [];
+  const visitedUrls = Array.isArray(result.visitedUrls) ? result.visitedUrls.slice(0, 20) : [];
+  const failedPages = Array.isArray(result.failedPages) ? result.failedPages.slice(0, 10) : [];
+  const consoleLogs = Array.isArray(result.consoleLogs) ? result.consoleLogs.slice(-12) : [];
+  const apiEndpoints = [
+    ...graphqlCalls.map((call) => call.endpoint || call.url).filter(Boolean),
+    ...restCalls.map((call) => call.url).filter(Boolean),
+  ].slice(0, 25);
+
+  const lines = [
+    `Start URL: ${result.startUrl || result.siteInfo?.origin || ''}`,
+    `Page count: ${Array.isArray(result.pages) ? result.pages.length : 0}`,
+    `Visited URL count: ${Array.isArray(result.visitedUrls) ? result.visitedUrls.length : 0}`,
+    `GraphQL call count: ${graphqlCalls.length}`,
+    `REST call count: ${restCalls.length}`,
+    `Asset count: ${Array.isArray(result.assets) ? result.assets.length : 0}`,
+    `Cookie names: ${cookies.map((cookie) => cookie.name).filter(Boolean).slice(0, 25).join(', ') || 'none captured'}`,
+    `Security headers: ${securityHeaders.join(' | ') || 'none captured'}`,
+    `Visited URLs:\n${visitedUrls.join('\n') || 'none captured'}`,
+    `Failed pages:\n${failedPages.map((page) => `${page.url || ''} — ${page.reason || 'unknown failure'}`).join('\n') || 'none'}`,
+    `API endpoints:\n${apiEndpoints.join('\n') || 'none captured'}`,
+    `Recent console logs:\n${consoleLogs.map((entry) => `${entry.level || 'log'}: ${entry.text || entry.message || ''}`).join('\n') || 'none captured'}`,
+  ];
+
+  return {
+    url: 'about:scrape-context',
+    title: 'Scrape Context Summary',
+    description: 'Synthetic summary of the current scrape metadata, API activity, cookies, headers, and crawl results.',
+    fullText: lines.join('\n\n'),
+    headings: {
+      h1: ['Scrape Context Summary'],
+      h2: ['Metadata', 'Visited URLs', 'API Endpoints', 'Console Logs'],
+    },
+    links: visitedUrls.map((url) => ({ href: url, text: url })),
+  };
+}
+
+function buildAiCurrentSourcePayload(scrapeData) {
+  const normalized = normalizeCompletedScrapeResult(scrapeData);
+  const pages = (Array.isArray(normalized?.pages) ? normalized.pages : [])
+    .map((page) => toResearchPage(page))
+    .filter((page) => page && (page.url || page.title || page.fullText));
+  const contextPage = buildAiContextPage(normalized);
+  if (contextPage) pages.unshift(contextPage);
+  return { normalized, pages };
+}
+
+function unwrapMcpToolResult(result) {
+  if (!result || typeof result !== 'object') return result;
+  if (result.isError) {
+    const error = result.structuredContent?.error || { message: result.content?.[0]?.text || 'Tool failed' };
+    const err = new Error(error.message || 'Tool failed');
+    err.code = error.code || 'tool_failed';
+    err.retryable = !!error.retryable;
+    err.suggestedNextStep = error.suggestedNextStep || null;
+    throw err;
+  }
+  return result.structuredContent?.data || result;
 }
 
 // Lightweight site detection — fetch title + favicon without launching a scrape
@@ -657,6 +735,94 @@ app.post('/api/generate/sitemap', (req, res) => {
     res.send(xml);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- AI assistant ----
+app.post('/api/ai/chat', async (req, res) => {
+  const {
+    source = 'current',
+    question,
+    mode = 'auto',
+    includeEvidence = false,
+    url,
+    scrapeData,
+    maxPages = 3,
+    scrapeDepth = 1,
+    autoScroll = false,
+  } = req.body || {};
+
+  const trimmedQuestion = String(question || '').trim();
+  if (!trimmedQuestion) {
+    return res.status(400).json({ error: 'question is required' });
+  }
+
+  try {
+    if (source === 'url') {
+      const targetUrl = String(url || '').trim();
+      if (!targetUrl) return res.status(400).json({ error: 'url is required when source is "url"' });
+
+      const startedAt = Date.now();
+      const toolResult = await handleMcpTool('research_url', {
+        url: targetUrl,
+        question: trimmedQuestion,
+        mode,
+        includeEvidence: !!includeEvidence,
+        maxPages: Number(maxPages) || 3,
+        scrapeDepth: Number(scrapeDepth) || 1,
+        autoScroll: !!autoScroll,
+      });
+      const data = unwrapMcpToolResult(toolResult);
+      return res.json({
+        source: 'url',
+        question: trimmedQuestion,
+        requestedUrl: targetUrl,
+        ...data,
+        timings: {
+          ...(data.timings || {}),
+          totalMs: Date.now() - startedAt,
+        },
+      });
+    }
+
+    if (!scrapeData || typeof scrapeData !== 'object') {
+      return res.status(400).json({ error: 'scrapeData is required when source is "current"' });
+    }
+
+    const { normalized, pages } = buildAiCurrentSourcePayload(scrapeData);
+    if (!pages.length) {
+      return res.status(400).json({ error: 'No page text is available in the current scrape data yet' });
+    }
+
+    const startedAt = Date.now();
+    const analysis = await analyzeResearchQuestion(pages, trimmedQuestion, {
+      mode,
+      includeEvidence: !!includeEvidence,
+    });
+
+    return res.json({
+      source: 'current',
+      question: trimmedQuestion,
+      startUrl: normalized?.startUrl || normalized?.siteInfo?.origin || '',
+      pageCount: Array.isArray(normalized?.pages) ? normalized.pages.length : 0,
+      routeUsed: analysis.routeUsed,
+      modelUsed: analysis.modelUsed,
+      answer: analysis.answer,
+      findings: analysis.findings || [],
+      confidence: analysis.confidence || 'medium',
+      suggestedFollowUp: analysis.suggestedFollowUp || [],
+      ...(includeEvidence ? { evidence: analysis.evidence || [] } : {}),
+      timings: {
+        analysisMs: Date.now() - startedAt,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({
+      error: err.message,
+      code: err.code || 'ai_failed',
+      retryable: !!err.retryable,
+      suggestedNextStep: err.suggestedNextStep || 'Try again with a smaller scope or switch modes.',
+    });
   }
 });
 

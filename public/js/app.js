@@ -1629,6 +1629,8 @@ function onPartialResults(sessionId, msg) {
 
 function onSessionComplete(sessionId, data) {
   scrapedData = data;
+  updateAIContextStatus();
+  syncAIUrlFromCurrentContext();
   saveToHistory(data);
   loadRuns(); // refresh runs badge + card list
   updateSessionProgress(sessionId, 'Complete ✓', 100);
@@ -3076,6 +3078,8 @@ async function openRun(id, source) {
 
     scrapedData = data;
     activeRunId = id;
+    updateAIContextStatus();
+    syncAIUrlFromCurrentContext(true);
 
     renderResults(data);
     renderAPICalls(data.apiCalls);
@@ -3771,6 +3775,289 @@ document.getElementById('crawl-sort-tabs').addEventListener('click', (e) => {
 
 // ---- Init ----
 connectWS();
+
+// ============================================================
+//  AI Assistant Panel
+// ============================================================
+
+const AI_FAST_MODEL = 'llama3.2:1b';
+const AI_DEEP_MODEL = 'llama3.2:3b';
+
+function getCurrentScrapeTargetUrl() {
+  return scrapedData?.meta?.targetUrl
+    || scrapedData?.startUrl
+    || scrapedData?.siteInfo?.origin
+    || scrapedData?.pages?.[0]?.meta?.url
+    || '';
+}
+
+function updateAIContextStatus() {
+  const contextEl = document.getElementById('ai-current-context');
+  const fastEl = document.getElementById('ai-fast-model');
+  const deepEl = document.getElementById('ai-deep-model');
+  if (!contextEl || !fastEl || !deepEl) return;
+
+  fastEl.textContent = AI_FAST_MODEL;
+  deepEl.textContent = AI_DEEP_MODEL;
+
+  if (!scrapedData) {
+    contextEl.textContent = 'No run loaded yet';
+    return;
+  }
+
+  const targetUrl = getCurrentScrapeTargetUrl();
+  const hostname = (() => {
+    try { return new URL(targetUrl).hostname; } catch { return targetUrl || 'current run'; }
+  })();
+  const pageCount = scrapedData?.pages?.length || 0;
+  const apiCount = (scrapedData?.apiCalls?.graphql?.length || 0) + (scrapedData?.apiCalls?.rest?.length || 0);
+  contextEl.textContent = `${hostname} — ${pageCount} pages, ${apiCount} API calls`;
+}
+
+function syncAIUrlFromCurrentContext(force = false) {
+  const urlEl = document.getElementById('ai-url');
+  if (!urlEl) return;
+  if (!force && urlEl.value.trim()) return;
+  const targetUrl = getCurrentScrapeTargetUrl();
+  if (targetUrl) urlEl.value = targetUrl;
+}
+
+function clearAIEmptyState() {
+  const log = document.getElementById('ai-chat-log');
+  const empty = log?.querySelector('.ai-empty-state');
+  if (empty) empty.remove();
+}
+
+function appendAIMessage(role, renderContent) {
+  const log = document.getElementById('ai-chat-log');
+  if (!log) return null;
+  clearAIEmptyState();
+
+  const wrapper = document.createElement('div');
+  wrapper.className = `ai-message ai-message-${role}`;
+
+  const label = document.createElement('div');
+  label.className = 'ai-message-label';
+  label.textContent = role === 'user' ? 'You' : 'Assistant';
+
+  const card = document.createElement('div');
+  card.className = 'ai-message-card';
+  renderContent(card);
+
+  wrapper.appendChild(label);
+  wrapper.appendChild(card);
+  log.appendChild(wrapper);
+  log.scrollTop = log.scrollHeight;
+  return { wrapper, card };
+}
+
+function renderAIPills(container, items) {
+  if (!items?.length) return;
+  const row = document.createElement('div');
+  row.className = 'ai-meta-row';
+  items.filter(Boolean).forEach((item) => {
+    const pill = document.createElement('span');
+    pill.className = 'ai-meta-pill';
+    pill.textContent = item;
+    row.appendChild(pill);
+  });
+  container.appendChild(row);
+}
+
+function renderAIList(container, title, values, className) {
+  if (!Array.isArray(values) || !values.length) return;
+  const heading = document.createElement('strong');
+  heading.textContent = title;
+  container.appendChild(heading);
+  const list = document.createElement('ul');
+  list.className = className;
+  values.forEach((value) => {
+    const item = document.createElement('li');
+    item.textContent = typeof value === 'string'
+      ? value
+      : value?.title
+        ? `${value.title}: ${(value.snippets || []).join(' | ')}`
+        : JSON.stringify(value);
+    list.appendChild(item);
+  });
+  container.appendChild(list);
+}
+
+function formatAIDuration(ms) {
+  if (!Number.isFinite(ms)) return null;
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(ms >= 10000 ? 0 : 1)}s`;
+}
+
+function renderAIResponseMessage(data) {
+  appendAIMessage('assistant', (card) => {
+    const answer = document.createElement('div');
+    answer.className = 'ai-answer';
+    answer.textContent = data.answer || 'No answer returned.';
+    card.appendChild(answer);
+
+    renderAIList(card, 'Key findings', data.findings || [], 'ai-findings');
+    renderAIList(card, 'Suggested follow-up', data.suggestedFollowUp || [], 'ai-followups');
+    renderAIList(card, 'Evidence', data.evidence || [], 'ai-evidence-list');
+
+    renderAIPills(card, [
+      data.routeUsed ? `Route: ${data.routeUsed}` : null,
+      data.modelUsed ? `Model: ${data.modelUsed}` : 'Model: extractive only',
+      data.confidence ? `Confidence: ${data.confidence}` : null,
+      data.pageCount ? `Pages: ${data.pageCount}` : data.pagesScraped ? `Pages: ${data.pagesScraped}` : null,
+      data.sessionId ? `Session: ${data.sessionId}` : null,
+      data.timings?.analysisMs ? `Analysis: ${formatAIDuration(data.timings.analysisMs)}` : null,
+      data.timings?.scrapeMs ? `Scrape: ${formatAIDuration(data.timings.scrapeMs)}` : null,
+      data.timings?.totalMs ? `Total: ${formatAIDuration(data.timings.totalMs)}` : null,
+    ]);
+  });
+}
+
+function renderAIErrorMessage(message) {
+  appendAIMessage('assistant', (card) => {
+    const body = document.createElement('div');
+    body.className = 'ai-answer';
+    body.textContent = message;
+    card.appendChild(body);
+  });
+}
+
+function createAILoadingMessage() {
+  return appendAIMessage('assistant', (card) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ai-loading';
+    wrap.innerHTML = `
+      <span>Working on it…</span>
+      <span class="ai-loading-dots"><span></span><span></span><span></span></span>
+    `;
+    card.appendChild(wrap);
+  });
+}
+
+async function sendAIQuestion() {
+  const questionEl = document.getElementById('ai-question');
+  const sourceEl = document.getElementById('ai-source');
+  const urlEl = document.getElementById('ai-url');
+  const modeEl = document.getElementById('ai-mode');
+  const includeEvidenceEl = document.getElementById('ai-include-evidence');
+  const autoScrollEl = document.getElementById('ai-auto-scroll');
+  const maxPagesEl = document.getElementById('ai-max-pages');
+  const depthEl = document.getElementById('ai-depth');
+  const sendBtn = document.getElementById('btn-ai-send');
+
+  const question = questionEl?.value.trim();
+  if (!question) return showToast('Ask the assistant a question first');
+
+  const source = sourceEl?.value || 'current';
+  const url = urlEl?.value.trim() || '';
+  if (source === 'current' && !scrapedData) {
+    return showToast('Load a run first or switch the source to fresh URL research');
+  }
+  if (source === 'url' && !url) {
+    return showToast('Enter a URL for fresh URL research');
+  }
+
+  appendAIMessage('user', (card) => {
+    const body = document.createElement('div');
+    body.className = 'ai-answer';
+    body.textContent = question;
+    card.appendChild(body);
+    renderAIPills(card, [
+      `Source: ${source === 'current' ? 'current scrape' : 'fresh URL'}`,
+      `Mode: ${modeEl?.value || 'auto'}`,
+      source === 'url' && url ? url : null,
+    ]);
+  });
+
+  const loading = createAILoadingMessage();
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '&#9203; Thinking…';
+  }
+
+  try {
+    const response = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source,
+        question,
+        mode: modeEl?.value || 'auto',
+        includeEvidence: !!includeEvidenceEl?.checked,
+        autoScroll: !!autoScrollEl?.checked,
+        maxPages: parseInt(maxPagesEl?.value, 10) || 3,
+        scrapeDepth: parseInt(depthEl?.value, 10) || 1,
+        url,
+        scrapeData: source === 'current' ? scrapedData : undefined,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    loading?.wrapper.remove();
+
+    if (!response.ok) {
+      const detail = payload?.suggestedNextStep
+        ? `${payload.error || 'AI request failed'}\n\nNext step: ${payload.suggestedNextStep}`
+        : payload?.error || 'AI request failed';
+      renderAIErrorMessage(detail);
+      return showToast(payload?.error || 'AI request failed');
+    }
+
+    renderAIResponseMessage(payload);
+    questionEl.value = '';
+  } catch (err) {
+    loading?.wrapper.remove();
+    renderAIErrorMessage(`The AI request failed.\n\n${err.message}`);
+    showToast('AI request failed: ' + err.message);
+  } finally {
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '&#9654; Ask AI';
+    }
+  }
+}
+
+(function initAIAssistantPanel() {
+  updateAIContextStatus();
+  syncAIUrlFromCurrentContext();
+
+  document.getElementById('btn-ai-send')?.addEventListener('click', sendAIQuestion);
+  document.getElementById('btn-ai-clear-chat')?.addEventListener('click', () => {
+    const log = document.getElementById('ai-chat-log');
+    if (!log) return;
+    log.innerHTML = `
+      <div class="ai-empty-state">
+        <div class="empty-icon">&#129302;</div>
+        <p>Ask about the current scrape, or switch to fresh URL research and let the assistant scrape + analyze for you.</p>
+      </div>
+    `;
+  });
+  document.getElementById('btn-ai-use-current')?.addEventListener('click', () => {
+    document.getElementById('ai-source').value = 'current';
+    syncAIUrlFromCurrentContext(true);
+    document.querySelector('[data-panel="ai"]')?.click();
+    showToast(scrapedData ? 'Using the current loaded run as AI context' : 'AI tab is ready — load a run to use current context');
+  });
+  document.getElementById('ai-source')?.addEventListener('change', (event) => {
+    const isUrl = event.target.value === 'url';
+    const urlEl = document.getElementById('ai-url');
+    const maxPagesEl = document.getElementById('ai-max-pages');
+    const depthEl = document.getElementById('ai-depth');
+    if (urlEl) urlEl.disabled = !isUrl;
+    if (maxPagesEl) maxPagesEl.disabled = !isUrl;
+    if (depthEl) depthEl.disabled = !isUrl;
+    if (!isUrl) syncAIUrlFromCurrentContext();
+  });
+  document.getElementById('ai-question')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      sendAIQuestion();
+    }
+  });
+
+  const sourceEl = document.getElementById('ai-source');
+  sourceEl?.dispatchEvent(new Event('change'));
+})();
 
 // ============================================================
 //  APA GraphQL API Panel
