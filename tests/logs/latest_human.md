@@ -1,33 +1,28 @@
 # Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-15T08:14:23.901Z
-**Commit:** `5c407e7`
-**Duration:** 15829ms
+**Run:** 2026-04-15T08:14:44.307Z
+**Commit:** `0951807`
+**Duration:** 6613ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 14 | 14 | 0 | 0 |
+| 9 | 9 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | POST /api/scrape with no body → 400 + error | pass | 71ms | |
-| ✅ | POST /api/scrape with valid url → 200 + { sessionId, message } | pass | 6ms | |
-| ✅ | GET /api/scrape/active returns active session snapshots | pass | 28ms | |
-| ✅ | GET /api/scrape/:id/status returns live session snapshot | pass | 12ms | |
-| ✅ | POST /api/scrape/:id/stop for active session → 200 | pass | 112ms | |
-| ✅ | GET /api/scrape/:id/status falls back after active session is removed | pass | 7231ms | |
-| ✅ | POST /api/scrape/:id/stop for unknown session → 404 | pass | 5ms | |
-| ✅ | POST /api/scrape/:id/pause for unknown session → 404 | pass | 4ms | |
-| ✅ | GET /api/scrape/:id/status for unknown session → 404 | pass | 5ms | |
-| ✅ | POST /api/scrape/:id/resume for unknown session → 404 | pass | 5ms | |
-| ✅ | POST /api/scrape/:id/verify for unknown session → 404 | pass | 3ms | |
-| ✅ | POST /api/scrape/:id/credentials for unknown session → 404 | pass | 4ms | |
-| ✅ | [chaos] POST /api/scrape with urls: [] → 400 | pass | 3ms | |
-| ✅ | [chaos] POST /api/scrape with malformed maxPages → does not 500 | pass | 5ms | |
+| ✅ | POST /api/generate/react → 200 + { jsx: string } | pass | 61ms | |
+| ✅ | [chaos] POST /api/generate/react with no pageData → 400 | pass | 6ms | |
+| ✅ | POST /api/generate/css → 200 + { css: string } | pass | 5ms | |
+| ✅ | [chaos] POST /api/generate/css with no pageData → 400 | pass | 4ms | |
+| ✅ | POST /api/generate/markdown → 200 + { markdown: string } | pass | 6ms | |
+| ✅ | [chaos] POST /api/generate/markdown with no pageData → 400 | pass | 4ms | |
+| ✅ | POST /api/generate/sitemap → 200 + XML string | pass | 6ms | |
+| ✅ | [chaos] POST /api/generate/sitemap with no pages → 400 | pass | 5ms | |
+| ✅ | [chaos] POST /api/generate/react with empty pageData → does not 500 | pass | 4ms | |
 
 
