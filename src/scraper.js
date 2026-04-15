@@ -1,13 +1,9 @@
-const { chromium: _chromiumBase } = require('playwright');
-let chromium;
+const { chromium } = require('playwright');
+let _stealthFn = null;
 try {
-  const { chromium: chromiumExtra } = require('playwright-extra');
-  const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-  chromiumExtra.use(StealthPlugin());
-  chromium = chromiumExtra;
-} catch {
-  chromium = _chromiumBase; // fallback if stealth plugin not installed
-}
+  _stealthFn = require('playwright-stealth').stealth;
+} catch {}
+// _stealthFn(page) — call after creating a page to apply stealth patches
 
 // ── User-agent pool (realistic Chrome on Windows strings) ─────────────────
 const _UA_POOL = [
@@ -1023,7 +1019,7 @@ class ScraperSession {
 
     // Support PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var (used when bundled browser version differs)
     const launchOpts = {
-      headless: 'new',
+      headless: true,
       slowMo: slowMotion ? parseInt(slowMotion) : 0,
       args: [
         '--no-sandbox',
@@ -1080,6 +1076,7 @@ class ScraperSession {
       this.context = context;
 
       const page = await context.newPage();
+      if (_stealthFn) await _stealthFn(page);
 
       // Native dialog dismissal only (alert/confirm/prompt boxes)
       page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
@@ -2196,6 +2193,7 @@ class ScraperSession {
       ...(savedSession ? { storageState: savedSession } : {}),
     });
     const page = await context.newPage();
+    if (_stealthFn) await _stealthFn(page);
     page.on('dialog', async (d) => { try { await d.dismiss(); } catch {} });
 
     const captures = {
@@ -2523,6 +2521,7 @@ class ScraperSession {
         const pages = await Promise.allSettled(
           Array.from({ length: pagesInCtx }, async () => {
             const page = await ctx.newPage();
+            if (_stealthFn) await _stealthFn(page);
             page.on('dialog', async (d) => { try { await d.dismiss(); } catch {} });
             const captures = {
               graphqlCalls: [], restCalls: [], assets: [], allRequests: [],
