@@ -2601,6 +2601,16 @@ class ScraperSession {
         pages: strip(this._savePages || []),
         apiCalls: { graphql: strip(graphql), rest: strip(rest) },
         assets: strip(assets),
+        cookies: strip((this.cookies || []).map((cookie) => ({
+          name: cookie.name,
+          domain: cookie.domain,
+          path: cookie.path,
+          expires: cookie.expires,
+          httpOnly: cookie.httpOnly,
+          secure: cookie.secure,
+          sameSite: cookie.sameSite,
+        }))),
+        securityHeaders: strip(this.securityHeaders || {}),
         failedPages: this.failedPages || [],
       };
       if (!fs.existsSync(SAVES_DIR)) fs.mkdirSync(SAVES_DIR, { recursive: true });
