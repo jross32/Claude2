@@ -1,28 +1,24 @@
 # Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-15T21:00:53.420Z
-**Commit:** `8ed1ed6`
-**Duration:** 5610ms
+**Run:** 2026-04-15T21:01:00.317Z
+**Commit:** `6b87f78`
+**Duration:** 6242ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 9 | 9 | 0 | 0 |
+| 5 | 5 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/schedules → 200 + array | pass | 36ms | |
-| ✅ | POST /api/schedules with valid data → 200 + { id, message } | pass | 49ms | |
-| ✅ | GET /api/schedules after create → contains new schedule | pass | 5ms | |
-| ✅ | DELETE /api/schedules/:id for existing → 200 + message | pass | 6ms | |
-| ✅ | GET /api/schedules after delete → schedule is gone | pass | 6ms | |
-| ✅ | DELETE /api/schedules/:id for unknown → 404 | pass | 4ms | |
-| ✅ | [chaos] POST /api/schedules with no cronExpr → 400 | pass | 5ms | |
-| ✅ | [chaos] POST /api/schedules with no scrapeOptions → 400 | pass | 5ms | |
-| ✅ | [chaos] POST /api/schedules with invalid cron → 400 | pass | 7ms | |
+| ✅ | POST /api/schema with graphqlCalls → 200 + schema object | pass | 82ms | |
+| ✅ | Schema response includes typescript or jsonSchema fields | pass | 7ms | |
+| ✅ | [chaos] POST /api/schema with no graphqlCalls → 400 | pass | 5ms | |
+| ✅ | [chaos] POST /api/schema with empty array → does not 500 | pass | 4ms | |
+| ✅ | [chaos] POST /api/schema with malformed call → does not 500 | pass | 4ms | |
 
 
