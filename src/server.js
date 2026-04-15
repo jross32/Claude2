@@ -442,6 +442,7 @@ app.post('/api/scrape', async (req, res) => {
       maxPages: maxPages !== undefined && maxPages !== null ? parseInt(maxPages, 10) : 100,
       saveId: sessionId,
       resumeFrom: resumeFrom || null,
+      proxy: proxy || null,
     })
     .then((result) => {
       clearTimeout(cleanupTimer);
