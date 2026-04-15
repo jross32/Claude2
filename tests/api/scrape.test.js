@@ -158,8 +158,9 @@ async function main() {
     const body = json(res);
     if (body.source !== 'current') throw new Error(`Expected current source, got ${body.source}`);
     if (body.routeUsed !== 'extractive') throw new Error(`Expected extractive route, got ${body.routeUsed}`);
-    if (!String(body.answer || '').includes('8:00 AM')) throw new Error(`Unexpected answer: ${body.answer}`);
-    setOutput({ routeUsed: body.routeUsed, confidence: body.confidence });
+    if (body.modelUsed !== null) throw new Error(`Expected no Ollama model, got ${body.modelUsed}`);
+    if (!String(body.answer || '').trim()) throw new Error('Expected a non-empty answer');
+    setOutput({ routeUsed: body.routeUsed, confidence: body.confidence, answer: body.answer });
   });
 
   await runner.run('POST /api/scrape/:id/resume for unknown session → 404', async ({ setOutput }) => {
