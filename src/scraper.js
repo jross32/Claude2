@@ -19,6 +19,43 @@ class Semaphore {
 
 const SESSIONS_DIR = path.join(__dirname, '../.scraper-sessions');
 const SAVES_DIR = path.join(__dirname, '../scrape-saves');
+const SCRAPE_STATES = {
+  RUNNING: 'running',
+  PAUSED: 'paused',
+  WAITING_AUTH: 'waiting_auth',
+  WAITING_VERIFICATION: 'waiting_verification',
+  STOPPING: 'stopping',
+  COMPLETE: 'complete',
+  STOPPED: 'stopped',
+  ERROR: 'error',
+};
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function createSessionSnapshot(sessionId) {
+  const now = nowIso();
+  return {
+    sessionId,
+    state: SCRAPE_STATES.RUNNING,
+    targetUrl: '',
+    startedAt: now,
+    updatedAt: now,
+    step: '',
+    percent: 0,
+    visited: 0,
+    total: null,
+    queued: 0,
+    failed: 0,
+    partialPageCount: 0,
+    graphqlCallCount: 0,
+    restCallCount: 0,
+    needsAuth: false,
+    needsVerification: false,
+    lastError: null,
+  };
+}
 
 function sessionFile(url) {
   try {
@@ -174,10 +211,77 @@ class ScraperSession {
     this.credentialsResolver = null;
     this.authRedirectedPages = [];  // pages that bounced to login mid-crawl
     this.failedPages = [];          // pages that failed to load (after retry)
+    this._partialPageCount = 0;
+    this._statusSnapshot = createSessionSnapshot(sessionId);
+  }
+
+  _setStatus(state, patch = {}) {
+    if (state) this._statusSnapshot.state = state;
+    Object.assign(this._statusSnapshot, patch, {
+      updatedAt: nowIso(),
+    });
+  }
+
+  _setRunningState(patch = {}) {
+    const state = this._statusSnapshot.state;
+    const nextState = [SCRAPE_STATES.PAUSED, SCRAPE_STATES.WAITING_AUTH, SCRAPE_STATES.WAITING_VERIFICATION, SCRAPE_STATES.STOPPING, SCRAPE_STATES.ERROR, SCRAPE_STATES.COMPLETE, SCRAPE_STATES.STOPPED].includes(state)
+      ? state
+      : SCRAPE_STATES.RUNNING;
+    this._setStatus(nextState, patch);
+  }
+
+  _incrementPartialPageCount(count = 1) {
+    this._partialPageCount += Math.max(0, count);
+    this._setStatus(null, { partialPageCount: this._partialPageCount });
+  }
+
+  markComplete(result = null) {
+    this._partialPageCount = Array.isArray(result?.pages) ? result.pages.length : this._partialPageCount;
+    this._setStatus(SCRAPE_STATES.COMPLETE, {
+      percent: 100,
+      step: 'Done',
+      needsAuth: false,
+      needsVerification: false,
+      lastError: null,
+      partialPageCount: this._partialPageCount,
+      visited: Array.isArray(result?.visitedUrls) ? result.visitedUrls.length : this._statusSnapshot.visited,
+      total: Array.isArray(result?.pages) ? result.pages.length : this._statusSnapshot.total,
+    });
+  }
+
+  markStopped() {
+    this._setStatus(SCRAPE_STATES.STOPPED, {
+      needsAuth: false,
+      needsVerification: false,
+      partialPageCount: this._partialPageCount,
+    });
+  }
+
+  markError(error) {
+    this._setStatus(SCRAPE_STATES.ERROR, {
+      lastError: error?.message || String(error),
+      needsAuth: false,
+      needsVerification: false,
+      partialPageCount: this._partialPageCount,
+    });
+  }
+
+  getStatusSnapshot() {
+    return {
+      ...this._statusSnapshot,
+      failed: this.failedPages.length,
+      partialPageCount: this._partialPageCount,
+      graphqlCallCount: this.graphqlCalls.length,
+      restCallCount: this.restCalls.length,
+    };
   }
 
   log(message, type = 'info') {
     console.log(`[${this.sessionId}] ${message}`);
+    this._setStatus(null, {
+      updatedAt: nowIso(),
+      lastError: type === 'error' ? message : this._statusSnapshot.lastError,
+    });
     this.broadcast(this.sessionId, { type: 'log', level: type, message });
   }
 
@@ -202,45 +306,76 @@ class ScraperSession {
   }
 
   progress(step, percent, extra = {}) {
+    this._setRunningState({
+      step,
+      percent,
+      visited: typeof extra.visited === 'number' ? extra.visited : this._statusSnapshot.visited,
+      total: typeof extra.total === 'number' ? extra.total : this._statusSnapshot.total,
+      queued: typeof extra.queued === 'number' ? extra.queued : this._statusSnapshot.queued,
+      failed: typeof extra.failed === 'number' ? extra.failed : this.failedPages.length,
+      partialPageCount: this._partialPageCount,
+    });
     this.broadcast(this.sessionId, { type: 'progress', step, percent, ...extra });
   }
 
   async submitVerification(code) {
     if (this.verificationResolver) {
+      this._setStatus(this.paused ? SCRAPE_STATES.PAUSED : SCRAPE_STATES.RUNNING, {
+        needsVerification: false,
+      });
       this.verificationResolver(code);
       this.verificationResolver = null;
     }
   }
 
   async waitForVerification() {
+    this._setStatus(SCRAPE_STATES.WAITING_VERIFICATION, {
+      needsVerification: true,
+      needsAuth: false,
+    });
     this.broadcast(this.sessionId, { type: 'needVerification' });
     return new Promise((resolve) => {
       this.verificationResolver = resolve;
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (this.verificationResolver) {
+          this._setStatus(SCRAPE_STATES.RUNNING, {
+            needsVerification: false,
+          });
           this.verificationResolver(null);
           this.verificationResolver = null;
         }
       }, 300000);
+      timer.unref?.();
     });
   }
 
   async waitForCredentials() {
+    this._setStatus(SCRAPE_STATES.WAITING_AUTH, {
+      needsAuth: true,
+      needsVerification: false,
+    });
     this.broadcast(this.sessionId, { type: 'needsAuth' });
     return new Promise((resolve) => {
       this.credentialsResolver = resolve;
       // 10 minute timeout
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (this.credentialsResolver) {
+          this._setStatus(SCRAPE_STATES.RUNNING, {
+            needsAuth: false,
+          });
           this.credentialsResolver(null);
           this.credentialsResolver = null;
         }
       }, 600000);
+      timer.unref?.();
     });
   }
 
   submitCredentials(username, password) {
     if (this.credentialsResolver) {
+      this._setStatus(this.paused ? SCRAPE_STATES.PAUSED : SCRAPE_STATES.RUNNING, {
+        needsAuth: false,
+      });
       this.credentialsResolver({ username, password });
       this.credentialsResolver = null;
     }
@@ -248,6 +383,10 @@ class ScraperSession {
 
   stop() {
     this.stopped = true;
+    this._setStatus(SCRAPE_STATES.STOPPING, {
+      needsAuth: false,
+      needsVerification: false,
+    });
     // Wake any paused wait before closing so the loop can exit cleanly
     if (this._resumeResolve) { this._resumeResolve(); this._resumeResolve = null; }
     this._stopLiveStream();
@@ -261,6 +400,7 @@ class ScraperSession {
     if (this.stopped || this.paused) return;
     this.paused = true;
     this._resumePromise = new Promise(resolve => { this._resumeResolve = resolve; });
+    this._setStatus(SCRAPE_STATES.PAUSED, {});
     this.log('Scrape paused by user.', 'warn');
     this.broadcast(this.sessionId, { type: 'paused' });
   }
@@ -270,6 +410,7 @@ class ScraperSession {
     this.paused = false;
     if (this._resumeResolve) { this._resumeResolve(); this._resumeResolve = null; }
     this._resumePromise = null;
+    this._setStatus(SCRAPE_STATES.RUNNING, {});
     this.log('Scrape resumed.', 'success');
     this.broadcast(this.sessionId, { type: 'resumed' });
   }
