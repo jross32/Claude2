@@ -1,25 +1,24 @@
 # Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-15T08:14:59.777Z
-**Commit:** `2ea13e9`
-**Duration:** 14982ms
+**Run:** 2026-04-15T08:15:14.267Z
+**Commit:** `96f9de3`
+**Duration:** 6801ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 6 | 6 | 0 | 0 |
+| 5 | 5 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/saves → 200 + array | pass | 2410ms | |
-| ✅ | GET /api/saves items have expected shape | pass | 2802ms | |
-| ✅ | GET /api/saves/:id with unknown id → 404 + error | pass | 7ms | |
-| ✅ | DELETE /api/saves/:id with unknown id → 200 + { ok: true } | pass | 5ms | |
-| ✅ | [chaos] GET /api/saves/:id with empty id segment → 404 | pass | 2631ms | |
-| ✅ | [chaos] DELETE /api/saves/:id with special chars in id | pass | 10ms | |
+| ✅ | POST /api/schema with graphqlCalls → 200 + schema object | pass | 53ms | |
+| ✅ | Schema response includes typescript or jsonSchema fields | pass | 29ms | |
+| ✅ | [chaos] POST /api/schema with no graphqlCalls → 400 | pass | 5ms | |
+| ✅ | [chaos] POST /api/schema with empty array → does not 500 | pass | 5ms | |
+| ✅ | [chaos] POST /api/schema with malformed call → does not 500 | pass | 3ms | |
 
 
