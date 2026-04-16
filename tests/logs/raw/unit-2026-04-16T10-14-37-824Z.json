@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-04-16T10:16:09.035Z",
+  "timestamp": "2026-04-16T10:14:37.823Z",
   "git_commit": "ef14bd5",
   "suite": "unit",
   "tests": [
     {
       "name": "MCP server exports 47 tools",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -30,7 +30,7 @@
     {
       "name": "New MCP tools are present",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -71,7 +71,7 @@
     {
       "name": "Read-only MCP tools expose readOnlyHint",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -96,7 +96,7 @@
     {
       "name": "Fixed resources and resource templates are exported",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -110,7 +110,7 @@
     {
       "name": "truncateText limits long strings",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -122,7 +122,7 @@
     {
       "name": "searchSavedPages returns snippets and match counts",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -135,7 +135,7 @@
     {
       "name": "research question router classifies extractive and deep prompts",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -167,7 +167,7 @@
     {
       "name": "scoreGoalText matches retail deal sections",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -198,7 +198,7 @@
     {
       "name": "buildSaveOverview summarizes counts, sections, and highlights",
       "status": "pass",
-      "duration_ms": 17,
+      "duration_ms": 13,
       "error": null,
       "input": {},
       "output": {
@@ -224,7 +224,7 @@
     {
       "name": "collectStoreContext detects visible/API mismatches",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -253,7 +253,7 @@
     {
       "name": "buildOrientationFromSave maps multi-section deal flows",
       "status": "pass",
-      "duration_ms": 44,
+      "duration_ms": 34,
       "error": null,
       "input": {},
       "output": {
@@ -314,7 +314,7 @@
     {
       "name": "analyzeResearchQuestion falls back cleanly when Ollama returns null",
       "status": "pass",
-      "duration_ms": 4,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -340,7 +340,7 @@
     {
       "name": "toResearchPage reads saved-page meta fields",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -365,7 +365,7 @@
     {
       "name": "createToolFailure includes standardized error shape",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -378,7 +378,7 @@
     {
       "name": "Prompt builder references narrow MCP reads",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -405,7 +405,7 @@
     {
       "name": "Resource URI parser understands templated scrape URIs",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -424,7 +424,7 @@
     "passed": 30,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 112,
-    "avg_duration_ms": 4
+    "duration_ms": 96,
+    "avg_duration_ms": 3
   }
 }
