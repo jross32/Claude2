@@ -1,27 +1,82 @@
-# Test Results — api
+# Test Results — smoke
 
-**Status:** ✅ HEALTHY
-**Run:** 2026-04-16T10:16:38.047Z
-**Commit:** `8f1b225`
-**Duration:** 2547ms
+**Status:** ❌ FAILING
+**Run:** 2026-04-16T10:31:56.388Z
+**Commit:** `a4633c3`
+**Duration:** 4787ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 8 | 8 | 0 | 0 |
+| 9 | 4 | 5 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/session/check with valid url → 200 + { exists: boolean } | pass | 25ms | |
-| ✅ | GET /api/session/check for poolplayers.com → exists field present | pass | 5ms | |
-| ✅ | DELETE /api/session with url → 200 + { cleared: boolean } | pass | 14ms | |
-| ✅ | GET /api/site-credentials for unknown site → { found: false } | pass | 5ms | |
-| ✅ | GET /api/site-credentials for poolplayers.com → { found: true, username: string } | pass | 4ms | |
-| ✅ | [chaos] GET /api/session/check with no url → { exists: false } | pass | 4ms | |
-| ✅ | [chaos] DELETE /api/session with no url → does not 500 | pass | 2ms | |
-| ✅ | [chaos] GET /api/site-credentials with no url → does not 500 | pass | 3ms | |
+| ✅ | Server starts without crashing | pass | 1821ms | |
+| ❌ | GET /api/saves → 200 + JSON array | fail | 350ms | |
+| ❌ | GET /api/schedules → 200 + JSON array | fail | 195ms | |
+| ❌ | GET /api/session/check → 200 + { exists: boolean } | fail | 524ms | |
+| ❌ | GET /api/site-credentials → 200 + { found: boolean } | fail | 166ms | |
+| ✅ | GET / serves HTML frontend | pass | 344ms | |
+| ❌ | [chaos] POST /api/scrape with no URL → 400 | fail | 314ms | |
+| ✅ | [chaos] GET unknown endpoint → 404 | pass | 234ms | |
+| ✅ | [chaos] GET /api/saves/:id with fake ID → 404 | pass | 193ms | |
 
+## Errors
 
+### ❌ GET /api/saves → 200 + JSON array
+```
+Expected 200, got 404
+Error: Expected 200, got 404
+    at C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:92:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:90:3)
+```
+
+### ❌ GET /api/schedules → 200 + JSON array
+```
+Expected 200, got 404
+Error: Expected 200, got 404
+    at C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:100:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:98:3)
+```
+
+### ❌ GET /api/session/check → 200 + { exists: boolean }
+```
+Expected 200, got 404
+Error: Expected 200, got 404
+    at C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:108:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:106:3)
+```
+
+### ❌ GET /api/site-credentials → 200 + { found: boolean }
+```
+Expected 200, got 404
+Error: Expected 200, got 404
+    at C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:116:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:114:3)
+```
+
+### ❌ [chaos] POST /api/scrape with no URL → 400
+```
+Expected 400, got 404
+Error: Expected 400, got 404
+    at C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:133:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\smoke\server-startup.test.js:131:3)
+```
+## Suggested Next Steps
+
+- Run `/new-test` to dig into failing tests
+- Check `tests/logs/raw/` for full history

@@ -401,6 +401,7 @@ async function main() {
       exhaustive: false,
       includeApiHints: true,
       relatedSessionIds: [],
+      followUpHistory: [{ round: 1, urls: ['https://www.dollargeneral.com/deals/weekly-ads'], reasons: [{ url: 'https://www.dollargeneral.com/deals/weekly-ads', purpose: 'weekly_ads', priority: 'high' }] }],
       roundCount: 1,
       stopReason: 'test',
     });
@@ -411,8 +412,9 @@ async function main() {
     if (!labels.some((label) => /Rebates/i.test(label))) throw new Error('Expected Rebates section');
     if (!orientation.coverage.found.includes('weekly_ads')) throw new Error('Expected weekly_ads coverage');
     if (!orientation.apiHints.length) throw new Error('Expected API hints');
+    if (!Array.isArray(orientation.interactionHistory) || orientation.interactionHistory.length !== 1) throw new Error('Expected interaction history to be preserved');
 
-    setOutput({ found: orientation.coverage.found, recommendedScrapes: orientation.recommendedScrapes.length });
+    setOutput({ found: orientation.coverage.found, recommendedScrapes: orientation.recommendedScrapes.length, interactionHistory: orientation.interactionHistory.length });
   });
 
   await runner.run('scope selection and stop logic behave as expected', ({ setOutput }) => {
