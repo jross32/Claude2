@@ -5,7 +5,7 @@
  */
 
 const { TestRunner } = require('../runner');
-const { start, stop, get, post, json } = require('./_server');
+const { start, stop, get, post, del, json } = require('./_server');
 
 async function waitFor(predicate, timeoutMs = 12000, intervalMs = 250) {
   const started = Date.now();
@@ -22,6 +22,7 @@ async function main() {
   await start();
 
   let liveSessionId = null;
+  let hiddenSessionId = null;
 
   // ── POST /api/scrape validation ────────────────────────────────────────────
 
@@ -100,6 +101,75 @@ async function main() {
 
     if (res.body.sessionId !== liveSessionId) throw new Error('Expected saved session fallback payload');
     setOutput({ status: res.status, state: res.body.state });
+  });
+
+  await runner.run('POST /api/scrape with uiVisible=false starts a headless session', async ({ setOutput }) => {
+    const res = await post('/api/scrape', {
+      url: 'http://example.com/headless',
+      maxPages: 1,
+      uiVisible: false,
+      initiatedBy: 'mcp',
+    });
+    if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
+    const body = json(res);
+    if (typeof body.sessionId !== 'string' || !body.sessionId) throw new Error('Missing sessionId string');
+    hiddenSessionId = body.sessionId;
+    setOutput({ sessionId: hiddenSessionId });
+  });
+
+  await runner.run('GET /api/scrape/active hides headless sessions by default', async ({ setOutput }) => {
+    if (!hiddenSessionId) throw new Error('Expected hidden session from previous test');
+
+    const included = await waitFor(async () => {
+      const res = await get('/api/scrape/active?includeHidden=1');
+      if (res.status !== 200) return false;
+      const body = json(res);
+      return body.find((entry) => entry.sessionId === hiddenSessionId) || false;
+    }, 12000, 300);
+
+    const visibleRes = await get('/api/scrape/active');
+    if (visibleRes.status !== 200) throw new Error(`Expected 200, got ${visibleRes.status}`);
+    const visible = json(visibleRes);
+    if (visible.some((entry) => entry.sessionId === hiddenSessionId)) {
+      throw new Error('Hidden session leaked into default active session list');
+    }
+
+    if (included.uiVisible !== false) throw new Error('Expected uiVisible=false on hidden session snapshot');
+    if (included.initiatedBy !== 'mcp') throw new Error(`Expected initiatedBy=mcp, got ${included.initiatedBy}`);
+    setOutput({ state: included.state, initiatedBy: included.initiatedBy });
+  });
+
+  await runner.run('GET /api/saves hides headless MCP saves by default but exposes them with includeHidden', async ({ setOutput }) => {
+    if (!hiddenSessionId) throw new Error('Expected hidden session from previous test');
+
+    await waitFor(async () => {
+      const activeRes = await get('/api/scrape/active?includeHidden=1');
+      if (activeRes.status !== 200) return false;
+      const active = json(activeRes);
+      return !active.some((entry) => entry.sessionId === hiddenSessionId);
+    }, 12000, 300);
+
+    const hiddenSave = await waitFor(async () => {
+      const res = await get('/api/saves?includeHidden=1');
+      if (res.status !== 200) return false;
+      const body = json(res);
+      return body.find((entry) => entry.sessionId === hiddenSessionId) || false;
+    }, 12000, 300);
+
+    const visibleRes = await get('/api/saves');
+    if (visibleRes.status !== 200) throw new Error(`Expected 200, got ${visibleRes.status}`);
+    const visible = json(visibleRes);
+    if (visible.some((entry) => entry.sessionId === hiddenSessionId)) {
+      throw new Error('Hidden save leaked into default saves list');
+    }
+
+    if (hiddenSave.uiVisible !== false) throw new Error('Expected uiVisible=false on hidden save');
+    if (hiddenSave.initiatedBy !== 'mcp') throw new Error(`Expected initiatedBy=mcp, got ${hiddenSave.initiatedBy}`);
+
+    const deleteRes = await del(`/api/saves/${encodeURIComponent(hiddenSessionId)}`);
+    if (deleteRes.status !== 200) throw new Error(`Expected cleanup delete 200, got ${deleteRes.status}`);
+
+    setOutput({ uiVisible: hiddenSave.uiVisible, initiatedBy: hiddenSave.initiatedBy });
   });
 
   await runner.run('POST /api/scrape/:id/stop for unknown session → 404', async ({ setOutput }) => {

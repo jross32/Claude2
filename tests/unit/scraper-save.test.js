@@ -52,6 +52,28 @@ async function main() {
     });
   });
 
+  await runner.run('autosave persists headless visibility metadata for MCP saves', ({ setOutput }) => {
+    const sessionId = `autosave-visibility-${Date.now()}`;
+    const file = path.join(SAVES_DIR, `${sessionId}.json`);
+    const session = new ScraperSession(sessionId, () => {});
+
+    session._saveId = sessionId;
+    session._saveStartUrl = 'https://example.com/headless';
+    session._saveStartedAt = '2026-04-16T00:00:00.000Z';
+    session._saveOptions = { url: 'https://example.com/headless' };
+    session._saveUiVisible = false;
+    session._saveInitiatedBy = 'mcp';
+
+    session._writeAutosave('running');
+
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (saved.uiVisible !== false) throw new Error('Expected uiVisible=false to be saved');
+    if (saved.initiatedBy !== 'mcp') throw new Error(`Expected initiatedBy=mcp, got ${saved.initiatedBy}`);
+
+    fs.unlinkSync(file);
+    setOutput({ uiVisible: saved.uiVisible, initiatedBy: saved.initiatedBy });
+  });
+
   const result = runner.finish();
   process.exit(result.summary.failed > 0 ? 1 : 0);
 }

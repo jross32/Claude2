@@ -949,6 +949,8 @@ class ScraperSession {
       saveId,
       resumeFrom,
       proxy,
+      uiVisible,
+      initiatedBy,
     } = options;
 
     this._captureScreenshots = captureScreenshots || false;
@@ -977,7 +979,23 @@ class ScraperSession {
     this._saveId = saveId || null;
     this._saveStartUrl = primaryUrl;
     this._saveStartedAt = new Date().toISOString();
-    this._saveOptions = { url: primaryUrl, maxPages, workerCount, captureSpeed, fullCrawl, autoScroll, politeDelay: politeDelay || 0, captureGraphQL, captureREST, captureAssets, captureAllRequests };
+    this._saveUiVisible = uiVisible !== false;
+    this._saveInitiatedBy = typeof initiatedBy === 'string' && initiatedBy.trim()
+      ? initiatedBy.trim()
+      : (this._saveUiVisible ? 'ui' : 'mcp');
+    this._saveOptions = {
+      url: primaryUrl,
+      maxPages,
+      workerCount,
+      captureSpeed,
+      fullCrawl,
+      autoScroll,
+      politeDelay: politeDelay || 0,
+      captureGraphQL,
+      captureREST,
+      captureAssets,
+      captureAllRequests,
+    };
     this._savePages = null;
     this._saveVisited = null;
     this._saveWorkers = null;
@@ -2635,6 +2653,8 @@ class ScraperSession {
         startedAt: this._saveStartedAt,
         lastSavedAt: new Date().toISOString(),
         status,
+        uiVisible: this._saveUiVisible !== false,
+        initiatedBy: this._saveInitiatedBy || 'ui',
         options: this._saveOptions,
         visitedUrls: this._saveVisited ? [...this._saveVisited] : [],
         pages: strip(this._savePages || []),

@@ -80,6 +80,28 @@ const KNOWN_SITES = [
   },
 ];
 
+function parseBooleanFlag(value, defaultValue = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value !== 'string') return defaultValue;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return defaultValue;
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return defaultValue;
+}
+
+function getSaveUiVisible(save) {
+  return save?.uiVisible !== false;
+}
+
+function getSaveInitiator(save) {
+  if (typeof save?.initiatedBy === 'string' && save.initiatedBy.trim()) {
+    return save.initiatedBy.trim();
+  }
+  return getSaveUiVisible(save) ? 'ui' : 'mcp';
+}
+
 function sanitizeSessionSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') return null;
   return {
@@ -100,6 +122,10 @@ function sanitizeSessionSnapshot(snapshot) {
     needsAuth: !!snapshot.needsAuth,
     needsVerification: !!snapshot.needsVerification,
     lastError: snapshot.lastError || null,
+    uiVisible: snapshot.uiVisible !== false,
+    initiatedBy: typeof snapshot.initiatedBy === 'string' && snapshot.initiatedBy.trim()
+      ? snapshot.initiatedBy.trim()
+      : (snapshot.uiVisible === false ? 'mcp' : 'ui'),
   };
 }
 
@@ -171,6 +197,8 @@ function buildSavedSessionSnapshot(save) {
     lastError: state === SCRAPE_STATUS_STATES.ERROR
       ? failedPages[failedPages.length - 1]?.reason || 'Saved scrape recorded an error'
       : null,
+    uiVisible: getSaveUiVisible(save),
+    initiatedBy: getSaveInitiator(save),
   });
 }
 
@@ -184,7 +212,11 @@ function getActiveSessionSnapshots() {
   return Array.from(sessions.values())
     .map((session) => {
       try {
-        return sanitizeSessionSnapshot(session.getStatusSnapshot?.());
+        const snapshot = sanitizeSessionSnapshot(session.getStatusSnapshot?.());
+        if (!snapshot) return null;
+        snapshot.uiVisible = session.uiVisible !== false;
+        snapshot.initiatedBy = session.initiatedBy || (snapshot.uiVisible ? 'ui' : 'mcp');
+        return snapshot;
       } catch {
         return null;
       }
@@ -453,6 +485,8 @@ app.post('/api/scrape', async (req, res) => {
     maxPages,
     resumeFrom,
     proxy,
+    uiVisible,
+    initiatedBy,
   } = req.body;
 
   if (!url && (!urls || urls.length === 0)) {
@@ -475,6 +509,10 @@ app.post('/api/scrape', async (req, res) => {
   res.json({ sessionId, message: 'Scraping started' });
 
   const scraper = new ScraperSession(sessionId, broadcast);
+  scraper.uiVisible = parseBooleanFlag(uiVisible, true);
+  scraper.initiatedBy = typeof initiatedBy === 'string' && initiatedBy.trim()
+    ? initiatedBy.trim()
+    : (scraper.uiVisible ? 'ui' : 'mcp');
   sessions.set(sessionId, scraper);
 
   // Auto-cleanup: remove session after 45 minutes to prevent memory/browser leaks
@@ -521,6 +559,8 @@ app.post('/api/scrape', async (req, res) => {
       saveId: sessionId,
       resumeFrom: resumeFrom || null,
       proxy: proxy || null,
+      uiVisible: scraper.uiVisible,
+      initiatedBy: scraper.initiatedBy,
     })
     .then((result) => {
       clearTimeout(cleanupTimer);
@@ -545,7 +585,10 @@ app.post('/api/scrape', async (req, res) => {
 
 app.get('/api/scrape/active', (req, res) => {
   try {
-    res.json(getActiveSessionSnapshots());
+    const includeHidden = parseBooleanFlag(req.query.includeHidden, false);
+    const active = getActiveSessionSnapshots()
+      .filter((snapshot) => includeHidden || snapshot.uiVisible !== false);
+    res.json(active);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -573,14 +616,28 @@ app.get('/api/scrape/:sessionId/status', (req, res) => {
 // ---- Saves API ----
 app.get('/api/saves', (req, res) => {
   try {
+    const includeHidden = parseBooleanFlag(req.query.includeHidden, false);
     if (!fs.existsSync(SAVES_DIR)) return res.json([]);
     const files = fs.readdirSync(SAVES_DIR).filter(f => f.endsWith('.json'));
     const saves = files.map(f => {
       try {
         const d = JSON.parse(fs.readFileSync(path.join(SAVES_DIR, f), 'utf8'));
-        return { sessionId: d.sessionId, startUrl: d.startUrl, startedAt: d.startedAt, lastSavedAt: d.lastSavedAt, status: d.status, pageCount: d.pages?.length || 0, options: d.options };
+        return {
+          sessionId: d.sessionId,
+          startUrl: d.startUrl,
+          startedAt: d.startedAt,
+          lastSavedAt: d.lastSavedAt,
+          status: d.status,
+          pageCount: d.pages?.length || 0,
+          options: d.options,
+          uiVisible: getSaveUiVisible(d),
+          initiatedBy: getSaveInitiator(d),
+        };
       } catch { return null; }
-    }).filter(Boolean).sort((a, b) => new Date(b.lastSavedAt) - new Date(a.lastSavedAt));
+    })
+      .filter(Boolean)
+      .filter((save) => includeHidden || save.uiVisible !== false)
+      .sort((a, b) => new Date(b.lastSavedAt) - new Date(a.lastSavedAt));
     res.json(saves);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
