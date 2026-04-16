@@ -1,0 +1,117 @@
+{
+  "timestamp": "2026-04-15T21:01:16.459Z",
+  "git_commit": "6aa1e3f",
+  "suite": "api",
+  "tests": [
+    {
+      "name": "GET /api/session/check with valid url → 200 + { exists: boolean }",
+      "status": "pass",
+      "duration_ms": 73,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "exists": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/session/check for poolplayers.com → exists field present",
+      "status": "pass",
+      "duration_ms": 20,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "exists": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "DELETE /api/session with url → 200 + { cleared: boolean }",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "cleared": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/site-credentials for unknown site → { found: false }",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "found": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/site-credentials for poolplayers.com → { found: true, username: string }",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "found": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] GET /api/session/check with no url → { exists: false }",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "exists": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] DELETE /api/session with no url → does not 500",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] GET /api/site-credentials with no url → does not 500",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 5182,
+    "avg_duration_ms": 648
+  }
+}

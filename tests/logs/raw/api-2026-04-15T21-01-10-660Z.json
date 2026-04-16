@@ -1,0 +1,215 @@
+{
+  "timestamp": "2026-04-15T21:01:10.655Z",
+  "git_commit": "6aa1e3f",
+  "suite": "api",
+  "tests": [
+    {
+      "name": "POST /api/scrape with no body → 400 + error",
+      "status": "pass",
+      "duration_ms": 52,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400,
+        "error": "URL is required"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape with valid url → 200 + { sessionId, message }",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "sessionId": "72533b33-a2d4-4000-b45d-288015477f2b"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/active returns active session snapshots",
+      "status": "pass",
+      "duration_ms": 346,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 1,
+        "state": "running"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/:id/status returns live session snapshot",
+      "status": "pass",
+      "duration_ms": 6,
+      "error": null,
+      "input": {},
+      "output": {
+        "state": "running",
+        "step": "Launching browser"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/stop for active session → 200",
+      "status": "pass",
+      "duration_ms": 6,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/:id/status falls back after active session is removed",
+      "status": "pass",
+      "duration_ms": 2925,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "state": "stopped"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/stop for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/pause for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/:id/status for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/ai/chat with no question → 400",
+      "status": "pass",
+      "duration_ms": 6,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400,
+        "error": "question is required"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/ai/chat analyzes current scrape data without Ollama for extractive questions",
+      "status": "pass",
+      "duration_ms": 27,
+      "error": null,
+      "input": {},
+      "output": {
+        "routeUsed": "extractive",
+        "confidence": "high",
+        "answer": "Found 3 strongly matching sections across 2 page(s)."
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/resume for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/verify for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/credentials for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 6,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/scrape with urls: [] → 400",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/scrape with malformed maxPages → does not 500",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 16,
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 9705,
+    "avg_duration_ms": 607
+  }
+}
