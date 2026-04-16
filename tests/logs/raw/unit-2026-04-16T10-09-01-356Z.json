@@ -1,253 +1,279 @@
 {
-  "timestamp": "2026-04-16T10:09:09.268Z",
+  "timestamp": "2026-04-16T10:09:01.352Z",
   "git_commit": "cf4ed62",
-  "suite": "api",
+  "suite": "unit",
   "tests": [
     {
-      "name": "POST /api/scrape with no body → 400 + error",
-      "status": "pass",
-      "duration_ms": 72,
-      "error": null,
-      "input": {},
-      "output": {
-        "status": 400,
-        "error": "URL is required"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "POST /api/scrape with valid url → 200 + { sessionId, message }",
-      "status": "pass",
-      "duration_ms": 6,
-      "error": null,
-      "input": {},
-      "output": {
-        "status": 200,
-        "sessionId": "fb67fc27-ebdf-4132-b926-edef8b995078"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "GET /api/scrape/active returns active session snapshots",
-      "status": "pass",
-      "duration_ms": 359,
-      "error": null,
-      "input": {},
-      "output": {
-        "count": 1,
-        "state": "running"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "GET /api/scrape/:id/status returns live session snapshot",
-      "status": "pass",
-      "duration_ms": 16,
-      "error": null,
-      "input": {},
-      "output": {
-        "state": "running",
-        "step": "Launching browser"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "POST /api/scrape/:id/stop for active session → 200",
-      "status": "pass",
-      "duration_ms": 20,
-      "error": null,
-      "input": {},
-      "output": {
-        "status": 200
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "GET /api/scrape/:id/status falls back after active session is removed",
-      "status": "pass",
-      "duration_ms": 3774,
-      "error": null,
-      "input": {},
-      "output": {
-        "status": 200,
-        "state": "stopped"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "POST /api/scrape with uiVisible=false starts a headless session",
-      "status": "pass",
-      "duration_ms": 3,
-      "error": null,
-      "input": {},
-      "output": {
-        "sessionId": "74a85350-07b2-49af-8e72-e296e0f496bd"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "GET /api/scrape/active hides headless sessions by default",
-      "status": "pass",
-      "duration_ms": 15,
-      "error": null,
-      "input": {},
-      "output": {
-        "state": "running",
-        "initiatedBy": "mcp"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "GET /api/saves hides headless MCP saves by default but exposes them with includeHidden",
-      "status": "pass",
-      "duration_ms": 6883,
-      "error": null,
-      "input": {},
-      "output": {
-        "uiVisible": false,
-        "initiatedBy": "mcp"
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "POST /api/scrape/:id/stop for unknown session → 404",
-      "status": "pass",
-      "duration_ms": 4,
-      "error": null,
-      "input": {},
-      "output": {
-        "status": 404
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "POST /api/scrape/:id/pause for unknown session → 404",
-      "status": "pass",
-      "duration_ms": 3,
-      "error": null,
-      "input": {},
-      "output": {
-        "status": 404
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "GET /api/scrape/:id/status for unknown session → 404",
+      "name": "generateReact returns a string",
       "status": "pass",
       "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
-        "status": 404
+        "length": 577
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "POST /api/ai/chat with no question → 400",
+      "name": "generateReact output contains React import",
       "status": "pass",
-      "duration_ms": 4,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
-        "status": 400,
-        "error": "question is required"
+        "ok": true
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "POST /api/ai/chat analyzes current scrape data without Ollama for extractive questions",
+      "name": "generateReact output includes page heading text",
       "status": "pass",
-      "duration_ms": 13,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
-        "routeUsed": "extractive",
-        "confidence": "high",
-        "answer": "Found 3 strongly matching sections across 2 page(s)."
+        "ok": true
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "POST /api/scrape/:id/resume for unknown session → 404",
+      "name": "generateReact only includes internal links",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
-        "status": 404
+        "ok": true
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "POST /api/scrape/:id/verify for unknown session → 404",
+      "name": "[chaos] generateReact with null → returns fallback string",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
-        "status": 404
+        "result": "// No page data available"
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "POST /api/scrape/:id/credentials for unknown session → 404",
+      "name": "[chaos] generateReact with empty object → no crash",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
-        "status": 404
+        "ok": true
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "[chaos] POST /api/scrape with urls: [] → 400",
+      "name": "extractCSS returns a string",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
-        "status": 400
+        "length": 579
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "[chaos] POST /api/scrape with malformed maxPages → does not 500",
+      "name": "extractCSS output contains :root block",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
-        "status": 200
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] extractCSS with null → returns fallback string",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "result": "/* No page data available */"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] extractCSS with empty object → no crash",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateMarkdown returns a string",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "length": 225
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateMarkdown output contains h1 heading marker",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateMarkdown includes page title",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateMarkdown includes links section",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateMarkdown with null → returns fallback string",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "result": "# No page data available\n"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateMarkdown with empty object → no crash",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateSitemap returns XML string",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "length": 201
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateSitemap includes all page URLs",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "generateSitemap escapes & in URLs",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateSitemap with null → returns empty sitemap",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateSitemap with empty array → returns empty urlset",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] generateSitemap with pages missing meta → no crash",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
       },
       "stack_trace": null,
       "screenshot": null
     }
   ],
   "summary": {
-    "total": 19,
-    "passed": 19,
+    "total": 22,
+    "passed": 22,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 15175,
-    "avg_duration_ms": 799
+    "duration_ms": 13,
+    "avg_duration_ms": 1
   }
 }
