@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-16T10:52:46.745Z",
+  "timestamp": "2026-04-16T10:52:19.249Z",
   "git_commit": "60930a3",
   "suite": "unit",
   "tests": [
@@ -54,7 +54,7 @@
     {
       "name": "research_url schema exposes auto/fast/deep modes",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -96,7 +96,7 @@
     {
       "name": "Fixed resources and resource templates are exported",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -122,7 +122,7 @@
     {
       "name": "searchSavedPages returns snippets and match counts",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -167,7 +167,7 @@
     {
       "name": "scoreGoalText matches retail deal sections",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -185,7 +185,7 @@
     {
       "name": "buildResearchEvidence respects fast profile budget and ranks matches first",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -198,7 +198,7 @@
     {
       "name": "buildSaveOverview summarizes counts, sections, and highlights",
       "status": "pass",
-      "duration_ms": 14,
+      "duration_ms": 13,
       "error": null,
       "input": {},
       "output": {
@@ -224,7 +224,7 @@
     {
       "name": "collectStoreContext detects visible/API mismatches",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -253,7 +253,7 @@
     {
       "name": "buildOrientationFromSave maps multi-section deal flows",
       "status": "pass",
-      "duration_ms": 69,
+      "duration_ms": 53,
       "error": null,
       "input": {},
       "output": {
@@ -271,22 +271,12 @@
     },
     {
       "name": "buildOrientationFromSave infers missing sibling sections when adjacent deal pages are present",
-      "status": "pass",
-      "duration_ms": 3,
-      "error": null,
+      "status": "fail",
+      "duration_ms": 4,
+      "error": "Expected rebates to be inferred from adjacent deal sections",
       "input": {},
-      "output": {
-        "found": [
-          "coupons",
-          "cash_back",
-          "rebates",
-          "weekly_ads"
-        ],
-        "inferredKinds": [
-          "Rebate"
-        ]
-      },
-      "stack_trace": null,
+      "output": {},
+      "stack_trace": "Error: Expected rebates to be inferred from adjacent deal sections\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\mcp-server.test.js:475:13\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\mcp-server.test.js:426:16)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
       "screenshot": null
     },
     {
@@ -305,7 +295,7 @@
     {
       "name": "findSiteIssues flags security and context problems",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -322,7 +312,7 @@
     {
       "name": "analyzeResearchQuestion skips Ollama for extractive auto mode",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 5,
       "error": null,
       "input": {},
       "output": {
@@ -335,7 +325,7 @@
     {
       "name": "analyzeResearchQuestion falls back cleanly when Ollama returns null",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -361,7 +351,7 @@
     {
       "name": "toResearchPage reads saved-page meta fields",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -374,7 +364,7 @@
     {
       "name": "createToolSuccess includes structuredContent",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -386,7 +376,7 @@
     {
       "name": "createToolFailure includes standardized error shape",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -399,7 +389,7 @@
     {
       "name": "Prompt builder references narrow MCP reads",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -411,7 +401,7 @@
     {
       "name": "New workflow prompts reference the new narrow tools/resources",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -442,10 +432,10 @@
   ],
   "summary": {
     "total": 31,
-    "passed": 31,
-    "failed": 0,
+    "passed": 30,
+    "failed": 1,
     "skipped": 0,
-    "duration_ms": 134,
+    "duration_ms": 126,
     "avg_duration_ms": 4
   }
 }

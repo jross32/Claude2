@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-16T10:52:46.745Z",
+  "timestamp": "2026-04-16T10:45:52.943Z",
   "git_commit": "60930a3",
   "suite": "unit",
   "tests": [
@@ -42,7 +42,7 @@
     {
       "name": "All MCP tools include title and annotations",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -54,7 +54,7 @@
     {
       "name": "research_url schema exposes auto/fast/deep modes",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -71,7 +71,7 @@
     {
       "name": "Read-only MCP tools expose readOnlyHint",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -110,7 +110,7 @@
     {
       "name": "truncateText limits long strings",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -135,7 +135,7 @@
     {
       "name": "research question router classifies extractive and deep prompts",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 4,
       "error": null,
       "input": {},
       "output": {
@@ -149,7 +149,7 @@
     {
       "name": "buildGoalModel expands deals and price-sensitive goals",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -167,7 +167,7 @@
     {
       "name": "scoreGoalText matches retail deal sections",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -211,7 +211,7 @@
     {
       "name": "buildApiSurface groups endpoints and operations",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -224,7 +224,7 @@
     {
       "name": "collectStoreContext detects visible/API mismatches",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -240,7 +240,7 @@
     {
       "name": "extractDealsFromSave finds deal snippets from pages and APIs",
       "status": "pass",
-      "duration_ms": 5,
+      "duration_ms": 18,
       "error": null,
       "input": {},
       "output": {
@@ -253,7 +253,7 @@
     {
       "name": "buildOrientationFromSave maps multi-section deal flows",
       "status": "pass",
-      "duration_ms": 69,
+      "duration_ms": 73,
       "error": null,
       "input": {},
       "output": {
@@ -270,29 +270,9 @@
       "screenshot": null
     },
     {
-      "name": "buildOrientationFromSave infers missing sibling sections when adjacent deal pages are present",
-      "status": "pass",
-      "duration_ms": 3,
-      "error": null,
-      "input": {},
-      "output": {
-        "found": [
-          "coupons",
-          "cash_back",
-          "rebates",
-          "weekly_ads"
-        ],
-        "inferredKinds": [
-          "Rebate"
-        ]
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
       "name": "scope selection and stop logic behave as expected",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -305,7 +285,7 @@
     {
       "name": "findSiteIssues flags security and context problems",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -348,7 +328,7 @@
     {
       "name": "normalizeCompletedScrapeResult converts saved scrapes into result shape",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -361,7 +341,7 @@
     {
       "name": "toResearchPage reads saved-page meta fields",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -374,7 +354,7 @@
     {
       "name": "createToolSuccess includes structuredContent",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -386,7 +366,7 @@
     {
       "name": "createToolFailure includes standardized error shape",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -399,7 +379,7 @@
     {
       "name": "Prompt builder references narrow MCP reads",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -411,7 +391,7 @@
     {
       "name": "New workflow prompts reference the new narrow tools/resources",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -426,7 +406,7 @@
     {
       "name": "Resource URI parser understands templated scrape URIs",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -441,11 +421,11 @@
     }
   ],
   "summary": {
-    "total": 31,
-    "passed": 31,
+    "total": 30,
+    "passed": 30,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 134,
-    "avg_duration_ms": 4
+    "duration_ms": 160,
+    "avg_duration_ms": 5
   }
 }

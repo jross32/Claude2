@@ -365,6 +365,7 @@ async function main() {
           { href: 'https://www.dollargeneral.com/deals/coupons?sort=0&sortOrder=2&type=0', text: 'Coupons & Cash Back', isInternal: true },
           { href: 'https://www.dollargeneral.com/deals/weekly-ads', text: 'Weekly Ads', isInternal: true },
           { href: 'https://www.dollargeneral.com/deals/rebates', text: 'Rebates', isInternal: true },
+          { href: 'https://careers.dollargeneral.com/jobs', text: 'Careers', isInternal: false },
         ],
         navigation: [{
           ariaLabel: 'Deals Navigation',
@@ -386,6 +387,10 @@ async function main() {
         rest: [{
           url: 'https://dam.flippenterprise.net/flyerkit/publications/dollargeneral?postal_code=78578&store_code=4337',
           method: 'GET',
+          statusCode: 200,
+        }, {
+          url: 'https://analytics-secure.dollargeneral.com/track',
+          method: 'POST',
           statusCode: 200,
         }],
       },
@@ -409,12 +414,69 @@ async function main() {
     const labels = orientation.relevantSections.map((section) => section.label);
     if (!labels.some((label) => /Coupons & Cash Back/i.test(label))) throw new Error('Expected Coupons & Cash Back section');
     if (!labels.some((label) => /Weekly Ads/i.test(label))) throw new Error('Expected Weekly Ads section');
-    if (!labels.some((label) => /Rebates/i.test(label))) throw new Error('Expected Rebates section');
+    if (!labels.some((label) => /Rebate/i.test(label))) throw new Error('Expected Rebates section');
     if (!orientation.coverage.found.includes('weekly_ads')) throw new Error('Expected weekly_ads coverage');
     if (!orientation.apiHints.length) throw new Error('Expected API hints');
     if (!Array.isArray(orientation.interactionHistory) || orientation.interactionHistory.length !== 1) throw new Error('Expected interaction history to be preserved');
+    if (orientation.coverage.relatedOrigins.some((entry) => /analytics-secure|careers/i.test(entry.origin))) throw new Error('Expected low-value origins to be filtered out');
 
     setOutput({ found: orientation.coverage.found, recommendedScrapes: orientation.recommendedScrapes.length, interactionHistory: orientation.interactionHistory.length });
+  });
+
+  await runner.run('buildOrientationFromSave infers missing sibling sections when adjacent deal pages are present', ({ setOutput }) => {
+    const save = {
+      sessionId: 'orientation-002',
+      startUrl: 'https://www.dollargeneral.com/store-directory/tx/port-isabel/4337',
+      visitedUrls: [
+        'https://www.dollargeneral.com/store-directory/tx/port-isabel/4337',
+        'https://www.dollargeneral.com/deals/coupons',
+        'https://www.dollargeneral.com/deals/weekly-ads',
+      ],
+      pages: [{
+        meta: {
+          url: 'https://www.dollargeneral.com/store-directory/tx/port-isabel/4337',
+          title: 'Dollar General Store # 4337 in Texas, Port Isabel, 1740 Highway 100 | Dollar General',
+          description: 'Store details and services',
+        },
+        headings: {
+          h1: [{ text: 'Dollar General Store #4337' }],
+          h2: [{ text: 'Store Services' }],
+        },
+        fullText: 'Shopping in-store at 1740 Highway 100, Port Isabel, TX 78578-2803. Explore Deals. Coupons & Cash Back. Weekly Ads.',
+        links: [
+          { href: 'https://www.dollargeneral.com/deals/coupons', text: 'Coupons & Cash Back', isInternal: true },
+          { href: 'https://www.dollargeneral.com/deals/weekly-ads', text: 'Weekly Ads', isInternal: true },
+        ],
+        navigation: [{
+          ariaLabel: 'Deals Navigation',
+          items: [
+            { text: 'Coupons & Cash Back', href: 'https://www.dollargeneral.com/deals/coupons' },
+            { text: 'Weekly Ads', href: 'https://www.dollargeneral.com/deals/weekly-ads' },
+          ],
+        }],
+        buttons: [],
+        forms: [],
+      }],
+      apiCalls: { graphql: [], rest: [] },
+      cookies: [],
+      securityHeaders: {},
+      consoleLogs: [],
+      failedPages: [],
+    };
+
+    const orientation = __private__.buildOrientationFromSave(save, {
+      goal: 'find all deals',
+      scopeLevel: 1,
+      exhaustive: false,
+      includeApiHints: false,
+    });
+
+    if (!orientation.relevantSections.some((section) => /Rebate/i.test(section.label) && section.kind === 'inferred_section')) {
+      throw new Error('Expected rebates to be inferred from adjacent deal sections');
+    }
+    if (!orientation.coverage.found.includes('rebates')) throw new Error('Expected inferred rebates coverage');
+
+    setOutput({ found: orientation.coverage.found, inferredKinds: orientation.relevantSections.filter((section) => section.kind === 'inferred_section').map((section) => section.label) });
   });
 
   await runner.run('scope selection and stop logic behave as expected', ({ setOutput }) => {
