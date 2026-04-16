@@ -38,6 +38,7 @@ const NEW_TOOL_NAMES = [
   'get_tech_stack',
   'find_graphql_endpoints',
   'preflight_url',
+  'map_site_for_goal',
   'research_url',
   'http_fetch',
 ];
@@ -45,9 +46,9 @@ const NEW_TOOL_NAMES = [
 async function main() {
   const runner = new TestRunner('unit');
 
-  await runner.run('MCP server exports 46 tools', ({ setOutput }) => {
+  await runner.run('MCP server exports 47 tools', ({ setOutput }) => {
     if (!Array.isArray(TOOLS)) throw new Error('TOOLS export missing');
-    if (TOOLS.length !== 46) throw new Error(`Expected 46 tools, got ${TOOLS.length}`);
+    if (TOOLS.length !== 47) throw new Error(`Expected 47 tools, got ${TOOLS.length}`);
     setOutput({ count: TOOLS.length });
   });
 
@@ -93,7 +94,18 @@ async function main() {
     if (!searchTool?.annotations?.readOnlyHint) throw new Error('search_scrape_text should be read-only');
     const scrapeTool = TOOLS.find((tool) => tool.name === 'scrape_url');
     if (scrapeTool?.annotations?.readOnlyHint) throw new Error('scrape_url should not be read-only');
+    const mapTool = TOOLS.find((tool) => tool.name === 'map_site_for_goal');
+    if (mapTool?.annotations?.readOnlyHint) throw new Error('map_site_for_goal should not be read-only');
     setOutput({ readOnlyTool: searchTool.name });
+  });
+
+  await runner.run('map_site_for_goal schema exposes scope and exhaustive controls', ({ setOutput }) => {
+    const tool = TOOLS.find((entry) => entry.name === 'map_site_for_goal');
+    const properties = tool?.inputSchema?.properties || {};
+    if (properties.scopeLevel?.type !== 'number') throw new Error('scopeLevel should be numeric');
+    if (properties.exhaustive?.type !== 'boolean') throw new Error('exhaustive should be boolean');
+    if (properties.includeApiHints?.type !== 'boolean') throw new Error('includeApiHints should be boolean');
+    setOutput({ scopeLevelType: properties.scopeLevel.type, exhaustiveType: properties.exhaustive.type });
   });
 
   await runner.run('Fixed resources and resource templates are exported', ({ setOutput }) => {
@@ -107,6 +119,7 @@ async function main() {
       'scrape://save/{sessionId}/overview',
       'scrape://save/{sessionId}/issues',
       'scrape://save/{sessionId}/deals',
+      'scrape://save/{sessionId}/orientation',
       'scrape://save/{sessionId}/store-context',
       'scrape://save/{sessionId}/api-surface',
       'scrape://save/{sessionId}/page/{pageIndex}',
@@ -121,6 +134,7 @@ async function main() {
       'investigate_site_leakage',
       'extract_store_deals',
       'map_api_surface',
+      'plan_site_extraction_for_goal',
     ];
 
     const missing = [
@@ -168,6 +182,28 @@ async function main() {
     if (forcedFast.routeUsed !== 'fast-ollama') throw new Error(`Expected fast override, got ${forcedFast.routeUsed}`);
 
     setOutput({ extractive: extractive.routeUsed, deep: deep.routeUsed, forcedFast: forcedFast.routeUsed });
+  });
+
+  await runner.run('buildGoalModel expands deals and price-sensitive goals', ({ setOutput }) => {
+    const deals = __private__.buildGoalModel('find all deals for this store');
+    const priceSensitive = __private__.buildGoalModel('find games under $100');
+
+    if (!deals.intents.includes('deals')) throw new Error('Expected deals intent');
+    if (!deals.coverageTargets.some((target) => target.id === 'rebates')) throw new Error('Expected rebates target');
+    if (priceSensitive.priceLimit !== 100) throw new Error(`Expected price limit 100, got ${priceSensitive.priceLimit}`);
+    if (!priceSensitive.coverageTargets.some((target) => target.id === 'free_items')) throw new Error('Expected free_items target');
+
+    setOutput({ dealTargets: deals.coverageTargets.map((target) => target.id), priceLimit: priceSensitive.priceLimit });
+  });
+
+  await runner.run('scoreGoalText matches retail deal sections', ({ setOutput }) => {
+    const goalModel = __private__.buildGoalModel('find all deals');
+    const score = __private__.scoreGoalText('Coupons & Cash Back Weekly Ads Rebates', goalModel);
+    if (score.score < 12) throw new Error(`Expected strong deal score, got ${score.score}`);
+    if (!score.matchedTargets.includes('coupons') || !score.matchedTargets.includes('weekly_ads') || !score.matchedTargets.includes('rebates')) {
+      throw new Error(`Missing matched targets: ${JSON.stringify(score.matchedTargets)}`);
+    }
+    setOutput({ score: score.score, matchedTargets: score.matchedTargets });
   });
 
   await runner.run('buildResearchEvidence respects fast profile budget and ranks matches first', ({ setOutput }) => {
