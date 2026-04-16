@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-04-16T10:40:45.643Z",
+  "timestamp": "2026-04-16T10:34:34.896Z",
   "git_commit": "9087df9",
   "suite": "unit",
   "tests": [
     {
       "name": "MCP server exports 47 tools",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -54,7 +54,7 @@
     {
       "name": "research_url schema exposes auto/fast/deep modes",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -71,7 +71,7 @@
     {
       "name": "Read-only MCP tools expose readOnlyHint",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -83,7 +83,7 @@
     {
       "name": "map_site_for_goal schema exposes scope and exhaustive controls",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "error": null,
       "input": {},
       "output": {
@@ -135,7 +135,7 @@
     {
       "name": "research question router classifies extractive and deep prompts",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 8,
       "error": null,
       "input": {},
       "output": {
@@ -149,7 +149,7 @@
     {
       "name": "buildGoalModel expands deals and price-sensitive goals",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 17,
       "error": null,
       "input": {},
       "output": {
@@ -167,7 +167,7 @@
     {
       "name": "scoreGoalText matches retail deal sections",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 6,
       "error": null,
       "input": {},
       "output": {
@@ -185,7 +185,7 @@
     {
       "name": "buildResearchEvidence respects fast profile budget and ranks matches first",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 4,
       "error": null,
       "input": {},
       "output": {
@@ -211,7 +211,7 @@
     {
       "name": "buildApiSurface groups endpoints and operations",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 2,
       "error": null,
       "input": {},
       "output": {
@@ -224,7 +224,7 @@
     {
       "name": "collectStoreContext detects visible/API mismatches",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 10,
       "error": null,
       "input": {},
       "output": {
@@ -240,7 +240,7 @@
     {
       "name": "extractDealsFromSave finds deal snippets from pages and APIs",
       "status": "pass",
-      "duration_ms": 6,
+      "duration_ms": 8,
       "error": null,
       "input": {},
       "output": {
@@ -253,7 +253,7 @@
     {
       "name": "buildOrientationFromSave maps multi-section deal flows",
       "status": "pass",
-      "duration_ms": 89,
+      "duration_ms": 119,
       "error": null,
       "input": {},
       "output": {
@@ -272,7 +272,7 @@
     {
       "name": "scope selection and stop logic behave as expected",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -302,7 +302,7 @@
     {
       "name": "analyzeResearchQuestion skips Ollama for extractive auto mode",
       "status": "pass",
-      "duration_ms": 5,
+      "duration_ms": 9,
       "error": null,
       "input": {},
       "output": {
@@ -315,7 +315,7 @@
     {
       "name": "analyzeResearchQuestion falls back cleanly when Ollama returns null",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 5,
       "error": null,
       "input": {},
       "output": {
@@ -328,7 +328,7 @@
     {
       "name": "normalizeCompletedScrapeResult converts saved scrapes into result shape",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -366,7 +366,7 @@
     {
       "name": "createToolFailure includes standardized error shape",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -391,7 +391,7 @@
     {
       "name": "New workflow prompts reference the new narrow tools/resources",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "error": null,
       "input": {},
       "output": {
@@ -406,7 +406,7 @@
     {
       "name": "Resource URI parser understands templated scrape URIs",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 6,
       "error": null,
       "input": {},
       "output": {
@@ -425,7 +425,7 @@
     "passed": 30,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 160,
-    "avg_duration_ms": 5
+    "duration_ms": 243,
+    "avg_duration_ms": 8
   }
 }
