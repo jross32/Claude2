@@ -341,6 +341,118 @@ async function main() {
     setOutput({ count: deals.count, first: deals.deals[0].text });
   });
 
+  await runner.run('buildOrientationFromSave maps multi-section deal flows', ({ setOutput }) => {
+    const save = {
+      sessionId: 'orientation-001',
+      startUrl: 'https://www.dollargeneral.com/store-directory/tx/port-isabel/4337',
+      visitedUrls: [
+        'https://www.dollargeneral.com/store-directory/tx/port-isabel/4337',
+        'https://www.dollargeneral.com/deals/coupons?sort=0&sortOrder=2&type=0',
+        'https://www.dollargeneral.com/deals/weekly-ads',
+      ],
+      pages: [{
+        meta: {
+          url: 'https://www.dollargeneral.com/store-directory/tx/port-isabel/4337',
+          title: 'Dollar General Store # 4337 in Texas, Port Isabel, 1740 Highway 100 | Dollar General',
+          description: 'Store details and services',
+        },
+        headings: {
+          h1: [{ text: 'Dollar General Store #4337' }],
+          h2: [{ text: 'Store Services' }],
+        },
+        fullText: 'Shopping in-store at 1740 Highway 100, Port Isabel, TX 78578-2803. Explore Deals. Coupons & Cash Back. Weekly Ads. Rebates.',
+        links: [
+          { href: 'https://www.dollargeneral.com/deals/coupons?sort=0&sortOrder=2&type=0', text: 'Coupons & Cash Back', isInternal: true },
+          { href: 'https://www.dollargeneral.com/deals/weekly-ads', text: 'Weekly Ads', isInternal: true },
+          { href: 'https://www.dollargeneral.com/deals/rebates', text: 'Rebates', isInternal: true },
+        ],
+        navigation: [{
+          ariaLabel: 'Deals Navigation',
+          items: [
+            { text: 'Coupons & Cash Back', href: 'https://www.dollargeneral.com/deals/coupons?sort=0&sortOrder=2&type=0' },
+            { text: 'Weekly Ads', href: 'https://www.dollargeneral.com/deals/weekly-ads' },
+            { text: 'Rebates', href: 'https://www.dollargeneral.com/deals/rebates' },
+          ],
+        }],
+        buttons: [
+          { text: 'Coupons & Cash Back' },
+          { text: 'Weekly Ads' },
+          { text: 'Rebates' },
+        ],
+        forms: [],
+      }],
+      apiCalls: {
+        graphql: [],
+        rest: [{
+          url: 'https://dam.flippenterprise.net/flyerkit/publications/dollargeneral?postal_code=78578&store_code=4337',
+          method: 'GET',
+          statusCode: 200,
+        }],
+      },
+      cookies: [],
+      securityHeaders: { 'x-frame-options': 'DENY' },
+      consoleLogs: [],
+      failedPages: [],
+    };
+
+    const orientation = __private__.buildOrientationFromSave(save, {
+      goal: 'find all deals',
+      scopeLevel: 1,
+      exhaustive: false,
+      includeApiHints: true,
+      relatedSessionIds: [],
+      roundCount: 1,
+      stopReason: 'test',
+    });
+
+    const labels = orientation.relevantSections.map((section) => section.label);
+    if (!labels.some((label) => /Coupons & Cash Back/i.test(label))) throw new Error('Expected Coupons & Cash Back section');
+    if (!labels.some((label) => /Weekly Ads/i.test(label))) throw new Error('Expected Weekly Ads section');
+    if (!labels.some((label) => /Rebates/i.test(label))) throw new Error('Expected Rebates section');
+    if (!orientation.coverage.found.includes('weekly_ads')) throw new Error('Expected weekly_ads coverage');
+    if (!orientation.apiHints.length) throw new Error('Expected API hints');
+
+    setOutput({ found: orientation.coverage.found, recommendedScrapes: orientation.recommendedScrapes.length });
+  });
+
+  await runner.run('scope selection and stop logic behave as expected', ({ setOutput }) => {
+    const allowedLevel1 = __private__.selectOrientationFollowUps({
+      coverage: { relatedOrigins: [{ origin: 'https://dam.flippenterprise.net', reasons: ['api'], score: 9 }] },
+      recommendedScrapes: [
+        {
+          methodHint: 'scrape_url',
+          url: 'https://dam.flippenterprise.net/flyerkit/publications/dollargeneral?postal_code=78578&store_code=4337',
+          priority: 'high',
+          alreadyVisited: false,
+        },
+        {
+          methodHint: 'scrape_url',
+          url: 'https://example.org/deals',
+          priority: 'high',
+          alreadyVisited: false,
+        },
+      ],
+    }, {
+      attemptedUrls: new Set(),
+      scopeLevel: 1,
+      startUrl: 'https://www.dollargeneral.com/deals',
+    });
+
+    if (allowedLevel1.length !== 1) throw new Error(`Expected 1 allowed follow-up at scope 1, got ${allowedLevel1.length}`);
+
+    const shouldStop = __private__.shouldStopOrientationRun({
+      coverage: { isLikelyComplete: true },
+    }, {
+      exhaustive: false,
+      staleRounds: 1,
+      pendingFollowUps: 0,
+      newRelevantSections: 0,
+    });
+
+    if (!shouldStop) throw new Error('Expected orientation stop condition to trigger');
+    setOutput({ allowedLevel1: allowedLevel1.length, shouldStop });
+  });
+
   await runner.run('findSiteIssues flags security and context problems', ({ setOutput }) => {
     const issues = __private__.findSiteIssues({
       sessionId: 'save-005',
@@ -484,6 +596,7 @@ async function main() {
     const leakage = __private__.buildPromptText('investigate_site_leakage', { sessionId: 'save-9' });
     const deals = __private__.buildPromptText('extract_store_deals', { sessionId: 'save-9' });
     const api = __private__.buildPromptText('map_api_surface', { sessionId: 'save-9' });
+    const goal = __private__.buildPromptText('plan_site_extraction_for_goal', { sessionId: 'save-9', goal: 'find all deals' });
 
     if (!leakage.includes('get_store_context') || !leakage.includes('scrape://save/save-9/issues')) {
       throw new Error('Leakage prompt missing expected references');
@@ -494,7 +607,10 @@ async function main() {
     if (!api.includes('get_api_surface') || !api.includes('scrape://save/save-9/api-surface')) {
       throw new Error('API-surface prompt missing expected references');
     }
-    setOutput({ leakage: leakage.slice(0, 60), deals: deals.slice(0, 60), api: api.slice(0, 60) });
+    if (!goal.includes('scrape://save/save-9/orientation') || !goal.includes('Playwright MCP')) {
+      throw new Error('Goal-planning prompt missing expected references');
+    }
+    setOutput({ leakage: leakage.slice(0, 60), deals: deals.slice(0, 60), api: api.slice(0, 60), goal: goal.slice(0, 60) });
   });
 
   await runner.run('Resource URI parser understands templated scrape URIs', ({ setOutput }) => {
@@ -502,11 +618,13 @@ async function main() {
     const active = __private__.parseResourceUri('scrape://active/demo-session');
     const overview = __private__.parseResourceUri('scrape://save/demo-session/overview');
     const deals = __private__.parseResourceUri('scrape://save/demo-session/deals');
+    const orientation = __private__.parseResourceUri('scrape://save/demo-session/orientation');
     if (summary.kind !== 'savePage' || summary.pageIndex !== 2) throw new Error('Failed to parse save page URI');
     if (active.kind !== 'activeSession' || active.sessionId !== 'demo-session') throw new Error('Failed to parse active URI');
     if (overview.kind !== 'saveOverview') throw new Error('Failed to parse save overview URI');
     if (deals.kind !== 'saveDeals') throw new Error('Failed to parse save deals URI');
-    setOutput({ summaryKind: summary.kind, activeKind: active.kind, overviewKind: overview.kind, dealsKind: deals.kind });
+    if (orientation.kind !== 'saveOrientation') throw new Error('Failed to parse save orientation URI');
+    setOutput({ summaryKind: summary.kind, activeKind: active.kind, overviewKind: overview.kind, dealsKind: deals.kind, orientationKind: orientation.kind });
   });
 
   const result = runner.finish();
