@@ -1312,6 +1312,35 @@ class ScraperSession {
         }
       }
 
+      // ── Service Worker detection / bypass ────────────────────────────────
+      if (captureServiceWorkers || bypassServiceWorkers) {
+        this.progress('Checking service workers', 78);
+        const swList = await this._detectServiceWorkers(page);
+        if (swList.length > 0) {
+          this.serviceWorkers.push(...swList);
+          this.log(`Service workers detected: ${swList.map(s => s.scope).join(', ')}`, 'warn');
+          if (bypassServiceWorkers) {
+            this.log('Bypassing service workers and re-scraping...', 'info');
+            await this._bypassServiceWorkers(page);
+            // Re-scrape with SW gone so network calls are now visible
+            const bypassVisited = new Set();
+            const bypassResults = await this._scrapePage(page, page.url(), scrapeDepth || 1, bypassVisited, autoScroll, Infinity, null, captureDropdowns);
+            // Merge — prefer SW-bypassed results
+            if (bypassResults.length > 0) allResults = bypassResults;
+          }
+        } else {
+          this.log('No service workers detected.', 'info');
+        }
+      }
+
+      // ── Flush SSE events collected by the EventSource patcher ────────────
+      if (captureSSE) {
+        await this._flushSSECaptures(page, this.sseCalls);
+        if (this.sseCalls.length > 0) {
+          this.log(`SSE streams captured: ${this.sseCalls.length} connection(s), ${this.sseCalls.reduce((n, s) => n + s.events.length, 0)} total events`, 'info');
+        }
+      }
+
       // ── Download images as base64 ────────────────────────────────────────
       if (captureImages && allResults.length > 0) {
         this.progress('Downloading images', 80);
@@ -1394,7 +1423,11 @@ class ScraperSession {
           graphql: this.graphqlCalls,
           rest: this.restCalls,
           all: captureAllRequests ? this.allRequests : [],
+          sse: this.sseCalls,
+          beacons: this.beaconCalls,
+          binary: this.binaryResponses,
         },
+        serviceWorkers: this.serviceWorkers,
         assets: this.assets,
         downloadedImages: this.downloadedImages,
         websockets: this.websockets,
@@ -1913,6 +1946,18 @@ class ScraperSession {
       try {
         const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
+        // Rate limited (429) — back off and retry
+        if (response && response.status() === 429) {
+          const retryAfterSec = parseInt(response.headers()['retry-after'] || '8', 10);
+          const delayMs = Math.min(Math.max(retryAfterSec * 1000, 3000), 60000);
+          this.log(`Rate limited (429) on ${url} — backing off ${delayMs}ms`, 'warn');
+          await page.waitForTimeout(delayMs);
+          // Try again after back-off (only on first attempt)
+          if (attempt === 0) continue;
+          this.failedPages.push({ url, reason: 'HTTP 429 rate-limited' });
+          return { success: false, reason: 'HTTP 429' };
+        }
+
         // Server returned 5xx — remember it, go back to a React page, then SPA nav
         if (response && response.status() >= 500) {
           this.log(`HTTP ${response.status()} on ${url} — saving as SPA route and retrying...`, 'warn');
@@ -1992,6 +2037,61 @@ class ScraperSession {
 
   _isPageClosed(err) {
     return /Target page|context or browser has been closed|browser has been closed|Target closed/i.test(err?.message || '');
+  }
+
+  // ── Service Worker detection & bypass ────────────────────────────────────
+  // Service Workers can intercept and serve requests from cache, hiding them
+  // from Playwright's route() interception. Detecting and unregistering them
+  // forces the app to fetch fresh from the network so we capture all API calls.
+  async _detectServiceWorkers(page) {
+    try {
+      return await page.evaluate(async () => {
+        if (!navigator.serviceWorker) return [];
+        const regs = await navigator.serviceWorker.getRegistrations();
+        return regs.map(r => ({
+          scope: r.scope,
+          scriptURL: r.active?.scriptURL || r.installing?.scriptURL || r.waiting?.scriptURL || null,
+          state: r.active?.state || r.installing?.state || r.waiting?.state || null,
+          updateViaCache: r.updateViaCache,
+        }));
+      });
+    } catch { return []; }
+  }
+
+  async _bypassServiceWorkers(page) {
+    try {
+      const { count, scopes } = await page.evaluate(async () => {
+        if (!navigator.serviceWorker) return { count: 0, scopes: [] };
+        const regs = await navigator.serviceWorker.getRegistrations();
+        const scopes = regs.map(r => r.scope);
+        await Promise.all(regs.map(r => r.unregister()));
+        return { count: regs.length, scopes };
+      });
+      if (count > 0) {
+        this.log(`Bypassed ${count} service worker(s): ${scopes.join(', ')}`, 'info');
+        // Reload to force fresh network requests now that SW is gone
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+      }
+      return count;
+    } catch { return 0; }
+  }
+
+  // ── Flush SSE events captured by the init script patcher ─────────────────
+  async _flushSSECaptures(page, sseCalls) {
+    try {
+      const captured = await page.evaluate(() => window.__capturedSSE || []);
+      // Merge events into sseCalls matched by URL
+      for (const entry of captured) {
+        const existing = sseCalls.find(s => s.url === entry.url);
+        if (existing) {
+          existing.events.push(...entry.events);
+          if (entry.closedAt) existing.closedAt = entry.closedAt;
+        } else {
+          sseCalls.push(entry);
+        }
+      }
+    } catch {}
   }
 
   // ── Reusable network/console/error interception setup ─────────────────────
@@ -2254,7 +2354,23 @@ class ScraperSession {
       if (restIdx !== undefined) {
         try {
           const ct = respHeaders['content-type'] || '';
-          if (ct.includes('application/json')) {
+          // Binary protocol detection — flag before attempting text parse
+          const _BINARY_CTS = ['application/octet-stream', 'application/msgpack', 'application/x-msgpack',
+            'application/x-protobuf', 'application/protobuf', 'application/cbor', 'application/x-cbor',
+            'application/grpc', 'application/grpc-web'];
+          const isBinary = _BINARY_CTS.some(t => ct.includes(t));
+          if (isBinary) {
+            captures.restCalls[restIdx].response = { status, headers: respHeaders, body: null, binary: true, encoding: ct };
+            if (captureBinaryResponses) {
+              captures.binaryResponses.push({
+                url: respUrl, status, contentType: ct,
+                contentLength: respHeaders['content-length'] || null,
+                note: 'Binary-encoded response (MessagePack/Protobuf/CBOR/gRPC). Requires binary decoder.',
+                timestamp: new Date().toISOString(),
+              });
+              this.log(`Binary response: ${ct} at ${respUrl}`, 'warn');
+            }
+          } else if (ct.includes('application/json') || ct.includes('text/')) {
             const text = await response.text();
             let parsed = null; try { parsed = JSON.parse(text); } catch {}
             captures.restCalls[restIdx].response = { status, headers: respHeaders, body: parsed || text };
@@ -2263,6 +2379,22 @@ class ScraperSession {
           }
         } catch {}
         pendingRest.delete(respUrl);
+      }
+
+      // ── SSE stream detection ──
+      // The actual events are captured via the injected EventSource patcher.
+      // Here we record the HTTP connection establishment (URL + status).
+      if (captureSSE) {
+        const ct = respHeaders['content-type'] || '';
+        if (ct.includes('text/event-stream')) {
+          captures.sseCalls.push({
+            url: respUrl, status,
+            openedAt: new Date().toISOString(),
+            note: 'SSE stream opened. Events captured via EventSource patcher in window.__capturedSSE.',
+            events: [],
+          });
+          this.log(`SSE stream: ${respUrl}`, 'api');
+        }
       }
 
       if (captureAllRequests) {
