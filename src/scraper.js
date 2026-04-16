@@ -227,6 +227,10 @@ class ScraperSession {
     this.assets = [];
     this.errors = [];
     this.websockets = [];
+    this.sseCalls = [];        // Server-Sent Events (EventSource streams)
+    this.beaconCalls = [];     // navigator.sendBeacon() / ping requests
+    this.binaryResponses = []; // MessagePack / Protobuf / CBOR / binary API responses
+    this.serviceWorkers = [];  // detected service worker registrations
     this.cookies = [];
     this.consoleLogs = [];
     this.securityHeaders = {};
@@ -934,6 +938,11 @@ class ScraperSession {
       captureAssets,
       captureAllRequests,
       captureIframeAPIs,
+      captureSSE,
+      captureBeacons,
+      captureBinaryResponses,
+      captureServiceWorkers,
+      bypassServiceWorkers,
       captureImages,
       imageLimit,
       autoScroll,
@@ -1101,7 +1110,7 @@ class ScraperSession {
       // ── Live screenshot stream ────────────────────────────────────────────
       if (liveView !== false) this._startLiveStream(page);
 
-      const captureOptions = { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureIframeAPIs, captureImages, imageLimit, captureScreenshots: captureScreenshots || false };
+      const captureOptions = { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureImages, imageLimit, captureScreenshots: captureScreenshots || false };
 
       // ── Request/Response/Console/Error interception ──────────────────────
       await this._setupPageCapture(page, this, captureOptions);
@@ -1989,7 +1998,49 @@ class ScraperSession {
   // `captures` is either `this` (for single-worker) or a plain object with the
   // same array properties (for parallel workers).
   async _setupPageCapture(page, captures, opts) {
-    const { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureIframeAPIs } = opts;
+    const { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureIframeAPIs,
+            captureSSE, captureBeacons, captureBinaryResponses } = opts;
+
+    // Ensure new capture arrays exist on the captures object (workers may not have them yet)
+    if (!captures.sseCalls) captures.sseCalls = [];
+    if (!captures.beaconCalls) captures.beaconCalls = [];
+    if (!captures.binaryResponses) captures.binaryResponses = [];
+
+    // ── SSE PATCHER — injected before page load so EventSource is hooked from the start ──
+    // Patches window.EventSource to record every event fired on every SSE connection.
+    // Read back via page.evaluate(() => window.__capturedSSE) at the end of the scrape.
+    if (captureSSE) {
+      await page.addInitScript(() => {
+        if (window.__capturedSSE) return; // already patched
+        window.__capturedSSE = [];
+        const _OriginalEventSource = window.EventSource;
+        if (!_OriginalEventSource) return;
+        function PatchedEventSource(url, init) {
+          const es = new _OriginalEventSource(url, init);
+          const entry = { url: String(url), openedAt: new Date().toISOString(), events: [], closedAt: null };
+          window.__capturedSSE.push(entry);
+          // Wrap addEventListener to capture all named event types
+          const _origAddEventListener = es.addEventListener.bind(es);
+          es.addEventListener = function(type, handler, ...rest) {
+            return _origAddEventListener(type, function(e) {
+              entry.events.push({ type, data: e.data?.substring(0, 2000), lastEventId: e.lastEventId || null, time: new Date().toISOString() });
+              if (typeof handler === 'function') handler.call(this, e);
+            }, ...rest);
+          };
+          es.onmessage = null; // reset so assignment below routes through our proxy
+          Object.defineProperty(es, 'onmessage', {
+            set(fn) { es.addEventListener('message', fn); },
+            get() { return null; },
+          });
+          es.onerror = () => { entry.closedAt = new Date().toISOString(); };
+          return es;
+        }
+        PatchedEventSource.CONNECTING = 0;
+        PatchedEventSource.OPEN = 1;
+        PatchedEventSource.CLOSED = 2;
+        window.EventSource = PatchedEventSource;
+      }).catch(() => {});
+    }
 
     // O(1) pending-request lookup maps (replace O(n) findLastIndex on every response)
     const pendingGql  = new Map();
@@ -2087,6 +2138,19 @@ class ScraperSession {
           pendingRest.set(reqUrl, captures.restCalls.length - 1);
           this.log(`REST: ${method} ${reqUrl}`, 'api');
         }
+      }
+
+      // ── BEACON capture (navigator.sendBeacon — fired on page unload, analytics POST) ──
+      if (captureBeacons && (resourceType === 'ping' || (resourceType === 'other' && method === 'POST'))) {
+        let parsedBody = null;
+        try { parsedBody = JSON.parse(postData); } catch {}
+        captures.beaconCalls.push({
+          url: reqUrl, method, resourceType,
+          body: parsedBody || (postData ? postData.substring(0, 2000) : null),
+          timestamp: new Date().toISOString(),
+          note: 'navigator.sendBeacon() or ping — often contains analytics/tracking payload',
+        });
+        this.log(`Beacon: ${method} ${reqUrl}`, 'api');
       }
 
       if (captureAllRequests) {

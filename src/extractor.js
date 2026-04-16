@@ -14,6 +14,46 @@ async function extractPageData(page, url, opts = {}) {
       try { return new URL(src, pageUrl).href; } catch { return src; }
     }
 
+    // ── SHADOW DOM PIERCE ──────────────────────────────────────────────────────
+    // Recursively traverses open shadow roots — invisible to normal querySelectorAll.
+    // Used for Web Components (Shopify Polaris, LitElement, Stencil, etc.)
+    function extractShadowContent(root, depth) {
+      const found = [];
+      if (depth <= 0 || !root) return found;
+      try {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+        let node;
+        while ((node = walker.nextNode())) {
+          if (node.shadowRoot) {
+            const sr = node.shadowRoot;
+            const text = sr.textContent?.replace(/\s+/g, ' ').trim().substring(0, 1000) || '';
+            const links = Array.from(sr.querySelectorAll('a[href]')).map(a => ({
+              href: abs(a.href), text: a.textContent?.trim().substring(0, 200)
+            })).filter(l => l.href);
+            const buttons = Array.from(sr.querySelectorAll('button,[role="button"]'))
+              .map(b => b.textContent?.trim().substring(0, 100)).filter(Boolean);
+            const inputs = Array.from(sr.querySelectorAll('input,select,textarea')).map(el => ({
+              type: el.type || null, name: el.name || null, placeholder: el.placeholder || null,
+              id: el.id || null,
+            }));
+            const images = Array.from(sr.querySelectorAll('img')).map(el => abs(el.src || el.getAttribute('data-src'))).filter(Boolean);
+            if (text || links.length || buttons.length || inputs.length) {
+              found.push({
+                host: node.tagName.toLowerCase(),
+                hostId: node.id || null,
+                hostClass: node.className?.toString().substring(0, 100) || null,
+                text, links, buttons, inputs, images,
+              });
+            }
+            // Recurse into nested shadow roots
+            found.push(...extractShadowContent(sr, depth - 1));
+          }
+        }
+      } catch {}
+      return found;
+    }
+    const shadowDOMContent = (() => { try { return extractShadowContent(document, 6); } catch { return []; } })();
+
     // ── META ──
     const meta = {
       title: document.title,
@@ -551,6 +591,65 @@ async function extractPageData(page, url, opts = {}) {
       .filter((v, i, a) => a.indexOf(v) === i)
       .slice(0, 50);
 
+    // ── JS GLOBAL STATE (server-side rendered / framework data stores) ─────────
+    // These objects contain the full dataset the page was rendered with —
+    // often richer than any individual API call.
+    const jsGlobalState = {};
+    const _knownStateKeys = [
+      ['nextData',        '__NEXT_DATA__'],          // Next.js SSR page props
+      ['nuxtData',        '__NUXT__'],               // Nuxt.js
+      ['remixContext',    '__remixContext'],          // Remix
+      ['apolloState',     '__APOLLO_STATE__'],        // Apollo GraphQL cache
+      ['relayStore',      '__RELAY_STORE__'],         // Relay
+      ['preloadedState',  '__PRELOADED_STATE__'],     // Generic Redux SSR
+      ['reactQueryState', '__REACT_QUERY_STATE__'],   // TanStack Query
+      ['svelteKitPage',   '__sveltekit_page'],        // SvelteKit
+      ['astroData',       '__astro_data__'],          // Astro
+      ['turbolinks',      'Turbolinks'],              // Rails Turbolinks
+      ['digitalData',     'digitalData'],            // Adobe Analytics data layer
+      ['dataLayer',       'dataLayer'],              // Google Tag Manager
+    ];
+    for (const [key, winKey] of _knownStateKeys) {
+      try {
+        if (w[winKey] !== undefined && w[winKey] !== null) {
+          const str = JSON.stringify(w[winKey]);
+          jsGlobalState[key] = str.length > 100000
+            ? { _truncated: true, _size: str.length, preview: JSON.parse(str.substring(0, 100000)) }
+            : w[winKey];
+        }
+      } catch {}
+    }
+    // Try Redux store (.getState())
+    try {
+      for (const k of ['__REDUX_STORE__', '__store__', 'store']) {
+        if (w[k] && typeof w[k].getState === 'function') {
+          const s = w[k].getState();
+          const str = JSON.stringify(s);
+          jsGlobalState.reduxState = str.length > 100000
+            ? { _truncated: true, _size: str.length, preview: JSON.parse(str.substring(0, 100000)) }
+            : s;
+          break;
+        }
+      }
+    } catch {}
+    // Scan for any other __ double-underscore global objects that look like data (skip framework internals)
+    const _SKIP_GLOBALS = new Set(['__REACT_DEVTOOLS_GLOBAL_HOOK__', '__webpack_require__', '__webpack_modules__',
+      '__webpack_chunk_load__', '__vue_app__', '__VUE_HMR_RUNTIME__', '__REDUX_DEVTOOLS_EXTENSION__',
+      '__REDUX_DEVTOOLS_EXTENSION_COMPOSE__', '__react_router_build_manifest', '__BUILD_MANIFEST']);
+    try {
+      Object.keys(w).filter(k =>
+        (k.startsWith('__') || k === 'digitalData') &&
+        !_SKIP_GLOBALS.has(k) &&
+        !_knownStateKeys.some(([, wk]) => wk === k) &&
+        typeof w[k] === 'object' && w[k] !== null && !Array.isArray(w[k])
+      ).slice(0, 15).forEach(k => {
+        try {
+          const str = JSON.stringify(w[k]);
+          if (str.length > 20 && str.length < 500000) jsGlobalState[k] = w[k];
+        } catch {}
+      });
+    } catch {}
+
     return {
       meta,
       headings,
@@ -584,10 +683,63 @@ async function extractPageData(page, url, opts = {}) {
       headHTML,
       htmlSource,
       customElements: customElements_,
+      shadowDOMContent,
+      jsGlobalState,
     };
   }, { pageUrl: url, lightMode: !!opts.lightMode });
 
-  // ── 2. Screenshot (full page) — only when captureScreenshots is enabled ────
+  // ── 2. IndexedDB — async, must run outside the main evaluate block ───────────
+  try {
+    data.indexedDB = await page.evaluate(() => new Promise(resolve => {
+      if (!window.indexedDB) { resolve({}); return; }
+      const result = {};
+      // indexedDB.databases() is not supported in all browsers; fall back to empty list
+      const dbListPromise = typeof indexedDB.databases === 'function'
+        ? indexedDB.databases()
+        : Promise.resolve([]);
+      dbListPromise.then(dbList => {
+        if (!dbList || dbList.length === 0) { resolve(result); return; }
+        let remaining = Math.min(dbList.length, 5);
+        if (remaining === 0) { resolve(result); return; }
+        for (const dbInfo of dbList.slice(0, 5)) {
+          if (!dbInfo.name) { if (--remaining === 0) resolve(result); continue; }
+          const openReq = indexedDB.open(dbInfo.name);
+          openReq.onerror = () => { result[dbInfo.name] = { error: 'open failed' }; if (--remaining === 0) resolve(result); };
+          openReq.onsuccess = (e) => {
+            const db = e.target.result;
+            const storeNames = Array.from(db.objectStoreNames).slice(0, 10);
+            result[dbInfo.name] = {};
+            let storesRemaining = storeNames.length;
+            if (storesRemaining === 0) { db.close(); if (--remaining === 0) resolve(result); return; }
+            for (const storeName of storeNames) {
+              try {
+                const tx = db.transaction(storeName, 'readonly');
+                const getAllReq = tx.objectStore(storeName).getAll();
+                getAllReq.onsuccess = (e2) => {
+                  const records = (e2.target.result || []).slice(0, 50);
+                  result[dbInfo.name][storeName] = records.map(r => {
+                    try { return JSON.parse(JSON.stringify(r).substring(0, 2000)); } catch { return '[UNSERIALIZABLE]'; }
+                  });
+                  if (--storesRemaining === 0) { db.close(); if (--remaining === 0) resolve(result); }
+                };
+                getAllReq.onerror = () => {
+                  result[dbInfo.name][storeName] = { error: 'read failed' };
+                  if (--storesRemaining === 0) { db.close(); if (--remaining === 0) resolve(result); }
+                };
+              } catch {
+                result[dbInfo.name][storeName] = { error: 'tx failed' };
+                if (--storesRemaining === 0) { db.close(); if (--remaining === 0) resolve(result); }
+              }
+            }
+          };
+        }
+      }).catch(() => resolve(result));
+    })).catch(() => null);
+  } catch {
+    data.indexedDB = null;
+  }
+
+  // ── 3. Screenshot (full page) — only when captureScreenshots is enabled ────
   if (opts.captureScreenshots) {
     try {
       const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 80, fullPage: true });
