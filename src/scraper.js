@@ -2461,6 +2461,7 @@ class ScraperSession {
 
     const captures = {
       graphqlCalls: [], restCalls: [], assets: [], allRequests: [],
+      sseCalls: [], beaconCalls: [], binaryResponses: [],
       consoleLogs: [], errors: [], websockets: [], downloadedImages: [],
       securityHeaders: {},
     };
