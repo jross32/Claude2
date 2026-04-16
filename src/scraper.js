@@ -2788,6 +2788,7 @@ class ScraperSession {
             page.on('dialog', async (d) => { try { await d.dismiss(); } catch {} });
             const captures = {
               graphqlCalls: [], restCalls: [], assets: [], allRequests: [],
+              sseCalls: [], beaconCalls: [], binaryResponses: [],
               consoleLogs: [], errors: [], websockets: [], downloadedImages: [],
               securityHeaders: {},
             };
@@ -2855,6 +2856,9 @@ class ScraperSession {
       this.restCalls.push(...w.captures.restCalls);
       this.assets.push(...w.captures.assets);
       this.allRequests.push(...w.captures.allRequests);
+      this.sseCalls.push(...(w.captures.sseCalls || []));
+      this.beaconCalls.push(...(w.captures.beaconCalls || []));
+      this.binaryResponses.push(...(w.captures.binaryResponses || []));
       this.consoleLogs.push(...w.captures.consoleLogs);
       this.errors.push(...w.captures.errors);
       this.websockets.push(...w.captures.websockets);
