@@ -2591,6 +2591,7 @@ class ScraperSession {
       this.consoleLogs.push(...w.captures.consoleLogs);
       this.errors.push(...w.captures.errors);
       this.websockets.push(...w.captures.websockets);
+      this.downloadedImages.push(...w.captures.downloadedImages);
       if (w.captures.securityHeaders && w.captures.securityHeaders.url) {
         this.securityHeaders = w.captures.securityHeaders;
       }
@@ -2624,6 +2625,10 @@ class ScraperSession {
       const graphql = ws.length ? ws.flatMap(w => w.captures.graphqlCalls) : this.graphqlCalls;
       const rest = ws.length ? ws.flatMap(w => w.captures.restCalls) : this.restCalls;
       const assets = ws.length ? ws.flatMap(w => w.captures.assets) : this.assets;
+      const consoleLogs = ws.length ? ws.flatMap(w => w.captures.consoleLogs) : this.consoleLogs;
+      const errors = ws.length ? ws.flatMap(w => w.captures.errors) : this.errors;
+      const websockets = ws.length ? ws.flatMap(w => w.captures.websockets) : this.websockets;
+      const downloadedImages = ws.length ? ws.flatMap(w => w.captures.downloadedImages) : this.downloadedImages;
       const saveData = {
         sessionId: saveId,
         startUrl: this._saveStartUrl,
@@ -2635,6 +2640,7 @@ class ScraperSession {
         pages: strip(this._savePages || []),
         apiCalls: { graphql: strip(graphql), rest: strip(rest) },
         assets: strip(assets),
+        downloadedImages: strip(downloadedImages),
         cookies: strip((this.cookies || []).map((cookie) => ({
           name: cookie.name,
           domain: cookie.domain,
@@ -2645,6 +2651,9 @@ class ScraperSession {
           sameSite: cookie.sameSite,
         }))),
         securityHeaders: strip(this.securityHeaders || {}),
+        consoleLogs: strip(consoleLogs),
+        errors: strip(errors),
+        websockets: strip(websockets),
         failedPages: this.failedPages || [],
       };
       if (!fs.existsSync(SAVES_DIR)) fs.mkdirSync(SAVES_DIR, { recursive: true });

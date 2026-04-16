@@ -25,6 +25,12 @@ const NEW_TOOL_NAMES = [
   'generate_sitemap',
   'list_active_scrapes',
   'get_scrape_status',
+  'get_save_overview',
+  'find_site_issues',
+  'extract_deals',
+  'list_internal_pages',
+  'get_api_surface',
+  'get_store_context',
   'search_scrape_text',
   'list_links',
   'list_forms',
@@ -39,9 +45,9 @@ const NEW_TOOL_NAMES = [
 async function main() {
   const runner = new TestRunner('unit');
 
-  await runner.run('MCP server exports 40 tools', ({ setOutput }) => {
+  await runner.run('MCP server exports 46 tools', ({ setOutput }) => {
     if (!Array.isArray(TOOLS)) throw new Error('TOOLS export missing');
-    if (TOOLS.length !== 40) throw new Error(`Expected 40 tools, got ${TOOLS.length}`);
+    if (TOOLS.length !== 46) throw new Error(`Expected 46 tools, got ${TOOLS.length}`);
     setOutput({ count: TOOLS.length });
   });
 
@@ -98,6 +104,11 @@ async function main() {
     const expectedFixed = ['scrape://saves', 'scrape://active'];
     const expectedTemplates = [
       'scrape://save/{sessionId}/summary',
+      'scrape://save/{sessionId}/overview',
+      'scrape://save/{sessionId}/issues',
+      'scrape://save/{sessionId}/deals',
+      'scrape://save/{sessionId}/store-context',
+      'scrape://save/{sessionId}/api-surface',
       'scrape://save/{sessionId}/page/{pageIndex}',
       'scrape://save/{sessionId}/api/{kind}',
       'scrape://active/{sessionId}',
@@ -107,6 +118,9 @@ async function main() {
       'extract_contacts_from_scrape',
       'review_scrape_security',
       'compare_scrapes_workflow',
+      'investigate_site_leakage',
+      'extract_store_deals',
+      'map_api_surface',
     ];
 
     const missing = [
@@ -184,6 +198,140 @@ async function main() {
     }
 
     setOutput({ rankedUrl: evidence.publicEvidence[0].url, totalChars });
+  });
+
+  await runner.run('buildSaveOverview summarizes counts, sections, and highlights', ({ setOutput }) => {
+    const overview = __private__.buildSaveOverview({
+      sessionId: 'save-001',
+      startUrl: 'https://example.com/store',
+      lastSavedAt: '2026-04-16T00:00:00.000Z',
+      pages: [{
+        meta: { url: 'https://example.com/store', title: 'Store Home', description: 'Store details' },
+        headings: { h1: [{ text: 'Store details' }], h2: [{ text: 'Hours' }] },
+        fullText: 'Store #4337 is open from 8:00 AM to 9:00 PM and has weekly deals.',
+        links: [{ href: 'https://example.com/store/deals', text: 'Deals' }],
+        forms: [{ fields: [{ name: 'zip' }] }],
+        images: [{ src: 'https://example.com/a.jpg' }],
+        tech: { frameworks: ['React'] },
+      }],
+      apiCalls: {
+        graphql: [],
+        rest: [{ url: 'https://example.com/api/store/info/4337?postal_code=78578', method: 'GET', statusCode: 200, headers: { authorization: 'Bearer x' } }],
+      },
+      cookies: [{ name: 'sessionToken', domain: 'example.com', secure: true, httpOnly: true, sameSite: 'Lax' }],
+      securityHeaders: { 'x-frame-options': 'DENY' },
+      consoleLogs: [{ type: 'error', text: 'Session timeout, please sign in again.' }],
+      failedPages: [],
+    });
+
+    if (overview.counts.pages !== 1) throw new Error(`Expected 1 page, got ${overview.counts.pages}`);
+    if (!overview.sections.some((section) => section.section === 'store')) throw new Error('Expected store section');
+    if (!overview.highlights.length) throw new Error('Expected highlights');
+    setOutput({ sections: overview.sections.length, highlights: overview.highlights.length });
+  });
+
+  await runner.run('buildApiSurface groups endpoints and operations', ({ setOutput }) => {
+    const surface = __private__.buildApiSurface({
+      sessionId: 'save-002',
+      apiCalls: {
+        graphql: [{
+          url: 'https://example.com/graphql?store=4337',
+          method: 'POST',
+          headers: { authorization: 'Bearer abc' },
+          body: { operationName: 'GetDeals', query: 'query GetDeals { deals { id } }' },
+          response: { status: 200 },
+        }],
+        rest: [{
+          url: 'https://example.com/api/store/info/4337?postal_code=78578',
+          method: 'GET',
+          headers: { 'x-api-key': 'redacted' },
+          statusCode: 200,
+        }],
+      },
+      cookies: [{ name: 'appSessionToken', domain: 'example.com', secure: true, httpOnly: true, sameSite: 'Lax' }],
+    });
+
+    if (!surface.graphql.operations.includes('GetDeals')) throw new Error('Expected GetDeals operation');
+    if (!surface.rest.endpoints[0]?.queryParamKeys.includes('postal_code')) throw new Error('Expected postal_code query param');
+    if (!surface.authHints.headerNames.includes('authorization')) throw new Error('Expected authorization auth hint');
+    setOutput({ graphqlEndpoints: surface.graphql.endpoints.length, restEndpoints: surface.rest.endpoints.length });
+  });
+
+  await runner.run('collectStoreContext detects visible/API mismatches', ({ setOutput }) => {
+    const context = __private__.collectStoreContext({
+      sessionId: 'save-003',
+      pages: [{
+        meta: { url: 'https://example.com/store/4337', title: 'Store #4337' },
+        headings: { h1: [{ text: 'Store #4337' }], h2: [] },
+        fullText: 'Store #4337 is located at 1740 Highway 100, Port Isabel, TX 78578 and is open 8:00 AM - 9:00 PM.',
+      }],
+      apiCalls: {
+        graphql: [],
+        rest: [{
+          url: 'https://example.com/api/store/info/21622?postal_code=78520',
+          method: 'GET',
+          response: { body: { merchant_store_code: '21622', address: '6115 FM 1732, Brownsville, TX 78520', hours: '9:00 AM - 8:00 PM' } },
+        }],
+      },
+      cookies: [{ name: 'preferredStore', domain: 'example.com', secure: true, httpOnly: false, sameSite: 'Lax' }],
+    });
+
+    if (!context.mismatches.length) throw new Error('Expected at least one mismatch');
+    if (context.pageContext.primaryStoreNumber !== '4337') throw new Error(`Unexpected page store number: ${context.pageContext.primaryStoreNumber}`);
+    if (context.apiContext.primaryStoreNumber !== '21622') throw new Error(`Unexpected API store number: ${context.apiContext.primaryStoreNumber}`);
+    setOutput({ mismatchTypes: context.mismatches.map((issue) => issue.type) });
+  });
+
+  await runner.run('extractDealsFromSave finds deal snippets from pages and APIs', ({ setOutput }) => {
+    const deals = __private__.extractDealsFromSave({
+      sessionId: 'save-004',
+      pages: [{
+        meta: { url: 'https://example.com/deals', title: 'Weekly Deals', description: '' },
+        headings: { h1: [{ text: 'Weekly Deals' }], h2: [] },
+        fullText: 'Pepsi or Mountain Dew 3 for $14. Tostitos Chips or Dairy Dips 2 for $8.',
+      }],
+      apiCalls: {
+        graphql: [],
+        rest: [{
+          url: 'https://example.com/api/deals',
+          method: 'GET',
+          response: { body: [{ title: 'Digital coupon', description: 'Gain detergent $5.50 with digital coupon' }] },
+        }],
+      },
+    }, { limit: 10 });
+
+    if (deals.count < 2) throw new Error(`Expected at least 2 deals, got ${deals.count}`);
+    if (!deals.deals.some((deal) => deal.text.includes('$14'))) throw new Error('Expected Pepsi/Mountain Dew deal');
+    setOutput({ count: deals.count, first: deals.deals[0].text });
+  });
+
+  await runner.run('findSiteIssues flags security and context problems', ({ setOutput }) => {
+    const issues = __private__.findSiteIssues({
+      sessionId: 'save-005',
+      startUrl: 'https://example.com/store',
+      pages: [{
+        meta: { url: 'https://example.com/store', title: 'Store #4337' },
+        headings: { h1: [{ text: 'Store #4337' }], h2: [] },
+        fullText: 'Session timeout, please sign in again. Store #4337 is open 8:00 AM - 9:00 PM.',
+      }],
+      apiCalls: {
+        graphql: [],
+        rest: [{
+          url: 'https://example.com/api/store/info/21622?postal_code=78520',
+          method: 'GET',
+          headers: { authorization: 'Bearer x' },
+          response: { body: { merchant_store_code: '21622' } },
+        }],
+      },
+      cookies: [{ name: 'appToken', domain: 'example.com', secure: false, httpOnly: false, sameSite: 'Lax' }],
+      securityHeaders: {},
+      consoleLogs: [{ type: 'error', text: 'TypeError: widget failed' }],
+      failedPages: [{ url: 'https://example.com/weekly-ads', reason: 'auth-redirect' }],
+    });
+
+    if (!issues.count) throw new Error('Expected issues to be detected');
+    if (!issues.bySeverity.medium && !issues.bySeverity.high) throw new Error('Expected medium/high issues');
+    setOutput({ count: issues.count, bySeverity: issues.bySeverity });
   });
 
   await runner.run('analyzeResearchQuestion skips Ollama for extractive auto mode', async ({ setOutput }) => {
@@ -296,12 +444,33 @@ async function main() {
     setOutput({ preview: text.slice(0, 80) });
   });
 
+  await runner.run('New workflow prompts reference the new narrow tools/resources', ({ setOutput }) => {
+    const leakage = __private__.buildPromptText('investigate_site_leakage', { sessionId: 'save-9' });
+    const deals = __private__.buildPromptText('extract_store_deals', { sessionId: 'save-9' });
+    const api = __private__.buildPromptText('map_api_surface', { sessionId: 'save-9' });
+
+    if (!leakage.includes('get_store_context') || !leakage.includes('scrape://save/save-9/issues')) {
+      throw new Error('Leakage prompt missing expected references');
+    }
+    if (!deals.includes('extract_deals') || !deals.includes('scrape://save/save-9/deals')) {
+      throw new Error('Deals prompt missing expected references');
+    }
+    if (!api.includes('get_api_surface') || !api.includes('scrape://save/save-9/api-surface')) {
+      throw new Error('API-surface prompt missing expected references');
+    }
+    setOutput({ leakage: leakage.slice(0, 60), deals: deals.slice(0, 60), api: api.slice(0, 60) });
+  });
+
   await runner.run('Resource URI parser understands templated scrape URIs', ({ setOutput }) => {
     const summary = __private__.parseResourceUri('scrape://save/demo-session/page/2');
     const active = __private__.parseResourceUri('scrape://active/demo-session');
+    const overview = __private__.parseResourceUri('scrape://save/demo-session/overview');
+    const deals = __private__.parseResourceUri('scrape://save/demo-session/deals');
     if (summary.kind !== 'savePage' || summary.pageIndex !== 2) throw new Error('Failed to parse save page URI');
     if (active.kind !== 'activeSession' || active.sessionId !== 'demo-session') throw new Error('Failed to parse active URI');
-    setOutput({ summaryKind: summary.kind, activeKind: active.kind });
+    if (overview.kind !== 'saveOverview') throw new Error('Failed to parse save overview URI');
+    if (deals.kind !== 'saveDeals') throw new Error('Failed to parse save deals URI');
+    setOutput({ summaryKind: summary.kind, activeKind: active.kind, overviewKind: overview.kind, dealsKind: deals.kind });
   });
 
   const result = runner.finish();
