@@ -933,6 +933,7 @@ class ScraperSession {
       captureREST,
       captureAssets,
       captureAllRequests,
+      captureIframeAPIs,
       captureImages,
       imageLimit,
       autoScroll,
@@ -1100,7 +1101,7 @@ class ScraperSession {
       // ── Live screenshot stream ────────────────────────────────────────────
       if (liveView !== false) this._startLiveStream(page);
 
-      const captureOptions = { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureImages, imageLimit, captureScreenshots: captureScreenshots || false };
+      const captureOptions = { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureIframeAPIs, captureImages, imageLimit, captureScreenshots: captureScreenshots || false };
 
       // ── Request/Response/Console/Error interception ──────────────────────
       await this._setupPageCapture(page, this, captureOptions);
@@ -1988,7 +1989,7 @@ class ScraperSession {
   // `captures` is either `this` (for single-worker) or a plain object with the
   // same array properties (for parallel workers).
   async _setupPageCapture(page, captures, opts) {
-    const { captureGraphQL, captureREST, captureAssets, captureAllRequests } = opts;
+    const { captureGraphQL, captureREST, captureAssets, captureAllRequests, captureIframeAPIs } = opts;
 
     // O(1) pending-request lookup maps (replace O(n) findLastIndex on every response)
     const pendingGql  = new Map();
@@ -2066,8 +2067,12 @@ class ScraperSession {
       }
 
       if (captureREST) {
+        // xhr/fetch resource types are always XHR/fetch API calls regardless of URL shape.
+        // Also match common URL patterns for APIs that don't use /api/ (e.g. /flyerkit/, /flyers/, /v2/).
+        const isXHRorFetch = resourceType === 'xhr' || resourceType === 'fetch';
         const isAPI =
-          reqUrl.match(/\/(api|v\d+|rest|graphql-rest)\//i) ||
+          isXHRorFetch ||
+          reqUrl.match(/\/(api|v\d+|rest|graphql-rest|flyerkit|flyers|publication|publications)\//i) ||
           (headers['accept']?.includes('application/json') && !reqUrl.includes('/graphql'));
         const isDocLike = ['document', 'script', 'stylesheet', 'font', 'image'].includes(resourceType);
         if (isAPI && !isDocLike && !reqUrl.includes('/graphql')) {
@@ -2102,6 +2107,48 @@ class ScraperSession {
 
       await route.continue().catch(() => {});
     });
+
+    // ── Context-level iframe API capture ───────────────────────────────────
+    // page.route() already fires for same-page frames, but some cross-origin
+    // iframes (e.g. flippenterprise widgets, embedded ad units) make XHR/fetch
+    // calls that are only reliably intercepted at the context level.
+    // We use a seen-URLs set to deduplicate against requests already captured
+    // by the page-level route handler above.
+    if (captureIframeAPIs && captureREST) {
+      const _seenIframeUrls = new Set();
+      await page.context().route('**/*', async (route) => {
+        if (this.stopped) { await route.continue().catch(() => {}); return; }
+        const request = route.request();
+        const frame = request.frame();
+        // Only process requests originating from a child frame (not the main frame)
+        if (!frame || frame === page.mainFrame()) { await route.continue().catch(() => {}); return; }
+        const reqUrl = request.url();
+        const resourceType = request.resourceType();
+        const isXHRorFetch = resourceType === 'xhr' || resourceType === 'fetch';
+        if (!isXHRorFetch) { await route.continue().catch(() => {}); return; }
+        // Skip URLs already captured by the page-level route
+        if (_seenIframeUrls.has(reqUrl)) { await route.continue().catch(() => {}); return; }
+        _seenIframeUrls.add(reqUrl);
+        const headers = request.headers();
+        const postData = request.postData();
+        let parsedBody = null;
+        try { parsedBody = JSON.parse(postData); } catch {}
+        captures.restCalls.push({
+          url: reqUrl,
+          method: request.method(),
+          headers: this._sanitizeHeaders(headers),
+          body: parsedBody || postData || null,
+          resourceType,
+          fromIframe: true,
+          iframeUrl: frame.url(),
+          timestamp: new Date().toISOString(),
+          response: null,
+        });
+        pendingRest.set(reqUrl, captures.restCalls.length - 1);
+        this.log(`REST (iframe): ${request.method()} ${reqUrl}`, 'api');
+        await route.continue().catch(() => {});
+      });
+    }
 
     page.on('response', async (response) => {
       const respUrl = response.url();
