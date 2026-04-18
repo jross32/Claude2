@@ -719,10 +719,12 @@ async function testScopeEscalation({ baseUrl, clientId, clientSecret, requestedS
  *    Use this to demonstrate what a vulnerable deployment looks like.
  *
  * @param {object} opts
- * @param {string} opts.baseUrl    - Mock IdP base URL
- * @param {string} opts.injectUser - Username to inject (default: 'admin')
+ * @param {string} opts.baseUrl               - Mock IdP base URL
+ * @param {string} [opts.injectUser]          - Username to inject (default: 'admin')
+ * @param {string} [opts.secureEndpointPath]  - Path of the JWT-only endpoint (default: /header-protected)
+ * @param {string} [opts.vulnerableEndpointPath] - Path of the vulnerable demo endpoint (default: /header-vulnerable)
  */
-async function testHeaderInjection({ baseUrl, injectUser = 'admin' }) {
+async function testHeaderInjection({ baseUrl, injectUser = 'admin', secureEndpointPath = '/header-protected', vulnerableEndpointPath = '/header-vulnerable' }) {
   const INJECTION_HEADERS = [
     'X-Authenticated-User',
     'X-Forwarded-User',
@@ -750,7 +752,7 @@ async function testHeaderInjection({ baseUrl, injectUser = 'admin' }) {
 
   for (const headerName of INJECTION_HEADERS) {
     // ── Secure endpoint — should reject all header injections ─────────────
-    const secureR = await probe('/header-protected', { [headerName]: injectUser });
+    const secureR = await probe(secureEndpointPath, { [headerName]: injectUser });
     secureResults.push({
       header:  headerName,
       blocked: !secureR.ok,
@@ -759,7 +761,7 @@ async function testHeaderInjection({ baseUrl, injectUser = 'admin' }) {
     });
 
     // ── Vulnerable endpoint — demonstrates what bypass looks like ─────────
-    const vulnR = await probe('/header-vulnerable', { [headerName]: injectUser });
+    const vulnR = await probe(vulnerableEndpointPath, { [headerName]: injectUser });
     vulnResults.push({
       header:   headerName,
       accepted: vulnR.ok,
@@ -775,7 +777,7 @@ async function testHeaderInjection({ baseUrl, injectUser = 'admin' }) {
     injectUser,
     headersProbed:       INJECTION_HEADERS.length,
     secureEndpoint: {
-      path:            '/header-protected',
+      path:            secureEndpointPath,
       bypassCount:     secureBypassCount,
       results:         secureResults,
       finding:         secureBypassCount === 0 ? 'OK' : 'VULNERABLE',
@@ -784,7 +786,7 @@ async function testHeaderInjection({ baseUrl, injectUser = 'admin' }) {
         : `FAIL — ${secureBypassCount} header(s) bypassed the secure endpoint`,
     },
     vulnerableEndpoint: {
-      path:    '/header-vulnerable',
+      path:    vulnerableEndpointPath,
       results: vulnResults,
       note:    'Demonstrates what a misconfigured PingAccess backend looks like — the vulnerable endpoint accepts injected identity headers without JWT verification',
     },
@@ -999,11 +1001,15 @@ const ALL_TESTS = [
  * @param {string}   [opts.targetClientId]   - Other tenant's client ID for bola_idor test
  * @param {string[]} [opts.resourceIds]      - Resource IDs to probe for bola_idor
  * @param {string[]} [opts.requestedScopes]  - Scopes to escalate for scope_escalation test
- * @param {string[]} [opts.allowedScopes]    - Scopes the client is legitimately allowed
+ * @param {string[]} [opts.allowedScopes]          - Scopes the client is legitimately allowed
+ * @param {string}   [opts.resourcePath]           - Base path for BOLA resource endpoint (default: /resource)
+ * @param {string}   [opts.secureEndpointPath]     - Path of JWT-only endpoint for header injection (default: /header-protected)
+ * @param {string}   [opts.vulnerableEndpointPath] - Path of vulnerable demo endpoint (default: /header-vulnerable)
  */
 async function performOidcSecurityTests({
   mockServerUrl, clientId, clientSecret, testsToRun, validRedirectUri,
   pkceClientId, targetClientId, resourceIds, requestedScopes, allowedScopes,
+  resourcePath, secureEndpointPath, vulnerableEndpointPath,
 }) {
   const toRun = [...new Set(
     (testsToRun || ['all']).flatMap(t => (t === 'all' ? ALL_TESTS : [t]))
@@ -1043,10 +1049,11 @@ async function performOidcSecurityTests({
         break;
       case 'bola_idor':
         results.bola_idor = await testBolaIdor({
-          baseUrl: mockServerUrl,
+          baseUrl:      mockServerUrl,
           clientId:     targetClientId || 'vendor-a',
           clientSecret: clientSecret || 'vendor-a-secret',
           resourceIds,
+          resourcePath: resourcePath || '/resource',
         });
         break;
       case 'scope_escalation':
@@ -1060,7 +1067,9 @@ async function performOidcSecurityTests({
         break;
       case 'header_injection':
         results.header_injection = await testHeaderInjection({
-          baseUrl: mockServerUrl,
+          baseUrl:               mockServerUrl,
+          secureEndpointPath:    secureEndpointPath    || '/header-protected',
+          vulnerableEndpointPath: vulnerableEndpointPath || '/header-vulnerable',
         });
         break;
     }

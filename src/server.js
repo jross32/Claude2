@@ -916,6 +916,7 @@ app.post('/api/oidc-test', async (req, res) => {
   const {
     mockServerUrl, clientId, clientSecret, tests, validRedirectUri,
     pkceClientId, targetClientId, resourceIds, requestedScopes, allowedScopes,
+    resourcePath, secureEndpointPath, vulnerableEndpointPath,
   } = req.body || {};
   if (!mockServerUrl) return res.status(400).json({ error: 'mockServerUrl is required' });
   if (!clientId)      return res.status(400).json({ error: 'clientId is required' });
@@ -930,7 +931,10 @@ app.post('/api/oidc-test', async (req, res) => {
       targetClientId:   targetClientId   || null,
       resourceIds:      resourceIds      || null,
       requestedScopes:  requestedScopes  || null,
-      allowedScopes:    allowedScopes    || null,
+      allowedScopes:          allowedScopes          || null,
+      resourcePath:           resourcePath           || null,
+      secureEndpointPath:     secureEndpointPath     || null,
+      vulnerableEndpointPath: vulnerableEndpointPath || null,
     });
     res.json(results);
   } catch (err) {

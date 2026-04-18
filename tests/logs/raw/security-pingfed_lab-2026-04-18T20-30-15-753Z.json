@@ -1,17 +1,17 @@
 {
-  "timestamp": "2026-04-18T20:30:58.094Z",
+  "timestamp": "2026-04-18T20:30:15.751Z",
   "git_commit": "dd72609",
   "suite": "security-pingfed_lab",
   "tests": [
     {
       "name": "mock PingFederate starts",
       "status": "pass",
-      "duration_ms": 37,
+      "duration_ms": 40,
       "error": null,
       "input": {},
       "output": {
-        "port": 64759,
-        "baseUrl": "http://127.0.0.1:64759"
+        "port": 63069,
+        "baseUrl": "http://127.0.0.1:63069"
       },
       "stack_trace": null,
       "screenshot": null
@@ -19,7 +19,7 @@
     {
       "name": "redirect_uri: all bypass variants blocked (PA_LEGACY_VENDOR)",
       "status": "pass",
-      "duration_ms": 265,
+      "duration_ms": 212,
       "error": null,
       "input": {},
       "output": {
@@ -33,7 +33,7 @@
     {
       "name": "redirect_uri: open redirect blocked on PA_ client",
       "status": "pass",
-      "duration_ms": 33,
+      "duration_ms": 40,
       "error": null,
       "input": {},
       "output": {
@@ -45,12 +45,12 @@
     {
       "name": "state_entropy: 50 unique states, entropy OK",
       "status": "pass",
-      "duration_ms": 102,
+      "duration_ms": 139,
       "error": null,
       "input": {},
       "output": {
         "uniqueCount": 50,
-        "entropy": 3.992
+        "entropy": 3.995
       },
       "stack_trace": null,
       "screenshot": null
@@ -58,7 +58,7 @@
     {
       "name": "alg_none: PingFed issues signed JWT (alg header RS256)",
       "status": "pass",
-      "duration_ms": 25,
+      "duration_ms": 31,
       "error": null,
       "input": {},
       "output": {
@@ -70,7 +70,7 @@
     {
       "name": "alg_none: forged token rejected by /idp/userinfo.openid",
       "status": "pass",
-      "duration_ms": 6,
+      "duration_ms": 7,
       "error": null,
       "input": {},
       "output": {
@@ -83,7 +83,7 @@
     {
       "name": "pkce: PA_VENDOR_PORTAL requires PKCE — no code_challenge rejected",
       "status": "pass",
-      "duration_ms": 10,
+      "duration_ms": 9,
       "error": null,
       "input": {},
       "output": {
@@ -109,7 +109,7 @@
     {
       "name": "pkce: PA_LEGACY_VENDOR has no PKCE (documented as upgrade target)",
       "status": "pass",
-      "duration_ms": 8,
+      "duration_ms": 9,
       "error": null,
       "input": {},
       "output": {
@@ -128,7 +128,7 @@
     {
       "name": "token_rotation: PingFed rotates refresh tokens correctly",
       "status": "pass",
-      "duration_ms": 11,
+      "duration_ms": 16,
       "error": null,
       "input": {},
       "output": {
@@ -140,32 +140,18 @@
     },
     {
       "name": "bola_idor: PA_VENDOR_A cannot access PA_VENDOR_B report",
-      "status": "pass",
-      "duration_ms": 9,
-      "error": null,
+      "status": "fail",
+      "duration_ms": 6,
+      "error": "no token in response",
       "input": {},
-      "output": {
-        "vulnerabilities": 0,
-        "results": [
-          {
-            "id": "rpt-vendor-a-weekly",
-            "finding": "OK",
-            "status": 200
-          },
-          {
-            "id": "rpt-vendor-b-weekly",
-            "finding": "OK",
-            "status": 403
-          }
-        ]
-      },
-      "stack_trace": null,
+      "output": {},
+      "stack_trace": "Error: no token in response\n    at c:\\Users\\justi\\Claude2\\tests\\security\\pingfed_lab.test.js:180:26\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async TestRunner.run (c:\\Users\\justi\\Claude2\\tests\\runner.js:40:22)\n    at async main (c:\\Users\\justi\\Claude2\\tests\\security\\pingfed_lab.test.js:169:3)",
       "screenshot": null
     },
     {
       "name": "scope_escalation: PA_LIMITED cannot escalate to vendor:reports",
       "status": "pass",
-      "duration_ms": 4,
+      "duration_ms": 5,
       "error": null,
       "input": {},
       "output": {
@@ -181,7 +167,7 @@
     {
       "name": "header_injection: /pa/protected rejects all X-PingAccess-* header injections",
       "status": "pass",
-      "duration_ms": 36,
+      "duration_ms": 48,
       "error": null,
       "input": {},
       "output": {
@@ -194,7 +180,7 @@
     {
       "name": "header_injection: /pa/misconfigured shows X-Authenticated-User bypass (vuln demo)",
       "status": "pass",
-      "duration_ms": 37,
+      "duration_ms": 44,
       "error": null,
       "input": {},
       "output": {
@@ -212,7 +198,7 @@
     {
       "name": "full suite (all 8 tests): risk score LOW against mock PingFed",
       "status": "pass",
-      "duration_ms": 198,
+      "duration_ms": 194,
       "error": null,
       "input": {},
       "output": {
@@ -237,7 +223,7 @@
     {
       "name": "chaos: non-PA_ client_id returns PingFed-format error",
       "status": "pass",
-      "duration_ms": 24,
+      "duration_ms": 37,
       "error": null,
       "input": {},
       "output": {
@@ -249,7 +235,7 @@
     {
       "name": "chaos: replayed refresh token triggers session invalidation",
       "status": "pass",
-      "duration_ms": 10,
+      "duration_ms": 14,
       "error": null,
       "input": {},
       "output": {
@@ -263,10 +249,10 @@
   ],
   "summary": {
     "total": 16,
-    "passed": 16,
-    "failed": 0,
+    "passed": 15,
+    "failed": 1,
     "skipped": 0,
-    "duration_ms": 828,
-    "avg_duration_ms": 52
+    "duration_ms": 869,
+    "avg_duration_ms": 54
   }
 }

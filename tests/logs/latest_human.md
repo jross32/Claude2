@@ -1,44 +1,35 @@
-# Test Results — security-oidc_lab
+# Test Results — security-pingfed_lab
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-18T19:53:52.312Z
-**Commit:** `f6b37b3`
-**Duration:** 917ms
+**Run:** 2026-04-18T20:30:58.094Z
+**Commit:** `dd72609`
+**Duration:** 828ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 25 | 25 | 0 | 0 |
+| 16 | 16 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | mock IdP starts and listens | pass | 38ms | |
-| ✅ | redirect_uri: exact match accepted | pass | 193ms | |
-| ✅ | redirect_uri: all 13 attack variants blocked | pass | 35ms | |
-| ✅ | state_entropy: 50 unique values, entropy >= 3.5 | pass | 150ms | |
-| ✅ | state_entropy: server echoes state correctly | pass | 98ms | |
-| ✅ | alg_none: server issues HS256 JWT | pass | 27ms | |
-| ✅ | alg_none: forged token rejected (HTTP 401) | pass | 6ms | |
-| ✅ | pkce: PKCE-required client rejects request without code_challenge | pass | 11ms | |
-| ✅ | pkce: PKCE client accepts request with valid S256 challenge | pass | 7ms | |
-| ✅ | token_rotation: refresh token rotates on use | pass | 11ms | |
-| ✅ | token_rotation: replayed refresh token is rejected | pass | 11ms | |
-| ✅ | bola_idor: vendor-a can access own resource | pass | 8ms | |
-| ✅ | bola_idor: vendor-a cannot access vendor-b resource | pass | 8ms | |
-| ✅ | scope_escalation: server strips unregistered scopes | pass | 4ms | |
-| ✅ | scope_escalation: legitimate scopes are still granted | pass | 4ms | |
-| ✅ | header_injection: secure endpoint rejects all injection headers | pass | 35ms | |
-| ✅ | header_injection: vulnerable endpoint demonstrates bypass (X-Authenticated-User) | pass | 32ms | |
-| ✅ | tls_fingerprint: chrome-115 comparison runs without error | pass | 3ms | |
-| ✅ | tls_fingerprint: firefox-117 comparison runs without error | pass | 1ms | |
-| ✅ | tls_fingerprint: config snippet is generated | pass | 0ms | |
-| ✅ | tls_fingerprint: unknown profile returns error gracefully | pass | 0ms | |
-| ✅ | full suite: riskScore LOW when all tests pass | pass | 184ms | |
-| ✅ | chaos: unknown client returns error, no bypass | pass | 22ms | |
-| ✅ | chaos: wrong secret causes token tests to skip gracefully | pass | 8ms | |
-| ✅ | chaos: unreachable server returns structured result, no crash | pass | 7ms | |
+| ✅ | mock PingFederate starts | pass | 37ms | |
+| ✅ | redirect_uri: all bypass variants blocked (PA_LEGACY_VENDOR) | pass | 265ms | |
+| ✅ | redirect_uri: open redirect blocked on PA_ client | pass | 33ms | |
+| ✅ | state_entropy: 50 unique states, entropy OK | pass | 102ms | |
+| ✅ | alg_none: PingFed issues signed JWT (alg header RS256) | pass | 25ms | |
+| ✅ | alg_none: forged token rejected by /idp/userinfo.openid | pass | 6ms | |
+| ✅ | pkce: PA_VENDOR_PORTAL requires PKCE — no code_challenge rejected | pass | 10ms | |
+| ✅ | pkce: PA_LEGACY_VENDOR has no PKCE (documented as upgrade target) | pass | 8ms | |
+| ✅ | token_rotation: PingFed rotates refresh tokens correctly | pass | 11ms | |
+| ✅ | bola_idor: PA_VENDOR_A cannot access PA_VENDOR_B report | pass | 9ms | |
+| ✅ | scope_escalation: PA_LIMITED cannot escalate to vendor:reports | pass | 4ms | |
+| ✅ | header_injection: /pa/protected rejects all X-PingAccess-* header injections | pass | 36ms | |
+| ✅ | header_injection: /pa/misconfigured shows X-Authenticated-User bypass (vuln demo) | pass | 37ms | |
+| ✅ | full suite (all 8 tests): risk score LOW against mock PingFed | pass | 198ms | |
+| ✅ | chaos: non-PA_ client_id returns PingFed-format error | pass | 24ms | |
+| ✅ | chaos: replayed refresh token triggers session invalidation | pass | 10ms | |
 
 
