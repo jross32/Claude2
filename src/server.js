@@ -26,7 +26,7 @@ const { diffScrapes } = require('./diff');
 const { createSchedule, deleteSchedule, listSchedules } = require('./scheduler');
 const { generateReact, extractCSS, generateMarkdown, generateSitemap } = require('./generators');
 const gitAutosave = require('./git-autosave');
-const { performOidcSecurityTests } = require('./oidc-tester');
+const { performOidcSecurityTests, testTlsFingerprint } = require('./oidc-tester');
 const {
   handleTool: handleMcpTool,
   __private__: {
@@ -896,18 +896,41 @@ app.post('/api/schema', (req, res) => {
   }
 });
 
+// ---- TLS fingerprint analysis ----
+app.post('/api/tls-fingerprint', async (req, res) => {
+  const { compareProfile, targetHost, targetPort } = req.body || {};
+  try {
+    const result = await testTlsFingerprint({
+      compareProfile: compareProfile || 'chrome-115',
+      targetHost:     targetHost  || null,
+      targetPort:     targetPort  || 443,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---- OIDC security lab ----
 app.post('/api/oidc-test', async (req, res) => {
-  const { mockServerUrl, clientId, clientSecret, tests, validRedirectUri } = req.body || {};
+  const {
+    mockServerUrl, clientId, clientSecret, tests, validRedirectUri,
+    pkceClientId, targetClientId, resourceIds, requestedScopes, allowedScopes,
+  } = req.body || {};
   if (!mockServerUrl) return res.status(400).json({ error: 'mockServerUrl is required' });
   if (!clientId)      return res.status(400).json({ error: 'clientId is required' });
   try {
     const results = await performOidcSecurityTests({
       mockServerUrl,
       clientId,
-      clientSecret: clientSecret || null,
-      testsToRun:   tests || ['all'],
+      clientSecret:     clientSecret     || null,
+      testsToRun:       tests            || ['all'],
       validRedirectUri: validRedirectUri || null,
+      pkceClientId:     pkceClientId     || null,
+      targetClientId:   targetClientId   || null,
+      resourceIds:      resourceIds      || null,
+      requestedScopes:  requestedScopes  || null,
+      allowedScopes:    allowedScopes    || null,
     });
     res.json(results);
   } catch (err) {

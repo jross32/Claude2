@@ -368,6 +368,595 @@ async function testJwtAlgNone({ baseUrl, clientId, clientSecret }) {
   };
 }
 
+// ─── TEST 4: PKCE ENFORCEMENT AUDIT ──────────────────────────────────────────
+
+/**
+ * Tests whether the authorization server enforces PKCE (Proof Key for Code
+ * Exchange). Without PKCE, authorization codes can be intercepted and replayed
+ * by a malicious app sharing the redirect_uri.
+ *
+ * Tests three scenarios:
+ *  - Legacy client (requirePkce=false): request without code_challenge accepted (expected)
+ *  - PKCE client (requirePkce=true): request without code_challenge rejected (expected)
+ *  - PKCE client: request WITH valid S256 code_challenge accepted (expected)
+ *
+ * @param {object} opts
+ * @param {string} opts.baseUrl         - Mock IdP base URL
+ * @param {string} opts.clientId        - Client that should have PKCE enforced
+ * @param {string} opts.legacyClientId  - Client without PKCE (to contrast)
+ * @param {string} opts.validRedirectUri
+ */
+async function testPkceEnforcement({ baseUrl, clientId, legacyClientId, validRedirectUri }) {
+  const valid = validRedirectUri || 'http://localhost:3000/callback';
+
+  async function tryAuth(cid, withPkce) {
+    const params = {
+      client_id:     cid,
+      response_type: 'code',
+      scope:         'openid',
+      redirect_uri:  valid,
+      state:         crypto.randomBytes(8).toString('hex'),
+    };
+    if (withPkce) {
+      const verifier   = crypto.randomBytes(32).toString('base64url');
+      const challenge  = crypto.createHash('sha256').update(verifier).digest('base64url');
+      params.code_challenge        = challenge;
+      params.code_challenge_method = 'S256';
+    }
+    const url  = buildAuthUrl(baseUrl, params);
+    const resp = await fetchManual(url);
+    const loc  = resp.headers.get('location') || '';
+    const gotCode = resp.status === 302 && loc.includes('code=') && !loc.includes('error=');
+    return { status: resp.status, location: loc, gotCode };
+  }
+
+  const cases = [];
+
+  // Case 1: PKCE-required client WITHOUT code_challenge → should be rejected
+  try {
+    const r = await tryAuth(clientId, false);
+    cases.push({
+      label:     'PKCE-required client: no code_challenge',
+      expected:  'blocked',
+      actual:    r.gotCode ? 'code-issued' : 'blocked',
+      finding:   r.gotCode ? 'VULNERABLE' : 'OK',
+      status:    r.status,
+    });
+  } catch (err) {
+    cases.push({ label: 'PKCE-required client: no code_challenge', finding: 'OK', error: err.message });
+  }
+
+  // Case 2: PKCE-required client WITH valid code_challenge → should succeed
+  try {
+    const r = await tryAuth(clientId, true);
+    cases.push({
+      label:     'PKCE-required client: valid S256 code_challenge',
+      expected:  'code-issued',
+      actual:    r.gotCode ? 'code-issued' : 'blocked',
+      finding:   r.gotCode ? 'OK' : 'WARN',
+      status:    r.status,
+    });
+  } catch (err) {
+    cases.push({ label: 'PKCE-required client: valid S256 code_challenge', finding: 'WARN', error: err.message });
+  }
+
+  // Case 3: legacy client WITHOUT code_challenge → should be allowed (no PKCE enforced)
+  if (legacyClientId) {
+    try {
+      const r = await tryAuth(legacyClientId, false);
+      cases.push({
+        label:     'legacy client: no code_challenge (PKCE not required)',
+        expected:  'code-issued',
+        actual:    r.gotCode ? 'code-issued' : 'blocked',
+        finding:   'INFO',
+        status:    r.status,
+        note:      r.gotCode ? 'No PKCE enforcement on this client — upgrade recommended' : 'Unexpectedly blocked',
+      });
+    } catch (err) {
+      cases.push({ label: 'legacy client: no code_challenge', finding: 'INFO', error: err.message });
+    }
+  }
+
+  const vulnerabilities = cases.filter(c => c.finding === 'VULNERABLE');
+
+  return {
+    test:            'pkce_enforcement',
+    clientId,
+    legacyClientId,
+    vulnerabilities: vulnerabilities.length,
+    cases,
+    summary: vulnerabilities.length === 0
+      ? 'PASS — PKCE enforced correctly for clients that require it'
+      : `FAIL — ${vulnerabilities.length} case(s) where PKCE was not enforced when required`,
+  };
+}
+
+// ─── TEST 5: TOKEN ROTATION / REPLAY DEFENSE ─────────────────────────────────
+
+/**
+ * Tests whether refresh token rotation is implemented correctly.
+ * A secure server issues a new refresh_token on each use and invalidates the
+ * old one — detecting replay if the old token is used again.
+ *
+ * @param {object} opts
+ * @param {string} opts.baseUrl       - Mock IdP base URL
+ * @param {string} opts.clientId
+ * @param {string} opts.clientSecret
+ */
+async function testTokenRotation({ baseUrl, clientId, clientSecret }) {
+  const tokenUrl = new URL(DEFAULT_TOKEN_PATH, baseUrl).toString();
+
+  async function postToken(body) {
+    const resp = await fetch(tokenUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    new URLSearchParams(body).toString(),
+    });
+    return { status: resp.status, data: await resp.json().catch(() => ({})) };
+  }
+
+  // Step 1: get initial tokens
+  const step1 = await postToken({
+    grant_type:    'client_credentials',
+    client_id:     clientId,
+    client_secret: clientSecret || '',
+    scope:         'openid',
+  });
+
+  if (!step1.data.refresh_token) {
+    return {
+      test:    'token_rotation',
+      skipped: true,
+      reason:  'Server did not issue a refresh_token with the initial grant',
+      finding: 'SKIP',
+      summary: 'Skipped — refresh_token not issued by this server/grant type',
+    };
+  }
+
+  const originalRefreshToken = step1.data.refresh_token;
+
+  // Step 2: use refresh_token → get new tokens + new refresh_token
+  const step2 = await postToken({
+    grant_type:    'refresh_token',
+    client_id:     clientId,
+    client_secret: clientSecret || '',
+    refresh_token: originalRefreshToken,
+  });
+
+  const rotationWorked = step2.status === 200 && !!step2.data.refresh_token
+    && step2.data.refresh_token !== originalRefreshToken;
+
+  // Step 3: replay the OLD refresh_token — should be rejected
+  const step3 = await postToken({
+    grant_type:    'refresh_token',
+    client_id:     clientId,
+    client_secret: clientSecret || '',
+    refresh_token: originalRefreshToken,
+  });
+
+  const replayRejected = step3.status !== 200;
+
+  return {
+    test:             'token_rotation',
+    rotationWorked,
+    newTokenIssued:   step2.status === 200,
+    replayRejected,
+    replayStatus:     step3.status,
+    replayError:      step3.data.error || null,
+    finding:          !replayRejected ? 'VULNERABLE' : 'OK',
+    summary: !replayRejected
+      ? 'FAIL — old refresh_token accepted after rotation (no replay detection)'
+      : `PASS — rotated token rejected with HTTP ${step3.status} (${step3.data.error || 'error'})`,
+  };
+}
+
+// ─── TEST 6: BOLA / IDOR CROSS-TENANT ACCESS ─────────────────────────────────
+
+/**
+ * Tests for Broken Object Level Authorization (BOLA / IDOR).
+ * Authenticates as one client and attempts to access resources owned by another.
+ *
+ * @param {object} opts
+ * @param {string}   opts.baseUrl         - Mock IdP base URL
+ * @param {string}   opts.clientId        - Attacker client (gets a token)
+ * @param {string}   opts.clientSecret    - Attacker client secret
+ * @param {string[]} opts.resourceIds     - Resource IDs to probe (some owned by others)
+ * @param {string}   [opts.resourcePath]  - Base resource path (default: /resource)
+ */
+async function testBolaIdor({ baseUrl, clientId, clientSecret, resourceIds, resourcePath = '/resource' }) {
+  const tokenUrl = new URL(DEFAULT_TOKEN_PATH, baseUrl).toString();
+
+  // Get attacker token
+  let attackerToken = null;
+  try {
+    const resp = await fetch(tokenUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    new URLSearchParams({
+        grant_type:    'client_credentials',
+        client_id:     clientId,
+        client_secret: clientSecret || '',
+        scope:         'openid read:reports',
+      }).toString(),
+    });
+    const data = await resp.json();
+    attackerToken = data.access_token || null;
+  } catch (err) {
+    return { test: 'bola_idor', skipped: true, reason: err.message, finding: 'SKIP', summary: 'Could not get attacker token' };
+  }
+
+  if (!attackerToken) {
+    return { test: 'bola_idor', skipped: true, reason: 'no token in response', finding: 'SKIP', summary: 'Could not get attacker token' };
+  }
+
+  const probeResults = [];
+  const ids = resourceIds && resourceIds.length ? resourceIds : [
+    'report-vendor-a',
+    'report-vendor-b',
+    // Path traversal & manipulation attempts
+    'report-vendor-a/../report-vendor-b',
+    'report-vendor-b%00',
+    '../report-vendor-b',
+  ];
+
+  for (const id of ids) {
+    const url = new URL(`${resourcePath}/${id}`, baseUrl).toString();
+    try {
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${attackerToken}` },
+      });
+      const body = await resp.json().catch(() => ({}));
+      probeResults.push({
+        resourceId: id,
+        status:     resp.status,
+        accessible: resp.ok,
+        ownedByAttacker: body.ownerId === clientId,
+        ownedBy:    body.ownerId || null,
+        finding:    resp.ok && body.ownerId && body.ownerId !== clientId ? 'VULNERABLE' : 'OK',
+      });
+    } catch (err) {
+      probeResults.push({ resourceId: id, status: null, accessible: false, finding: 'OK', error: err.message });
+    }
+  }
+
+  const vulnerabilities = probeResults.filter(r => r.finding === 'VULNERABLE');
+
+  return {
+    test:            'bola_idor',
+    attackerClientId: clientId,
+    totalProbed:     probeResults.length,
+    vulnerabilities: vulnerabilities.length,
+    results:         probeResults,
+    finding:         vulnerabilities.length > 0 ? 'VULNERABLE' : 'OK',
+    summary: vulnerabilities.length === 0
+      ? 'PASS — no cross-tenant resource access detected'
+      : `FAIL — ${vulnerabilities.length} resource(s) accessible to wrong tenant`,
+  };
+}
+
+// ─── TEST 7: SCOPE ESCALATION ─────────────────────────────────────────────────
+
+/**
+ * Tests whether a client can obtain scopes beyond what it is registered for.
+ * A secure server must strip unregistered scopes from the issued token.
+ *
+ * @param {object} opts
+ * @param {string}   opts.baseUrl          - Mock IdP base URL
+ * @param {string}   opts.clientId         - Client with limited registered scopes
+ * @param {string}   opts.clientSecret
+ * @param {string[]} opts.requestedScopes  - Scopes to request (includes ones client lacks)
+ * @param {string[]} opts.allowedScopes    - Scopes the client is legitimately registered for
+ */
+async function testScopeEscalation({ baseUrl, clientId, clientSecret, requestedScopes, allowedScopes }) {
+  const tokenUrl = new URL(DEFAULT_TOKEN_PATH, baseUrl).toString();
+
+  const requested = requestedScopes || ['openid', 'read', 'write', 'admin', 'superuser'];
+  const allowed   = allowedScopes   || ['openid', 'read'];
+
+  const resp = await fetch(tokenUrl, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    new URLSearchParams({
+      grant_type:    'client_credentials',
+      client_id:     clientId,
+      client_secret: clientSecret || '',
+      scope:         requested.join(' '),
+    }).toString(),
+  }).catch(err => ({ ok: false, _err: err.message }));
+
+  if (resp._err) {
+    return { test: 'scope_escalation', skipped: true, reason: resp._err, finding: 'SKIP', summary: 'Connection error' };
+  }
+
+  const data = await resp.json().catch(() => ({}));
+
+  if (!data.access_token) {
+    return {
+      test:    'scope_escalation',
+      skipped: true,
+      reason:  data.error || 'no token',
+      finding: 'SKIP',
+      summary: 'Could not obtain token to inspect scopes',
+    };
+  }
+
+  // Decode granted scopes from token
+  const parts   = data.access_token.split('.');
+  let grantedScopes = [];
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    grantedScopes = (payload.scope || data.scope || '').split(' ').filter(Boolean);
+  } catch {
+    grantedScopes = (data.scope || '').split(' ').filter(Boolean);
+  }
+
+  const escalatedScopes = grantedScopes.filter(s => !allowed.includes(s));
+
+  return {
+    test:              'scope_escalation',
+    clientId,
+    requestedScopes:   requested,
+    allowedScopes:     allowed,
+    grantedScopes,
+    escalatedScopes,
+    finding:           escalatedScopes.length > 0 ? 'VULNERABLE' : 'OK',
+    summary: escalatedScopes.length === 0
+      ? `PASS — server stripped unregistered scopes, granted only: ${grantedScopes.join(', ')}`
+      : `FAIL — server granted escalated scopes: ${escalatedScopes.join(', ')}`,
+  };
+}
+
+// ─── TEST 8: HEADER INJECTION (PingAccess / Reverse Proxy) ───────────────────
+
+/**
+ * Tests whether a protected endpoint can be bypassed by injecting identity
+ * headers. Common in misconfigured PingAccess / Akamai / Nginx deployments
+ * where the backend trusts upstream headers without verifying the JWT.
+ *
+ * Probes two endpoints:
+ *  - /header-protected  — secure endpoint (should reject all header injections)
+ *  - /header-vulnerable — simulated misconfigured endpoint (should accept injected headers)
+ *    Use this to demonstrate what a vulnerable deployment looks like.
+ *
+ * @param {object} opts
+ * @param {string} opts.baseUrl    - Mock IdP base URL
+ * @param {string} opts.injectUser - Username to inject (default: 'admin')
+ */
+async function testHeaderInjection({ baseUrl, injectUser = 'admin' }) {
+  const INJECTION_HEADERS = [
+    'X-Authenticated-User',
+    'X-Forwarded-User',
+    'X-Remote-User',
+    'X-PingAccess-Authenticated-User',
+    'X-Real-User',
+    'X-Proxy-Authenticated-User',
+    'X-WEBAUTH-USER',
+    'X-Auth-User',
+  ];
+
+  async function probe(path, extraHeaders = {}) {
+    const url = new URL(path, baseUrl).toString();
+    try {
+      const resp = await fetch(url, { headers: { ...extraHeaders } });
+      const body = await resp.json().catch(() => ({}));
+      return { status: resp.status, ok: resp.ok, body };
+    } catch (err) {
+      return { status: null, ok: false, body: {}, error: err.message };
+    }
+  }
+
+  const secureResults  = [];
+  const vulnResults    = [];
+
+  for (const headerName of INJECTION_HEADERS) {
+    // ── Secure endpoint — should reject all header injections ─────────────
+    const secureR = await probe('/header-protected', { [headerName]: injectUser });
+    secureResults.push({
+      header:  headerName,
+      blocked: !secureR.ok,
+      status:  secureR.status,
+      finding: secureR.ok ? 'VULNERABLE' : 'OK',
+    });
+
+    // ── Vulnerable endpoint — demonstrates what bypass looks like ─────────
+    const vulnR = await probe('/header-vulnerable', { [headerName]: injectUser });
+    vulnResults.push({
+      header:   headerName,
+      accepted: vulnR.ok,
+      authn:    vulnR.body.authn || null,
+      status:   vulnR.status,
+    });
+  }
+
+  const secureBypassCount = secureResults.filter(r => r.finding === 'VULNERABLE').length;
+
+  return {
+    test:                'header_injection',
+    injectUser,
+    headersProbed:       INJECTION_HEADERS.length,
+    secureEndpoint: {
+      path:            '/header-protected',
+      bypassCount:     secureBypassCount,
+      results:         secureResults,
+      finding:         secureBypassCount === 0 ? 'OK' : 'VULNERABLE',
+      summary:         secureBypassCount === 0
+        ? 'PASS — secure endpoint rejected all header injection attempts'
+        : `FAIL — ${secureBypassCount} header(s) bypassed the secure endpoint`,
+    },
+    vulnerableEndpoint: {
+      path:    '/header-vulnerable',
+      results: vulnResults,
+      note:    'Demonstrates what a misconfigured PingAccess backend looks like — the vulnerable endpoint accepts injected identity headers without JWT verification',
+    },
+    finding: secureBypassCount === 0 ? 'OK' : 'VULNERABLE',
+    summary: secureBypassCount === 0
+      ? 'PASS — secure endpoint correctly ignores identity header injection'
+      : `FAIL — ${secureBypassCount} header injection(s) bypassed authentication`,
+  };
+}
+
+// ─── TEST 9: TLS / JA3 FINGERPRINT ANALYSIS ──────────────────────────────────
+
+const tls = require('tls');
+
+/**
+ * Known TLS cipher preference profiles for major clients.
+ * Cipher names in OpenSSL format, in preference order.
+ */
+const TLS_PROFILES = {
+  'chrome-115': {
+    label:        'Chrome 115',
+    minTls:       'TLSv1.2',
+    cipherOrder:  [
+      'TLS_AES_128_GCM_SHA256',
+      'TLS_AES_256_GCM_SHA384',
+      'TLS_CHACHA20_POLY1305_SHA256',
+      'ECDHE-ECDSA-AES128-GCM-SHA256',
+      'ECDHE-RSA-AES128-GCM-SHA256',
+      'ECDHE-ECDSA-AES256-GCM-SHA384',
+      'ECDHE-RSA-AES256-GCM-SHA384',
+      'ECDHE-ECDSA-CHACHA20-POLY1305',
+      'ECDHE-RSA-CHACHA20-POLY1305',
+      'ECDHE-RSA-AES128-SHA',
+      'ECDHE-RSA-AES256-SHA',
+      'AES128-GCM-SHA256',
+      'AES256-GCM-SHA384',
+      'AES128-SHA',
+      'AES256-SHA',
+    ],
+    ecdhCurves:   ['X25519', 'prime256v1', 'secp384r1'],
+    // Approximate JA3 string (TLS version + cipher IDs + extensions + curves + point formats)
+    ja3Approx:    '771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53',
+  },
+  'firefox-117': {
+    label:        'Firefox 117',
+    minTls:       'TLSv1.2',
+    cipherOrder:  [
+      'TLS_AES_128_GCM_SHA256',
+      'TLS_CHACHA20_POLY1305_SHA256',
+      'TLS_AES_256_GCM_SHA384',
+      'ECDHE-ECDSA-AES128-GCM-SHA256',
+      'ECDHE-RSA-AES128-GCM-SHA256',
+      'ECDHE-ECDSA-CHACHA20-POLY1305',
+      'ECDHE-RSA-CHACHA20-POLY1305',
+      'ECDHE-ECDSA-AES256-GCM-SHA384',
+      'ECDHE-RSA-AES256-GCM-SHA384',
+      'ECDHE-ECDSA-AES256-CBC-SHA',
+      'ECDHE-ECDSA-AES128-CBC-SHA',
+      'ECDHE-RSA-AES128-CBC-SHA',
+      'ECDHE-RSA-AES256-CBC-SHA',
+      'AES128-GCM-SHA256',
+      'AES256-GCM-SHA384',
+    ],
+    ecdhCurves:   ['X25519', 'prime256v1', 'secp384r1', 'secp521r1'],
+    ja3Approx:    '771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157',
+  },
+};
+
+/**
+ * Analyze the current Node.js TLS fingerprint and compare to a browser profile.
+ * For Playwright-based scraping, note that the scraper already uses Chrome's
+ * real TLS fingerprint since Playwright launches an actual Chromium browser.
+ * This tool is relevant for direct Node.js HTTP requests (e.g. from oidc-tester).
+ *
+ * @param {object} opts
+ * @param {string} [opts.compareProfile='chrome-115'] - Profile to compare against
+ * @param {string} [opts.targetHost]                  - Optional: connect and observe negotiated cipher
+ * @param {number} [opts.targetPort=443]
+ */
+async function testTlsFingerprint({ compareProfile = 'chrome-115', targetHost, targetPort = 443 } = {}) {
+  const profile = TLS_PROFILES[compareProfile];
+  if (!profile) {
+    return { test: 'tls_fingerprint', error: `Unknown profile: ${compareProfile}. Available: ${Object.keys(TLS_PROFILES).join(', ')}` };
+  }
+
+  // Node.js TLS capabilities
+  const nodeSupportedCiphers = tls.getCiphers().map(c => c.toUpperCase());
+  const nodeOpenSslVersion   = process.versions.openssl;
+  const nodeVersion          = process.version;
+
+  // Compare cipher order: how many of Chrome's ciphers does Node support, in what order?
+  const profileCiphersNormalized = profile.cipherOrder.map(c => c.toUpperCase().replace(/-/g, '_'));
+  const nodeCiphersNormalized    = nodeSupportedCiphers.map(c => c.replace(/-/g, '_'));
+
+  const supportedByNode = profile.cipherOrder.filter(c =>
+    nodeCiphersNormalized.includes(c.toUpperCase().replace(/-/g, '_'))
+  );
+  const missingFromNode = profile.cipherOrder.filter(c =>
+    !nodeCiphersNormalized.includes(c.toUpperCase().replace(/-/g, '_'))
+  );
+
+  // Compute a cipher-order similarity score (Kendall tau-like)
+  const inCommon = supportedByNode.length;
+  const similarityPct = Math.round((inCommon / profile.cipherOrder.length) * 100);
+
+  // Optional: connect to target host and observe negotiated cipher
+  let negotiated = null;
+  if (targetHost) {
+    negotiated = await new Promise((resolve) => {
+      const cipherStr = profile.cipherOrder.join(':');
+      const socket = tls.connect({
+        host:               targetHost,
+        port:               targetPort,
+        ciphers:            cipherStr,
+        minVersion:         'TLSv1.2',
+        rejectUnauthorized: false,
+        servername:         targetHost,
+      }, () => {
+        resolve({
+          protocol:    socket.getProtocol(),
+          cipher:      socket.getCipher(),
+          peerCert:    socket.getPeerCertificate()?.subject?.CN || null,
+          authorized:  socket.authorized,
+        });
+        socket.destroy();
+      });
+      socket.on('error', (err) => resolve({ error: err.message }));
+      setTimeout(() => { socket.destroy(); resolve({ error: 'timeout' }); }, 5000);
+    });
+  }
+
+  // Config snippet for making Node.js fetch more browser-like
+  const configSnippet = `// Make Node.js https requests more browser-like (${profile.label} cipher order)
+const https = require('https');
+const browserAgent = new https.Agent({
+  ciphers:    '${profile.cipherOrder.join(':')}',
+  minVersion: '${profile.minTls}',
+  ecdhCurve:  '${profile.ecdhCurves.join(':')}',
+});
+// Use in requests:
+// https.get({ host, path, agent: browserAgent }, handler)
+// Or with node-fetch: fetch(url, { agent: browserAgent })
+
+// NOTE: If you are using Playwright in this scraper, Playwright already launches
+// a real Chromium browser — its TLS fingerprint IS ${profile.label}'s fingerprint.
+// This config only applies to direct Node.js HTTP requests.`;
+
+  return {
+    test:              'tls_fingerprint',
+    compareProfile:    compareProfile,
+    profileLabel:      profile.label,
+    node: {
+      version:         nodeVersion,
+      openssl:         nodeOpenSslVersion,
+      totalCiphers:    nodeSupportedCiphers.length,
+    },
+    comparison: {
+      profileCipherCount:   profile.cipherOrder.length,
+      supportedByNode:      supportedByNode.length,
+      missingFromNode,
+      similarityPct,
+      ja3Approx:            profile.ja3Approx,
+    },
+    negotiated: negotiated || null,
+    configSnippet,
+    playwrightNote: 'Playwright already uses Chromium — its TLS fingerprint matches Chrome natively. Use Playwright for requests where fingerprinting matters.',
+    summary: similarityPct >= 80
+      ? `Node.js supports ${similarityPct}% of ${profile.label} ciphers — fingerprint similarity GOOD`
+      : `Node.js supports only ${similarityPct}% of ${profile.label} ciphers — fingerprint divergence HIGH, use configSnippet to improve`,
+  };
+}
+
 // ─── RISK SCORING ─────────────────────────────────────────────────────────────
 
 function computeRiskScore(results) {
@@ -375,26 +964,47 @@ function computeRiskScore(results) {
   if ((results.redirect_uri_validation?.vulnerabilities ?? 0) > 0) score += 40;
   if (results.state_entropy?.entropyFlag)                          score += 20;
   if (results.alg_none_attack?.forgedAccepted)                     score += 40;
-  const label = score === 0 ? 'LOW' : score <= 20 ? 'MEDIUM' : score <= 40 ? 'HIGH' : 'CRITICAL';
+  if ((results.pkce_enforcement?.vulnerabilities ?? 0) > 0)        score += 35;
+  if (results.token_rotation?.finding === 'VULNERABLE')            score += 30;
+  if ((results.bola_idor?.vulnerabilities ?? 0) > 0)              score += 45;
+  if (results.scope_escalation?.finding === 'VULNERABLE')          score += 35;
+  if (results.header_injection?.finding === 'VULNERABLE')          score += 40;
+  const label = score === 0 ? 'LOW' : score <= 30 ? 'MEDIUM' : score <= 60 ? 'HIGH' : 'CRITICAL';
   return { score, label };
 }
 
 // ─── ORCHESTRATOR ─────────────────────────────────────────────────────────────
 
-const ALL_TESTS = ['redirect_uri_validation', 'state_entropy', 'alg_none_attack'];
+const ALL_TESTS = [
+  'redirect_uri_validation',
+  'state_entropy',
+  'alg_none_attack',
+  'pkce_enforcement',
+  'token_rotation',
+  'bola_idor',
+  'scope_escalation',
+  'header_injection',
+];
 
 /**
- * Run one or more OIDC security tests against a mock IdP.
+ * Run one or more OIDC/OAuth2 security tests against a mock IdP.
  *
  * @param {object} opts
- * @param {string}   opts.mockServerUrl   - Base URL of the local mock IdP
- * @param {string}   opts.clientId        - OIDC client_id
- * @param {string}   [opts.clientSecret]  - Client secret (needed for alg_none_attack)
- * @param {string[]} [opts.testsToRun]    - Subset of ALL_TESTS, or ['all']
- * @param {string}   [opts.validRedirectUri] - Known-good redirect_uri for test baseline
- * @returns {object} Structured results with risk score
+ * @param {string}   opts.mockServerUrl      - Base URL of the local mock IdP
+ * @param {string}   opts.clientId           - Primary OIDC client_id
+ * @param {string}   [opts.clientSecret]     - Client secret
+ * @param {string[]} [opts.testsToRun]       - Subset of ALL_TESTS, or ['all']
+ * @param {string}   [opts.validRedirectUri] - Known-good redirect_uri
+ * @param {string}   [opts.pkceClientId]     - PKCE-enforcing client for pkce_enforcement test
+ * @param {string}   [opts.targetClientId]   - Other tenant's client ID for bola_idor test
+ * @param {string[]} [opts.resourceIds]      - Resource IDs to probe for bola_idor
+ * @param {string[]} [opts.requestedScopes]  - Scopes to escalate for scope_escalation test
+ * @param {string[]} [opts.allowedScopes]    - Scopes the client is legitimately allowed
  */
-async function performOidcSecurityTests({ mockServerUrl, clientId, clientSecret, testsToRun, validRedirectUri }) {
+async function performOidcSecurityTests({
+  mockServerUrl, clientId, clientSecret, testsToRun, validRedirectUri,
+  pkceClientId, targetClientId, resourceIds, requestedScopes, allowedScopes,
+}) {
   const toRun = [...new Set(
     (testsToRun || ['all']).flatMap(t => (t === 'all' ? ALL_TESTS : [t]))
   )].filter(t => ALL_TESTS.includes(t));
@@ -402,18 +1012,57 @@ async function performOidcSecurityTests({ mockServerUrl, clientId, clientSecret,
   const results = {};
 
   for (const t of toRun) {
-    if (t === 'redirect_uri_validation') {
-      results.redirect_uri_validation = await testRedirectUriValidation({
-        baseUrl: mockServerUrl, clientId, validRedirectUri,
-      });
-    } else if (t === 'state_entropy') {
-      results.state_entropy = await testStateEntropy({
-        baseUrl: mockServerUrl, clientId, validRedirectUri,
-      });
-    } else if (t === 'alg_none_attack') {
-      results.alg_none_attack = await testJwtAlgNone({
-        baseUrl: mockServerUrl, clientId, clientSecret,
-      });
+    switch (t) {
+      case 'redirect_uri_validation':
+        results.redirect_uri_validation = await testRedirectUriValidation({
+          baseUrl: mockServerUrl, clientId, validRedirectUri,
+        });
+        break;
+      case 'state_entropy':
+        results.state_entropy = await testStateEntropy({
+          baseUrl: mockServerUrl, clientId, validRedirectUri,
+        });
+        break;
+      case 'alg_none_attack':
+        results.alg_none_attack = await testJwtAlgNone({
+          baseUrl: mockServerUrl, clientId, clientSecret,
+        });
+        break;
+      case 'pkce_enforcement':
+        results.pkce_enforcement = await testPkceEnforcement({
+          baseUrl: mockServerUrl,
+          clientId:       pkceClientId || 'pkce-client',
+          legacyClientId: clientId,
+          validRedirectUri,
+        });
+        break;
+      case 'token_rotation':
+        results.token_rotation = await testTokenRotation({
+          baseUrl: mockServerUrl, clientId, clientSecret,
+        });
+        break;
+      case 'bola_idor':
+        results.bola_idor = await testBolaIdor({
+          baseUrl: mockServerUrl,
+          clientId:     targetClientId || 'vendor-a',
+          clientSecret: clientSecret || 'vendor-a-secret',
+          resourceIds,
+        });
+        break;
+      case 'scope_escalation':
+        results.scope_escalation = await testScopeEscalation({
+          baseUrl: mockServerUrl,
+          clientId:       clientId,
+          clientSecret:   clientSecret,
+          requestedScopes,
+          allowedScopes,
+        });
+        break;
+      case 'header_injection':
+        results.header_injection = await testHeaderInjection({
+          baseUrl: mockServerUrl,
+        });
+        break;
     }
   }
 
@@ -427,4 +1076,4 @@ async function performOidcSecurityTests({ mockServerUrl, clientId, clientSecret,
   };
 }
 
-module.exports = { performOidcSecurityTests };
+module.exports = { performOidcSecurityTests, testTlsFingerprint };
