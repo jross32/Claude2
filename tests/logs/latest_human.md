@@ -1,38 +1,32 @@
-# Test Results — api
+# Test Results — security-oidc_lab
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-16T11:03:05.907Z
-**Commit:** `11e6aca`
-**Duration:** 14845ms
+**Run:** 2026-04-18T10:37:33.985Z
+**Commit:** `eecf803`
+**Duration:** 875ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 19 | 19 | 0 | 0 |
+| 13 | 13 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | POST /api/scrape with no body → 400 + error | pass | 86ms | |
-| ✅ | POST /api/scrape with valid url → 200 + { sessionId, message } | pass | 8ms | |
-| ✅ | GET /api/scrape/active returns active session snapshots | pass | 447ms | |
-| ✅ | GET /api/scrape/:id/status returns live session snapshot | pass | 7ms | |
-| ✅ | POST /api/scrape/:id/stop for active session → 200 | pass | 5ms | |
-| ✅ | GET /api/scrape/:id/status falls back after active session is removed | pass | 2792ms | |
-| ✅ | POST /api/scrape with uiVisible=false starts a headless session | pass | 4ms | |
-| ✅ | GET /api/scrape/active hides headless sessions by default | pass | 17ms | |
-| ✅ | GET /api/saves hides headless MCP saves by default but exposes them with includeHidden | pass | 5665ms | |
-| ✅ | POST /api/scrape/:id/stop for unknown session → 404 | pass | 5ms | |
-| ✅ | POST /api/scrape/:id/pause for unknown session → 404 | pass | 4ms | |
-| ✅ | GET /api/scrape/:id/status for unknown session → 404 | pass | 4ms | |
-| ✅ | POST /api/ai/chat with no question → 400 | pass | 5ms | |
-| ✅ | POST /api/ai/chat analyzes current scrape data without Ollama for extractive questions | pass | 18ms | |
-| ✅ | POST /api/scrape/:id/resume for unknown session → 404 | pass | 4ms | |
-| ✅ | POST /api/scrape/:id/verify for unknown session → 404 | pass | 3ms | |
-| ✅ | POST /api/scrape/:id/credentials for unknown session → 404 | pass | 3ms | |
-| ✅ | [chaos] POST /api/scrape with urls: [] → 400 | pass | 3ms | |
-| ✅ | [chaos] POST /api/scrape with malformed maxPages → does not 500 | pass | 3ms | |
+| ✅ | mock IdP starts and listens | pass | 43ms | |
+| ✅ | exact-match redirect_uri is accepted | pass | 202ms | |
+| ✅ | open redirect attempt is blocked | pass | 40ms | |
+| ✅ | all 13 attack variants are blocked (no bypasses) | pass | 37ms | |
+| ✅ | state values are unique across 50 requests | pass | 106ms | |
+| ✅ | state entropy meets minimum threshold (>= 3.5 bits/char) | pass | 102ms | |
+| ✅ | server echoes state parameter correctly | pass | 106ms | |
+| ✅ | server issues a valid HS256 JWT | pass | 34ms | |
+| ✅ | forged alg:none JWT is rejected (HTTP 401) | pass | 8ms | |
+| ✅ | full suite: all three tests pass with risk score LOW | pass | 143ms | |
+| ✅ | chaos: unknown client_id returns error, not bypass | pass | 30ms | |
+| ✅ | chaos: wrong client_secret causes alg:none test to skip gracefully | pass | 4ms | |
+| ✅ | chaos: unreachable server returns structured error, not crash | pass | 11ms | |
 
 

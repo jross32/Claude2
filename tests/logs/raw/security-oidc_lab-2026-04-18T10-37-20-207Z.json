@@ -1,17 +1,17 @@
 {
-  "timestamp": "2026-04-18T10:37:33.985Z",
+  "timestamp": "2026-04-18T10:37:20.205Z",
   "git_commit": "eecf803",
   "suite": "security-oidc_lab",
   "tests": [
     {
       "name": "mock IdP starts and listens",
       "status": "pass",
-      "duration_ms": 43,
+      "duration_ms": 36,
       "error": null,
       "input": {},
       "output": {
-        "port": 58310,
-        "baseUrl": "http://127.0.0.1:58310"
+        "port": 54355,
+        "baseUrl": "http://127.0.0.1:54355"
       },
       "stack_trace": null,
       "screenshot": null
@@ -19,7 +19,7 @@
     {
       "name": "exact-match redirect_uri is accepted",
       "status": "pass",
-      "duration_ms": 202,
+      "duration_ms": 197,
       "error": null,
       "input": {},
       "output": {
@@ -32,7 +32,7 @@
     {
       "name": "open redirect attempt is blocked",
       "status": "pass",
-      "duration_ms": 40,
+      "duration_ms": 36,
       "error": null,
       "input": {},
       "output": {
@@ -60,7 +60,7 @@
     {
       "name": "all 13 attack variants are blocked (no bypasses)",
       "status": "pass",
-      "duration_ms": 37,
+      "duration_ms": 33,
       "error": null,
       "input": {},
       "output": {
@@ -79,7 +79,7 @@
       "output": {
         "uniqueCount": 50,
         "sampleSize": 50,
-        "entropy": 3.997
+        "entropy": 3.992
       },
       "stack_trace": null,
       "screenshot": null
@@ -87,11 +87,11 @@
     {
       "name": "state entropy meets minimum threshold (>= 3.5 bits/char)",
       "status": "pass",
-      "duration_ms": 102,
+      "duration_ms": 110,
       "error": null,
       "input": {},
       "output": {
-        "shannonEntropy": 3.995,
+        "shannonEntropy": 3.996,
         "entropyFlag": false
       },
       "stack_trace": null,
@@ -100,7 +100,7 @@
     {
       "name": "server echoes state parameter correctly",
       "status": "pass",
-      "duration_ms": 106,
+      "duration_ms": 102,
       "error": null,
       "input": {},
       "output": {
@@ -113,7 +113,7 @@
     {
       "name": "server issues a valid HS256 JWT",
       "status": "pass",
-      "duration_ms": 34,
+      "duration_ms": 36,
       "error": null,
       "input": {},
       "output": {
@@ -125,7 +125,7 @@
     {
       "name": "forged alg:none JWT is rejected (HTTP 401)",
       "status": "pass",
-      "duration_ms": 8,
+      "duration_ms": 7,
       "error": null,
       "input": {},
       "output": {
@@ -139,7 +139,7 @@
     {
       "name": "full suite: all three tests pass with risk score LOW",
       "status": "pass",
-      "duration_ms": 143,
+      "duration_ms": 136,
       "error": null,
       "input": {},
       "output": {
@@ -162,7 +162,7 @@
     {
       "name": "chaos: unknown client_id returns error, not bypass",
       "status": "pass",
-      "duration_ms": 30,
+      "duration_ms": 22,
       "error": null,
       "input": {},
       "output": {
@@ -175,7 +175,7 @@
     {
       "name": "chaos: wrong client_secret causes alg:none test to skip gracefully",
       "status": "pass",
-      "duration_ms": 4,
+      "duration_ms": 3,
       "error": null,
       "input": {},
       "output": {
@@ -188,7 +188,7 @@
     {
       "name": "chaos: unreachable server returns structured error, not crash",
       "status": "pass",
-      "duration_ms": 11,
+      "duration_ms": 5,
       "error": null,
       "input": {},
       "output": {
@@ -204,7 +204,7 @@
     "passed": 13,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 875,
-    "avg_duration_ms": 67
+    "duration_ms": 844,
+    "avg_duration_ms": 65
   }
 }

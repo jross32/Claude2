@@ -22,7 +22,7 @@
 
 const http   = require('http');
 const crypto = require('crypto');
-const urlMod = require('url');
+const urlMod = require('url'); // used only for pathname/query parsing on incoming requests
 
 // ─── CLIENT REGISTRY ──────────────────────────────────────────────────────────
 
@@ -105,9 +105,9 @@ function send(res, status, body) {
 
 function createServer() {
   const server = http.createServer(async (req, res) => {
-    const parsed   = urlMod.parse(req.url, true);
-    const pathname = parsed.pathname;
-    const query    = parsed.query;
+    const u        = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const pathname = u.pathname;
+    const query    = Object.fromEntries(u.searchParams.entries());
 
     // ── GET /as/authorization.oauth2 ──────────────────────────────────────────
     if (req.method === 'GET' && pathname === '/as/authorization.oauth2') {
