@@ -2837,7 +2837,10 @@ async function loadRuns() {
   const badge = document.getElementById('runs-badge');
   if (badge) { badge.textContent = runs.length; badge.style.display = runs.length ? 'inline-block' : 'none'; }
 
+  _allRunsCache = runs;
   renderRunCards(runs);
+  const clearBtn = document.getElementById('btn-runs-clear-all');
+  if (clearBtn) clearBtn.style.display = runs.length ? 'inline-flex' : 'none';
 }
 
 function renderRunCards(runs) {
@@ -3166,8 +3169,10 @@ async function populateDiffDropdowns(preselectA, preselectB) {
 
 function renderDiffResults(diff) {
   const container = document.getElementById('diff-results');
+  const emptyEl   = document.getElementById('diff-empty');
   if (!container) return;
   container.style.display = 'block';
+  if (emptyEl) emptyEl.style.display = 'none';
 
   const noChanges =
     !diff.pages?.added.length && !diff.pages?.removed.length &&
@@ -3287,8 +3292,175 @@ document.getElementById('btn-run-diff')?.addEventListener('click', async () => {
 });
 
 document.querySelector('[data-panel="diff"]')?.addEventListener('click', () => populateDiffDropdowns());
+document.getElementById('btn-refresh-diff')?.addEventListener('click', () => populateDiffDropdowns());
 
-// ---- Code generators ----
+// Hide diff empty state when results are shown
+const _origRenderDiffResults = renderDiffResults;
+// (hide/show logic is handled inline below)
+
+// ---- Batch scrape ----
+document.getElementById('btn-batch-scrape')?.addEventListener('click', async () => {
+  const rawUrls = document.getElementById('batch-urls')?.value || '';
+  const urls = rawUrls.split('\n').map(u => u.trim()).filter(Boolean);
+  if (!urls.length) return showToast('Enter at least one URL');
+
+  const depth    = parseInt(document.getElementById('batch-depth')?.value, 10)     || 1;
+  const maxPages = parseInt(document.getElementById('batch-max-pages')?.value, 10)  || 10;
+  const workers  = parseInt(document.getElementById('batch-workers')?.value, 10)    || 2;
+
+  const captureGraphQL    = document.getElementById('batch-graphql')?.checked    ?? true;
+  const captureREST       = document.getElementById('batch-rest')?.checked       ?? true;
+  const captureAssets     = document.getElementById('batch-assets')?.checked     ?? false;
+  const downloadImages    = document.getElementById('batch-images')?.checked     ?? false;
+  const autoScroll        = document.getElementById('batch-auto-scroll')?.checked ?? false;
+  const takeScreenshots   = document.getElementById('batch-screenshots')?.checked  ?? false;
+  const captureAllRequests = document.getElementById('batch-all-requests')?.checked ?? false;
+
+  const progress = document.getElementById('batch-progress');
+  const list     = document.getElementById('batch-progress-list');
+  const results  = document.getElementById('batch-results');
+  if (progress) progress.style.display = 'block';
+  if (results)  results.style.display = 'none';
+  if (list) list.innerHTML = urls.map(u => `<div class="batch-url-row" data-url="${escapeAttr(u)}"><span class="batch-url-label">${escapeHTML(u)}</span><span class="batch-url-status">queued</span></div>`).join('');
+
+  const btn = document.getElementById('btn-batch-scrape');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Running…'; }
+
+  const batchResults = [];
+  for (const url of urls) {
+    const row = list?.querySelector(`[data-url="${CSS.escape(url)}"]`);
+    const statusEl = row?.querySelector('.batch-url-status');
+    if (statusEl) statusEl.textContent = 'scraping…';
+    try {
+      const res = await fetch('/api/scrape', { method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ url, depth, maxPages, captureGraphQL, captureREST, captureAssets, downloadImages, autoScroll, takeScreenshots, captureAllRequests }) });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      batchResults.push({ url, data, ok: true });
+      if (statusEl) { statusEl.textContent = `done (${data.pages?.length || 0} pages)`; statusEl.style.color = 'var(--success)'; }
+    } catch (err) {
+      batchResults.push({ url, error: err.message, ok: false });
+      if (statusEl) { statusEl.textContent = 'error'; statusEl.style.color = 'var(--danger)'; }
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '▶ Start Batch Scrape'; }
+  if (results) {
+    results.style.display = 'block';
+    const content = document.getElementById('batch-results-content');
+    if (content) {
+      content.innerHTML = batchResults.map(r => `
+        <div class="batch-result-item" style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <strong>${escapeHTML(r.url)}</strong>
+          ${r.ok
+            ? `<span style="color:var(--success);margin-left:10px">${(r.data.pages?.length || 0)} pages</span>`
+            : `<span style="color:var(--danger);margin-left:10px">${escapeHTML(r.error)}</span>`}
+        </div>`).join('');
+    }
+  }
+  document.getElementById('btn-download-batch')?.addEventListener('click', () => {
+    downloadFile(JSON.stringify(batchResults, null, 2), 'batch-results.json', 'application/json');
+  }, { once: true });
+});
+
+// ---- Runs search / filter ----
+let _allRunsCache = [];
+const _origLoadRuns = typeof loadRuns === 'function' ? loadRuns : null;
+
+function _filterRuns() {
+  const q      = (document.getElementById('runs-search')?.value || '').toLowerCase().trim();
+  const status = document.getElementById('runs-filter-status')?.value || '';
+  const filtered = _allRunsCache.filter(r => {
+    const matchQ      = !q || (r.url || '').toLowerCase().includes(q) || (r.sessionId || '').toLowerCase().includes(q);
+    const matchStatus = !status || r.status === status;
+    return matchQ && matchStatus;
+  });
+  renderRunCards(filtered);
+}
+
+document.getElementById('runs-search')?.addEventListener('input', _filterRuns);
+document.getElementById('runs-filter-status')?.addEventListener('change', _filterRuns);
+
+// Also show/hide the Clear All button (only when runs exist)
+document.getElementById('btn-runs-clear-all')?.addEventListener('click', async () => {
+  if (!confirm('Clear all saved runs from local history?')) return;
+  clearHistory?.();
+  _allRunsCache = [];
+  renderRunCards([]);
+  document.getElementById('btn-runs-clear-all').style.display = 'none';
+});
+
+// ---- Tool Logs panel ----
+async function loadToolLogs() {
+  const content     = document.getElementById('logs-content');
+  const summaryBar  = document.getElementById('logs-summary-bar');
+  const recentCard  = document.getElementById('logs-recent-card');
+  const emptyEl     = document.getElementById('logs-empty');
+  if (!content) return;
+
+  try {
+    const [usageRes, reqRes] = await Promise.all([
+      fetch('/api/tool-logs'),
+      fetch('/api/tool-logs/requests'),
+    ]);
+    const usage    = usageRes.ok  ? await usageRes.json()  : {};
+    const requests = reqRes.ok    ? await reqRes.json()    : [];
+
+    const tools       = usage.tools      || {};
+    const totalCalls  = usage.totalCalls || 0;
+    const activeTools = Object.values(tools).filter(v => v > 0).length;
+
+    // Summary bar
+    if (document.getElementById('logs-total-calls'))  document.getElementById('logs-total-calls').textContent  = totalCalls;
+    if (document.getElementById('logs-active-tools')) document.getElementById('logs-active-tools').textContent = activeTools;
+    if (document.getElementById('logs-last-updated')) document.getElementById('logs-last-updated').textContent = usage.lastUpdated ? new Date(usage.lastUpdated).toLocaleString() : '—';
+    if (summaryBar) summaryBar.style.display = 'flex';
+
+    // Empty state
+    if (emptyEl) emptyEl.style.display = totalCalls === 0 ? 'flex' : 'none';
+
+    // Tools grid — rebuild each refresh
+    const existingGrid = content.querySelector('.logs-tools-grid');
+    if (existingGrid) existingGrid.remove();
+
+    const sorted = Object.entries(tools).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    const max = sorted[0]?.[1] || 1;
+    if (sorted.length) {
+      const grid = document.createElement('div');
+      grid.className = 'logs-tools-grid';
+      grid.innerHTML = sorted.map(([name, count]) => `
+        <div class="log-tool-card">
+          <div class="log-tool-count">${count}</div>
+          <div class="log-tool-name" title="${escapeAttr(name)}">${escapeHTML(name)}</div>
+          <div class="log-tool-bar" style="width:${Math.round((count / max) * 100)}%"></div>
+        </div>`).join('');
+      content.appendChild(grid);
+    }
+
+    // Recent requests
+    if (requests.length && recentCard) {
+      recentCard.style.display = 'block';
+      const recentList = document.getElementById('logs-recent-list');
+      if (recentList) {
+        recentList.innerHTML = requests.slice(0, 50).map(r => {
+          const ts  = r.ts       ? new Date(r.ts).toLocaleTimeString() : '?';
+          const dur = r.durationMs != null ? `${r.durationMs}ms` : '';
+          return `<div class="logs-req-row">
+            <span class="logs-req-tool">${escapeHTML(r.tool || '?')}</span>
+            <span class="logs-req-time">${ts}</span>
+            ${dur ? `<span class="logs-req-dur">${dur}</span>` : ''}
+            ${r.error ? '<span class="logs-req-err">error</span>' : ''}
+          </div>`;
+        }).join('');
+      }
+    }
+  } catch (err) {
+    if (content) content.innerHTML += `<p class="empty-hint" style="color:var(--danger)">Failed to load: ${escapeHTML(err.message)}</p>`;
+  }
+}
+
+document.getElementById('btn-refresh-logs')?.addEventListener('click', loadToolLogs);
+document.querySelector('[data-panel="logs"]')?.addEventListener('click', loadToolLogs);
 function downloadFile(content, filename, type = 'text/plain') {
   const blob = new Blob([content], { type });
   const a = document.createElement('a');
@@ -3407,7 +3579,7 @@ document.getElementById('btn-create-schedule')?.addEventListener('click', async 
   if (!cron) return showToast('Enter a cron expression');
   try {
     const res = await fetch('/api/schedules', { method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url } }) });
+      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, maxPages: parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100 } }) });
     if (!res.ok) throw new Error(await res.text());
     showToast('Schedule created');
     loadSchedules();
@@ -3416,6 +3588,22 @@ document.getElementById('btn-create-schedule')?.addEventListener('click', async 
 
 document.getElementById('btn-refresh-schedules')?.addEventListener('click', loadSchedules);
 document.querySelector('[data-panel="schedule"]')?.addEventListener('click', loadSchedules);
+
+// ---- Cron presets & help card ----
+document.querySelectorAll('.cron-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const inp = document.getElementById('sched-cron');
+    if (inp) inp.value = btn.dataset.cron || '';
+  });
+});
+document.getElementById('btn-cron-help')?.addEventListener('click', () => {
+  const card = document.getElementById('cron-help-card');
+  if (card) card.style.display = card.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('btn-cron-help-close')?.addEventListener('click', () => {
+  const card = document.getElementById('cron-help-card');
+  if (card) card.style.display = 'none';
+});
 
 // ---- CSV export utility ----
 function downloadCSV(rows, headers, filename) {
@@ -3780,8 +3968,6 @@ connectWS();
 //  AI Assistant Panel
 // ============================================================
 
-const AI_FAST_MODEL = 'llama3.2:1b';
-const AI_DEEP_MODEL = 'llama3.2:3b';
 
 function getCurrentScrapeTargetUrl() {
   return scrapedData?.meta?.targetUrl
@@ -3793,12 +3979,7 @@ function getCurrentScrapeTargetUrl() {
 
 function updateAIContextStatus() {
   const contextEl = document.getElementById('ai-current-context');
-  const fastEl = document.getElementById('ai-fast-model');
-  const deepEl = document.getElementById('ai-deep-model');
-  if (!contextEl || !fastEl || !deepEl) return;
-
-  fastEl.textContent = AI_FAST_MODEL;
-  deepEl.textContent = AI_DEEP_MODEL;
+  if (!contextEl) return;
 
   if (!scrapedData) {
     contextEl.textContent = 'No run loaded yet';
