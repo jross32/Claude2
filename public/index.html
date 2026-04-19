@@ -227,6 +227,34 @@
                   <input type="checkbox" id="capture-screenshots" />
                   <span>Capture page screenshots (slower, larger results)</span>
                 </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-iframe-apis" />
+                  <span>Capture Iframe APIs</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-sse" />
+                  <span>Capture Server-Sent Events (SSE)</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-beacons" />
+                  <span>Capture Beacon Requests</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-binary" />
+                  <span>Capture Binary Responses</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-sw" />
+                  <span>Detect Service Workers</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="bypass-sw" />
+                  <span>Bypass Service Workers</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="capture-dropdowns" />
+                  <span>Interact with Dropdowns</span>
+                </label>
               </div>
             </div>
 
@@ -292,6 +320,34 @@
               <div style="display:flex;align-items:center;gap:12px">
                 <input type="range" id="slow-motion" min="0" max="2000" step="100" value="0" style="width:200px" />
                 <span class="range-value" id="slowmo-value">0ms</span>
+              </div>
+            </div>
+
+            <!-- Proxy config (collapsible) -->
+            <div class="proxy-section">
+              <button class="avoid-links-toggle" id="proxy-toggle" type="button">
+                <span>&#127760; Proxy Settings</span>
+                <span class="avoid-links-chevron" id="proxy-chevron">&#9660;</span>
+              </button>
+              <div class="avoid-links-panel" id="proxy-panel" style="display:none">
+                <div class="field-hint" style="margin-bottom:8px">Route all browser requests through a proxy server. Leave blank to use no proxy.</div>
+                <div class="field">
+                  <label for="proxy-server">Proxy URL</label>
+                  <input type="text" id="proxy-server" placeholder="http://proxy.example.com:8080"
+                    autocomplete="off" data-lpignore="true" style="width:100%;max-width:420px" />
+                </div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                  <div class="field" style="flex:1;min-width:140px">
+                    <label for="proxy-username">Proxy Username</label>
+                    <input type="text" id="proxy-username" placeholder="(optional)"
+                      autocomplete="off" data-lpignore="true" />
+                  </div>
+                  <div class="field" style="flex:1;min-width:140px">
+                    <label for="proxy-password">Proxy Password</label>
+                    <input type="password" id="proxy-password" placeholder="(optional)"
+                      autocomplete="new-password" data-lpignore="true" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

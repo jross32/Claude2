@@ -622,6 +622,13 @@ const _CAPTURE_FORM_IDS = {
   captureImages: 'capture-images',
   autoScroll: 'auto-scroll',
   captureScreenshots: 'capture-screenshots',
+  captureIframeAPIs: 'capture-iframe-apis',
+  captureSSE: 'capture-sse',
+  captureBeacons: 'capture-beacons',
+  captureBinaryResponses: 'capture-binary',
+  captureServiceWorkers: 'capture-sw',
+  bypassServiceWorkers: 'bypass-sw',
+  captureDropdowns: 'capture-dropdowns',
   imageLimit: 'image-limit',
 };
 
@@ -666,6 +673,41 @@ const _CAPTURE_OPTION_META = [
     label: 'Capture page screenshots',
     tooltip: 'Captures screenshots for visual QA (slower and produces larger results).',
   },
+  {
+    key: 'captureIframeAPIs',
+    label: 'Capture Iframe APIs',
+    tooltip: 'Intercepts API calls made from embedded iframes — useful for sites with embedded widgets or micro-frontends.',
+  },
+  {
+    key: 'captureSSE',
+    label: 'Capture Server-Sent Events (SSE)',
+    tooltip: 'Intercepts EventSource / SSE streams — ideal for sites with live feeds, chat, or real-time dashboards.',
+  },
+  {
+    key: 'captureBeacons',
+    label: 'Capture Beacon Requests',
+    tooltip: 'Captures navigator.sendBeacon() and ping requests sent to analytics and tracking endpoints.',
+  },
+  {
+    key: 'captureBinaryResponses',
+    label: 'Capture Binary Responses',
+    tooltip: 'Captures binary API responses (MessagePack, Protobuf, CBOR) — for apps that use non-JSON encoding.',
+  },
+  {
+    key: 'captureServiceWorkers',
+    label: 'Detect Service Workers',
+    tooltip: 'Detects registered service workers and the scripts they use — useful for PWA analysis.',
+  },
+  {
+    key: 'bypassServiceWorkers',
+    label: 'Bypass Service Workers',
+    tooltip: 'Bypasses service worker caching and re-scrapes to surface network calls hidden by SW interception.',
+  },
+  {
+    key: 'captureDropdowns',
+    label: 'Interact with Dropdowns',
+    tooltip: 'Selects every option in each <select> dropdown and captures the unique page data exposed by each choice.',
+  },
 ];
 
 const _CAPTURE_PRESETS = [
@@ -683,6 +725,13 @@ const _CAPTURE_PRESETS = [
       captureImages: false,
       autoScroll: true,
       captureScreenshots: false,
+      captureIframeAPIs: false,
+      captureSSE: false,
+      captureBeacons: false,
+      captureBinaryResponses: false,
+      captureServiceWorkers: false,
+      bypassServiceWorkers: false,
+      captureDropdowns: false,
       imageLimit: 0,
     },
     icon: 'spark',
@@ -702,6 +751,13 @@ const _CAPTURE_PRESETS = [
       captureImages: false,
       autoScroll: true,
       captureScreenshots: false,
+      captureIframeAPIs: false,
+      captureSSE: false,
+      captureBeacons: false,
+      captureBinaryResponses: false,
+      captureServiceWorkers: false,
+      bypassServiceWorkers: false,
+      captureDropdowns: false,
       imageLimit: 0,
     },
     icon: 'map',
@@ -721,6 +777,13 @@ const _CAPTURE_PRESETS = [
       captureImages: false,
       autoScroll: true,
       captureScreenshots: false,
+      captureIframeAPIs: true,
+      captureSSE: true,
+      captureBeacons: true,
+      captureBinaryResponses: true,
+      captureServiceWorkers: false,
+      bypassServiceWorkers: false,
+      captureDropdowns: false,
       imageLimit: 0,
     },
     icon: 'nodes',
@@ -740,6 +803,13 @@ const _CAPTURE_PRESETS = [
       captureImages: true,
       autoScroll: true,
       captureScreenshots: false,
+      captureIframeAPIs: false,
+      captureSSE: false,
+      captureBeacons: false,
+      captureBinaryResponses: false,
+      captureServiceWorkers: false,
+      bypassServiceWorkers: false,
+      captureDropdowns: false,
       imageLimit: 0,
     },
     icon: 'image',
@@ -759,6 +829,13 @@ const _CAPTURE_PRESETS = [
       captureImages: true,
       autoScroll: true,
       captureScreenshots: true,
+      captureIframeAPIs: true,
+      captureSSE: true,
+      captureBeacons: true,
+      captureBinaryResponses: true,
+      captureServiceWorkers: true,
+      bypassServiceWorkers: false,
+      captureDropdowns: true,
       imageLimit: 0,
     },
     icon: 'stack',
@@ -794,6 +871,13 @@ function _readCaptureOptionsFromForm() {
     captureImages: getCb(_CAPTURE_FORM_IDS.captureImages),
     autoScroll: getCb(_CAPTURE_FORM_IDS.autoScroll),
     captureScreenshots: getCb(_CAPTURE_FORM_IDS.captureScreenshots),
+    captureIframeAPIs: getCb(_CAPTURE_FORM_IDS.captureIframeAPIs),
+    captureSSE: getCb(_CAPTURE_FORM_IDS.captureSSE),
+    captureBeacons: getCb(_CAPTURE_FORM_IDS.captureBeacons),
+    captureBinaryResponses: getCb(_CAPTURE_FORM_IDS.captureBinaryResponses),
+    captureServiceWorkers: getCb(_CAPTURE_FORM_IDS.captureServiceWorkers),
+    bypassServiceWorkers: getCb(_CAPTURE_FORM_IDS.bypassServiceWorkers),
+    captureDropdowns: getCb(_CAPTURE_FORM_IDS.captureDropdowns),
     imageLimit,
   };
 }
@@ -812,6 +896,13 @@ function _applyCaptureOptionsToForm(opts) {
   setCb(_CAPTURE_FORM_IDS.captureImages, opts.captureImages);
   setCb(_CAPTURE_FORM_IDS.autoScroll, opts.autoScroll);
   setCb(_CAPTURE_FORM_IDS.captureScreenshots, opts.captureScreenshots);
+  setCb(_CAPTURE_FORM_IDS.captureIframeAPIs, opts.captureIframeAPIs);
+  setCb(_CAPTURE_FORM_IDS.captureSSE, opts.captureSSE);
+  setCb(_CAPTURE_FORM_IDS.captureBeacons, opts.captureBeacons);
+  setCb(_CAPTURE_FORM_IDS.captureBinaryResponses, opts.captureBinaryResponses);
+  setCb(_CAPTURE_FORM_IDS.captureServiceWorkers, opts.captureServiceWorkers);
+  setCb(_CAPTURE_FORM_IDS.bypassServiceWorkers, opts.bypassServiceWorkers);
+  setCb(_CAPTURE_FORM_IDS.captureDropdowns, opts.captureDropdowns);
 
   const imgLimit = document.getElementById(_CAPTURE_FORM_IDS.imageLimit);
   if (imgLimit) imgLimit.value = String(Number.isFinite(opts.imageLimit) ? Math.max(0, opts.imageLimit) : 0);
@@ -832,6 +923,13 @@ function _captureOptionsEqual(a, b) {
     _coerceBool(a.captureImages) === _coerceBool(b.captureImages) &&
     _coerceBool(a.autoScroll) === _coerceBool(b.autoScroll) &&
     _coerceBool(a.captureScreenshots) === _coerceBool(b.captureScreenshots) &&
+    _coerceBool(a.captureIframeAPIs) === _coerceBool(b.captureIframeAPIs) &&
+    _coerceBool(a.captureSSE) === _coerceBool(b.captureSSE) &&
+    _coerceBool(a.captureBeacons) === _coerceBool(b.captureBeacons) &&
+    _coerceBool(a.captureBinaryResponses) === _coerceBool(b.captureBinaryResponses) &&
+    _coerceBool(a.captureServiceWorkers) === _coerceBool(b.captureServiceWorkers) &&
+    _coerceBool(a.bypassServiceWorkers) === _coerceBool(b.bypassServiceWorkers) &&
+    _coerceBool(a.captureDropdowns) === _coerceBool(b.captureDropdowns) &&
     (parseInt(a.imageLimit, 10) || 0) === (parseInt(b.imageLimit, 10) || 0)
   );
 }
@@ -1252,6 +1350,19 @@ document.getElementById('avoid-links-toggle').addEventListener('click', () => {
   panel.style.display = open ? 'block' : 'none';
   chevron.innerHTML = open ? '&#9650;' : '&#9660;';
 });
+
+// ---- Proxy toggle ----
+(function () {
+  const toggle = document.getElementById('proxy-toggle');
+  const panel = document.getElementById('proxy-panel');
+  const chevron = document.getElementById('proxy-chevron');
+  if (!toggle || !panel) return;
+  toggle.addEventListener('click', () => {
+    const open = panel.style.display === 'none';
+    panel.style.display = open ? 'block' : 'none';
+    chevron.innerHTML = open ? '&#9650;' : '&#9660;';
+  });
+})();
 // Render selected tag pills into a container
 function renderAvoidPills(pillsContainerId, cbSelector) {
   const container = document.getElementById(pillsContainerId);
@@ -1310,6 +1421,13 @@ async function startScrapeSession(name, faviconUrl) {
     imageLimit: parseInt(document.getElementById('image-limit').value, 10) || 0,
     autoScroll: document.getElementById('auto-scroll').checked,
     captureScreenshots: document.getElementById('capture-screenshots').checked,
+    captureIframeAPIs: document.getElementById('capture-iframe-apis')?.checked || false,
+    captureSSE: document.getElementById('capture-sse')?.checked || false,
+    captureBeacons: document.getElementById('capture-beacons')?.checked || false,
+    captureBinaryResponses: document.getElementById('capture-binary')?.checked || false,
+    captureServiceWorkers: document.getElementById('capture-sw')?.checked || false,
+    bypassServiceWorkers: document.getElementById('bypass-sw')?.checked || false,
+    captureDropdowns: document.getElementById('capture-dropdowns')?.checked || false,
     captureSpeed: parseInt(document.getElementById('capture-speed').value, 10) || 1,
     workerCount: parseInt(document.getElementById('worker-count').value, 10) || 0,
     politeDelay: parseInt(document.getElementById('polite-delay')?.value, 10) || 0,
@@ -1319,6 +1437,16 @@ async function startScrapeSession(name, faviconUrl) {
     fullCrawl: document.getElementById('full-crawl').checked,
     maxPages: document.getElementById('full-crawl').checked ? 0 : (parseInt(document.getElementById('max-pages').value, 10) || 100),
   };
+
+  // Attach proxy config if a server is specified
+  const proxyServer = document.getElementById('proxy-server')?.value.trim();
+  if (proxyServer) {
+    payload.proxy = { server: proxyServer };
+    const proxyUser = document.getElementById('proxy-username')?.value.trim();
+    const proxyPass = document.getElementById('proxy-password')?.value;
+    if (proxyUser) payload.proxy.username = proxyUser;
+    if (proxyPass) payload.proxy.password = proxyPass;
+  }
 
   _lastScrapePayload = payload;
   try {
@@ -1965,6 +2093,64 @@ function buildCardDetail(key, data) {
     case 'auth-redirects':
       return (data.authRedirectedPages || []).map(urlRow).join('') || '<p class="cd-empty">No auth redirects.</p>';
 
+    case 'sse': {
+      const sseCalls = data.apiCalls?.sse || [];
+      if (!sseCalls.length) return '<p class="cd-empty">No SSE streams captured.</p>';
+      return sseCalls.map((s, i) =>
+        `<div class="cd-row">
+          <span class="cd-num">${i + 1}</span>
+          <div class="cd-main">
+            <a class="cd-url" href="${esc(s.url || '')}" target="_blank" rel="noopener">${esc(s.url || '')}</a>
+            <div class="cd-chips">
+              ${s.eventCount != null ? `<span class="cd-chip">${s.eventCount} events</span>` : ''}
+              ${s.duration != null ? `<span class="cd-chip">${s.duration}ms</span>` : ''}
+            </div>
+          </div>
+        </div>`).join('');
+    }
+
+    case 'beacons': {
+      const beacons = data.apiCalls?.beacons || [];
+      if (!beacons.length) return '<p class="cd-empty">No beacon requests captured.</p>';
+      return beacons.map((b, i) =>
+        `<div class="cd-row">
+          <span class="cd-num">${i + 1}</span>
+          <div class="cd-main">
+            <a class="cd-url" href="${esc(b.url || '')}" target="_blank" rel="noopener">${esc(b.url || '')}</a>
+            ${b.body ? `<pre class="call-json">${esc(JSON.stringify(b.body, null, 2)).substring(0, 500)}</pre>` : ''}
+          </div>
+        </div>`).join('');
+    }
+
+    case 'binary': {
+      const binaries = data.apiCalls?.binary || [];
+      if (!binaries.length) return '<p class="cd-empty">No binary responses captured.</p>';
+      return binaries.map((b, i) =>
+        `<div class="cd-row">
+          <span class="cd-num">${i + 1}</span>
+          <div class="cd-main">
+            <a class="cd-url" href="${esc(b.url || '')}" target="_blank" rel="noopener">${esc(b.url || '')}</a>
+            <div class="cd-chips">
+              ${b.encoding ? `<span class="cd-chip">${esc(b.encoding)}</span>` : ''}
+              ${b.size != null ? `<span class="cd-chip">${b.size} bytes</span>` : ''}
+            </div>
+          </div>
+        </div>`).join('');
+    }
+
+    case 'service-workers': {
+      const sws = data.serviceWorkers || [];
+      if (!sws.length) return '<p class="cd-empty">No service workers detected.</p>';
+      return sws.map((sw, i) =>
+        `<div class="cd-row">
+          <span class="cd-num">${i + 1}</span>
+          <div class="cd-main">
+            <div class="cd-title">${esc(sw.scope || sw.url || '(unknown scope)')}</div>
+            ${sw.url ? `<a class="cd-url" href="${esc(sw.url)}" target="_blank" rel="noopener">${esc(sw.url)}</a>` : ''}
+          </div>
+        </div>`).join('');
+    }
+
     case 'failed-pages': {
       const failed = data.failedPages || [];
       if (!failed.length) return '<p class="cd-empty">No failed pages.</p>';
@@ -2028,6 +2214,10 @@ function renderResults(data) {
     { label: 'Scripts', key: 'scripts', value: (data.pages?.flatMap(p => p.scripts || []).length) || 0 },
     { label: 'Forms', key: 'forms', value: (data.pages?.flatMap(p => p.forms || []).length) || 0 },
     { label: 'Errors', key: 'errors', value: data.errors?.length || 0, err: (data.errors?.length > 0) },
+    ...(data.apiCalls?.sse?.length ? [{ label: 'SSE Streams', key: 'sse', value: data.apiCalls.sse.length }] : []),
+    ...(data.apiCalls?.beacons?.length ? [{ label: 'Beacon Calls', key: 'beacons', value: data.apiCalls.beacons.length }] : []),
+    ...(data.apiCalls?.binary?.length ? [{ label: 'Binary Responses', key: 'binary', value: data.apiCalls.binary.length }] : []),
+    ...(data.serviceWorkers?.length ? [{ label: 'Service Workers', key: 'service-workers', value: data.serviceWorkers.length }] : []),
     ...(data.authRedirectedPages?.length ? [{ label: 'Auth Redirects', key: 'auth-redirects', value: data.authRedirectedPages.length, warn: true }] : []),
     ...(data.failedPages?.length ? [{ label: 'Failed Pages', key: 'failed-pages', value: data.failedPages.length, err: true }] : []),
   ];
