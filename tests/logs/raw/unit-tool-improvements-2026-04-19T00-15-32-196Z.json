@@ -1,0 +1,221 @@
+{
+  "timestamp": "2026-04-19T00:15:32.195Z",
+  "git_commit": "abb088e",
+  "suite": "unit-tool-improvements",
+  "tests": [
+    {
+      "name": "fix-1: pause/resume/submit — description quality",
+      "status": "fail",
+      "duration_ms": 5,
+      "error": "Score 33% — needs improvement",
+      "input": {},
+      "output": {
+        "pts": 2,
+        "max": 6,
+        "pct": 33,
+        "pauseDesc": "Pause a currently running scrape session.",
+        "verifyDesc": "Submit a 2FA or verification code to a running scrape session."
+      },
+      "stack_trace": "Error: Score 33% — needs improvement\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:72:27\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:50:10)\n    at Object.<anonymous> (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:364:1)\n    at Module._compile (node:internal/modules/cjs/loader:1812:14)\n    at Object..js (node:internal/modules/cjs/loader:1943:10)\n    at Module.load (node:internal/modules/cjs/loader:1533:32)\n    at Module._load (node:internal/modules/cjs/loader:1335:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-2: openWorld flags for extract_entities, find_graphql_endpoints, find_site_issues",
+      "status": "fail",
+      "duration_ms": 3,
+      "error": "Missing openWorld flags: find_graphql_endpoints, find_site_issues",
+      "input": {},
+      "output": {
+        "hasEntities": true,
+        "hasGraphql": false,
+        "hasSiteIssues": false,
+        "pct": 33
+      },
+      "stack_trace": "Error: Missing openWorld flags: find_graphql_endpoints, find_site_issues\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:89:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:76:10)\n    at Object.<anonymous> (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:364:1)\n    at Module._compile (node:internal/modules/cjs/loader:1812:14)\n    at Object..js (node:internal/modules/cjs/loader:1943:10)\n    at Module.load (node:internal/modules/cjs/loader:1533:32)\n    at Module._load (node:internal/modules/cjs/loader:1335:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-3: schedule persistence survives module reload",
+      "status": "fail",
+      "duration_ms": 11,
+      "error": "Schedule not persisted to disk (fileExists=false, hasEntry=false)",
+      "input": {},
+      "output": {
+        "fileExists": false,
+        "fileHasEntry": false,
+        "schedFile": "C:\\Users\\justi\\Claude2\\data\\schedules.json",
+        "pct": 0
+      },
+      "stack_trace": "Error: Schedule not persisted to disk (fileExists=false, hasEntry=false)\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:121:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:93:16)\n    at Object.<anonymous> (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:364:1)\n    at Module._compile (node:internal/modules/cjs/loader:1812:14)\n    at Object..js (node:internal/modules/cjs/loader:1943:10)\n    at Module.load (node:internal/modules/cjs/loader:1533:32)\n    at Module._load (node:internal/modules/cjs/loader:1335:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-4: http_fetch — POST method + body + sessionId cookie jar in schema",
+      "status": "fail",
+      "duration_ms": 5,
+      "error": "Score 17% — http_fetch missing capabilities",
+      "input": {},
+      "output": {
+        "hasMethod": false,
+        "hasBody": true,
+        "hasSessionId": false,
+        "handlerHasMethod": false,
+        "handlerHasBody": false,
+        "handlerHasCookies": false,
+        "pct": 17
+      },
+      "stack_trace": "Error: Score 17% — http_fetch missing capabilities\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:145:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:125:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-5: export_har — real timing fields when duration available",
+      "status": "fail",
+      "duration_ms": 2,
+      "error": "HAR timings not using duration field (time=-1, wait=-1)",
+      "input": {},
+      "output": {
+        "timedEntry": {
+          "time": -1,
+          "wait": -1
+        },
+        "pct": 33
+      },
+      "stack_trace": "Error: HAR timings not using duration field (time=-1, wait=-1)\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:179:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:149:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-6: extract_entities — international phone formats",
+      "status": "fail",
+      "duration_ms": 2,
+      "error": "Only 2/4 phone formats detected: [\" (555) 867-5309\",\"800-555-0199\",\"416-555-0123\",\"+14165550123\"]",
+      "input": {},
+      "output": {
+        "phones": [
+          " (555) 867-5309",
+          "800-555-0199",
+          "416-555-0123",
+          "+14165550123"
+        ],
+        "hasUS": true,
+        "hasUK": false,
+        "hasDE": false,
+        "hasE164": true,
+        "pct": 50
+      },
+      "stack_trace": "Error: Only 2/4 phone formats detected: [\" (555) 867-5309\",\"800-555-0199\",\"416-555-0123\",\"+14165550123\"]\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:205:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:183:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-7: batch_scrape — schema has errorStrategy param",
+      "status": "fail",
+      "duration_ms": 4,
+      "error": "batch_scrape missing per-URL isolation (score 0%)",
+      "input": {},
+      "output": {
+        "hasParallelFlag": false,
+        "hasAllSettled": false,
+        "hasPerUrlResult": false,
+        "hasErrorCount": false,
+        "pct": 0
+      },
+      "stack_trace": "Error: batch_scrape missing per-URL isolation (score 0%)\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:225:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:209:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-8: get_api_calls — filter by method, domain, status, keyword",
+      "status": "fail",
+      "duration_ms": 5,
+      "error": "get_api_calls missing filter params (score 0%)",
+      "input": {},
+      "output": {
+        "hasMethodFilter": false,
+        "hasDomainFilter": false,
+        "hasStatusFilter": false,
+        "hasKeywordFilter": false,
+        "pct": 0
+      },
+      "stack_trace": "Error: get_api_calls missing filter params (score 0%)\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:245:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:229:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-9: map_site_for_goal — maxRounds param in schema and handler",
+      "status": "fail",
+      "duration_ms": 4,
+      "error": "map_site_for_goal missing maxRounds (score 0%)",
+      "input": {},
+      "output": {
+        "schemaHasMaxRounds": false,
+        "handlerPassesIt": false,
+        "fnUsesIt": false,
+        "pct": 0
+      },
+      "stack_trace": "Error: map_site_for_goal missing maxRounds (score 0%)\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:265:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:249:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-11: compare_scrapes — semantic diff (price change, similarity)",
+      "status": "fail",
+      "duration_ms": 2,
+      "error": "compare_scrapes missing semantic diff (score 25%)",
+      "input": {},
+      "output": {
+        "hasSummary": true,
+        "hasSemanticKey": false,
+        "hasPriceChange": false,
+        "hasSimilarity": false,
+        "diffKeys": [
+          "pages",
+          "textContent",
+          "links",
+          "images",
+          "headings",
+          "apiCalls",
+          "assets",
+          "summary"
+        ],
+        "pct": 25
+      },
+      "stack_trace": "Error: compare_scrapes missing semantic diff (score 25%)\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:312:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:292:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-12: get_save_overview — topActiveEndpoints with frequency",
+      "status": "fail",
+      "duration_ms": 3,
+      "error": "buildSaveOverview missing topActiveEndpoints (score 0%)",
+      "input": {},
+      "output": {
+        "hasTopEndpoints": false,
+        "hasFrequency": false,
+        "hasRestAndGql": false,
+        "pct": 0
+      },
+      "stack_trace": "Error: buildSaveOverview missing topActiveEndpoints (score 0%)\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:329:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:316:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    },
+    {
+      "name": "fix-13: test_oidc_security — auth_code_replay test type",
+      "status": "fail",
+      "duration_ms": 6,
+      "error": "auth_code_replay not fully implemented (score 25%)",
+      "input": {},
+      "output": {
+        "hasFunctionDef": false,
+        "hasInOrchestrator": false,
+        "hasInMcpSchema": false,
+        "hasMockSupport": true,
+        "pct": 25
+      },
+      "stack_trace": "Error: auth_code_replay not fully implemented (score 25%)\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:349:24\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\tool-improvements.test.js:333:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 12,
+    "passed": 0,
+    "failed": 12,
+    "skipped": 0,
+    "duration_ms": 62,
+    "avg_duration_ms": 5
+  }
+}

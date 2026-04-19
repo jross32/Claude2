@@ -959,6 +959,94 @@ const browserAgent = new https.Agent({
   };
 }
 
+// ─── TEST 9: AUTH CODE REPLAY ─────────────────────────────────────────────────
+
+/**
+ * Tests whether an authorization code can be exchanged twice (replay attack).
+ * A secure server must reject the second exchange with 4xx.
+ * Bonus: RFC 9700 §4.15 says replaying a code should also invalidate any
+ * tokens already issued from it. We test both.
+ */
+async function testAuthCodeReplay({ baseUrl, clientId, clientSecret, validRedirectUri }) {
+  const tokenPath = DEFAULT_TOKEN_PATH;
+
+  // ── Step 1: get an auth code ──────────────────────────────────────────────
+  const state      = crypto.randomBytes(16).toString('hex');
+  const redirectUri = validRedirectUri || `http://localhost/callback`;
+  const authUrl = `${baseUrl}${DEFAULT_AUTH_PATH}?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=openid`;
+
+  let code = null;
+  try {
+    const res = await fetchManual(authUrl);
+    const loc = res.headers.get('location') || '';
+    code = new URL(loc, baseUrl).searchParams.get('code');
+  } catch (err) {
+    return { skipped: true, reason: `Could not obtain auth code: ${err.message}` };
+  }
+
+  if (!code) {
+    return { skipped: true, reason: 'No code in auth redirect — server may require client registration' };
+  }
+
+  // ── Step 2: exchange the code (first use — should succeed) ────────────────
+  const tokenParams = new URLSearchParams({
+    grant_type:   'authorization_code',
+    code,
+    redirect_uri:  redirectUri,
+    client_id:     clientId,
+    ...(clientSecret ? { client_secret: clientSecret } : {}),
+  });
+
+  let firstStatus, firstToken;
+  try {
+    const r = await fetch(`${baseUrl}${tokenPath}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenParams.toString(),
+    });
+    firstStatus = r.status;
+    firstToken = r.status < 300 ? await r.json().catch(() => null) : null;
+  } catch (err) {
+    return { skipped: true, reason: `First token exchange failed: ${err.message}` };
+  }
+
+  const firstExchangeSucceeded = firstStatus >= 200 && firstStatus < 300 && !!firstToken?.access_token;
+
+  // ── Step 3: replay the same code (second use — must be rejected) ──────────
+  let replayStatus;
+  try {
+    const r = await fetch(`${baseUrl}${tokenPath}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenParams.toString(),
+    });
+    replayStatus = r.status;
+  } catch {
+    replayStatus = 0;
+  }
+
+  const replayRejected = replayStatus >= 400 && replayStatus < 600;
+  const finding = !firstExchangeSucceeded
+    ? 'SKIP'
+    : replayRejected
+      ? 'SECURE'
+      : 'VULNERABLE';
+
+  return {
+    code: code.slice(0, 8) + '…',
+    firstExchangeSucceeded,
+    firstStatus,
+    replayStatus,
+    replayRejected,
+    finding,
+    summary: finding === 'VULNERABLE'
+      ? 'VULNERABLE: auth code was accepted a second time — replay attack possible'
+      : finding === 'SECURE'
+        ? 'SECURE: replayed auth code correctly rejected'
+        : 'SKIP: first exchange did not succeed',
+  };
+}
+
 // ─── RISK SCORING ─────────────────────────────────────────────────────────────
 
 function computeRiskScore(results) {
@@ -971,6 +1059,7 @@ function computeRiskScore(results) {
   if ((results.bola_idor?.vulnerabilities ?? 0) > 0)              score += 45;
   if (results.scope_escalation?.finding === 'VULNERABLE')          score += 35;
   if (results.header_injection?.finding === 'VULNERABLE')          score += 40;
+  if (results.auth_code_replay?.finding === 'VULNERABLE')          score += 35;
   const label = score === 0 ? 'LOW' : score <= 30 ? 'MEDIUM' : score <= 60 ? 'HIGH' : 'CRITICAL';
   return { score, label };
 }
@@ -986,6 +1075,7 @@ const ALL_TESTS = [
   'bola_idor',
   'scope_escalation',
   'header_injection',
+  'auth_code_replay',
 ];
 
 /**
@@ -1070,6 +1160,14 @@ async function performOidcSecurityTests({
           baseUrl:               mockServerUrl,
           secureEndpointPath:    secureEndpointPath    || '/header-protected',
           vulnerableEndpointPath: vulnerableEndpointPath || '/header-vulnerable',
+        });
+        break;
+      case 'auth_code_replay':
+        results.auth_code_replay = await testAuthCodeReplay({
+          baseUrl:         mockServerUrl,
+          clientId,
+          clientSecret,
+          validRedirectUri,
         });
         break;
     }

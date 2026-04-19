@@ -2215,7 +2215,9 @@ class ScraperSession {
             url: reqUrl, method,
             headers: this._sanitizeHeaders(headers),
             body: parsedBody || postData,
-            timestamp: new Date().toISOString(), response: null,
+            timestamp: new Date().toISOString(),
+            requestMs: Date.now(),
+            response: null,
           });
           pendingGql.set(reqUrl, captures.graphqlCalls.length - 1);
           this.log(`GraphQL: ${reqUrl}`, 'graphql');
@@ -2238,7 +2240,9 @@ class ScraperSession {
             url: reqUrl, method,
             headers: this._sanitizeHeaders(headers),
             body: parsedBody || postData || null,
-            resourceType, timestamp: new Date().toISOString(), response: null,
+            resourceType, timestamp: new Date().toISOString(),
+            requestMs: Date.now(),
+            response: null,
           });
           pendingRest.set(reqUrl, captures.restCalls.length - 1);
           this.log(`REST: ${method} ${reqUrl}`, 'api');
@@ -2350,6 +2354,8 @@ class ScraperSession {
         try {
           const text = await response.text();
           let parsed = null; try { parsed = JSON.parse(text); } catch {}
+          const reqMs = captures.graphqlCalls[gqlIdx].requestMs;
+          captures.graphqlCalls[gqlIdx].duration = reqMs ? Date.now() - reqMs : undefined;
           captures.graphqlCalls[gqlIdx].response = { status, headers: respHeaders, body: parsed || text };
         } catch {}
         pendingGql.delete(respUrl);
@@ -2359,6 +2365,8 @@ class ScraperSession {
       if (restIdx !== undefined) {
         try {
           const ct = respHeaders['content-type'] || '';
+          const reqMs = captures.restCalls[restIdx].requestMs;
+          captures.restCalls[restIdx].duration = reqMs ? Date.now() - reqMs : undefined;
           // Binary protocol detection — flag before attempting text parse
           const _BINARY_CTS = ['application/octet-stream', 'application/msgpack', 'application/x-msgpack',
             'application/x-protobuf', 'application/protobuf', 'application/cbor', 'application/x-cbor',

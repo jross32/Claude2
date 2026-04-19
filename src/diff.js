@@ -1,6 +1,33 @@
+'use strict';
+
 /**
- * Compare two scrape results and return a structured diff.
+ * Compare two scrape results and return a structured diff,
+ * including structural, content, API, and semantic (price/similarity) analysis.
  */
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function extractPrices(text) {
+  if (!text) return [];
+  const matches = text.match(/(?:USD?|€|£|¥|CAD?|\$)\s?[\d,]+(?:\.\d{2})?|\d+(?:\.\d{2})?\s*(?:USD|EUR|GBP|CAD)/gi) || [];
+  return [...new Set(matches.map(m => m.replace(/\s+/g, ' ').trim()))];
+}
+
+function tokenize(text) {
+  return (text || '').toLowerCase().split(/\W+/).filter(t => t.length > 2);
+}
+
+function jaccardSimilarity(textA, textB) {
+  const setA = new Set(tokenize(textA));
+  const setB = new Set(tokenize(textB));
+  if (setA.size === 0 && setB.size === 0) return 1;
+  const intersection = [...setA].filter(t => setB.has(t)).length;
+  const union = new Set([...setA, ...setB]).size;
+  return union === 0 ? 1 : Math.round((intersection / union) * 100) / 100;
+}
+
+// ── Main diff function ────────────────────────────────────────────────────────
+
 function diffScrapes(scrapeA, scrapeB) {
   const result = {};
 
@@ -21,47 +48,77 @@ function diffScrapes(scrapeA, scrapeB) {
   const firstB = pagesB[0];
 
   if (firstA && firstB) {
-    // Diff text blocks
     const textA = new Set((firstA.textBlocks || []).map((t) => t.text));
     const textB = new Set((firstB.textBlocks || []).map((t) => t.text));
 
     result.textContent = {
-      added: [...textB].filter((t) => !textA.has(t)).slice(0, 50),
+      added:   [...textB].filter((t) => !textA.has(t)).slice(0, 50),
       removed: [...textA].filter((t) => !textB.has(t)).slice(0, 50),
     };
 
-    // Diff links
     const linksA = new Set((firstA.links || []).map((l) => l.href));
     const linksB = new Set((firstB.links || []).map((l) => l.href));
-
     result.links = {
-      added: [...linksB].filter((l) => !linksA.has(l)),
+      added:   [...linksB].filter((l) => !linksA.has(l)),
       removed: [...linksA].filter((l) => !linksB.has(l)),
     };
 
-    // Diff images
     const imgsA = new Set((firstA.images || []).map((i) => i.src).filter(Boolean));
     const imgsB = new Set((firstB.images || []).map((i) => i.src).filter(Boolean));
-
     result.images = {
-      added: [...imgsB].filter((i) => !imgsA.has(i)),
+      added:   [...imgsB].filter((i) => !imgsA.has(i)),
       removed: [...imgsA].filter((i) => !imgsB.has(i)),
     };
 
-    // Diff headings
     const h1A = (firstA.headings?.h1 || []).map((h) => h.text);
     const h1B = (firstB.headings?.h1 || []).map((h) => h.text);
     const setH1A = new Set(h1A);
     const setH1B = new Set(h1B);
     result.headings = {
-      added: h1B.filter((h) => !setH1A.has(h)),
+      added:   h1B.filter((h) => !setH1A.has(h)),
       removed: h1A.filter((h) => !setH1B.has(h)),
     };
 
-    // Title change
     if (firstA.meta?.title !== firstB.meta?.title) {
       result.title = { from: firstA.meta?.title, to: firstB.meta?.title };
     }
+
+    // ── Semantic analysis ─────────────────────────────────────────────────────
+    const fullTextA = firstA.fullText || '';
+    const fullTextB = firstB.fullText || '';
+    const similarity = jaccardSimilarity(fullTextA, fullTextB);
+
+    const pricesA = extractPrices(fullTextA);
+    const pricesB = extractPrices(fullTextB);
+    const setPricesA = new Set(pricesA);
+    const setPricesB = new Set(pricesB);
+
+    const priceChanges = {
+      added:   pricesB.filter(p => !setPricesA.has(p)),
+      removed: pricesA.filter(p => !setPricesB.has(p)),
+    };
+
+    // Detect pages whose text changed significantly (across all matched pages)
+    const changedPages = [];
+    pagesA.forEach(pageA => {
+      const matchingB = pagesB.find(p => p.meta?.url === pageA.meta?.url);
+      if (!matchingB) return;
+      const sim = jaccardSimilarity(pageA.fullText || '', matchingB.fullText || '');
+      if (sim < 0.95) {
+        changedPages.push({
+          url: pageA.meta?.url,
+          similarity: sim,
+          likelyChanged: sim < 0.8,
+        });
+      }
+    });
+
+    result.semantic = {
+      similarity,
+      similarityLabel: similarity >= 0.95 ? 'nearly identical' : similarity >= 0.7 ? 'similar' : similarity >= 0.4 ? 'moderately changed' : 'significantly changed',
+      priceChanges,
+      changedPages,
+    };
   }
 
   // Diff API calls
@@ -72,35 +129,40 @@ function diffScrapes(scrapeA, scrapeB) {
 
   result.apiCalls = {
     graphql: {
-      added: [...gqlUrlsB].filter((u) => !gqlUrlsA.has(u)),
+      added:   [...gqlUrlsB].filter((u) => !gqlUrlsA.has(u)),
       removed: [...gqlUrlsA].filter((u) => !gqlUrlsB.has(u)),
     },
     rest: {
-      added: [...restUrlsB].filter((u) => !restUrlsA.has(u)),
+      added:   [...restUrlsB].filter((u) => !restUrlsA.has(u)),
       removed: [...restUrlsA].filter((u) => !restUrlsB.has(u)),
     },
   };
 
-  // Assets diff
   const assetsA = new Set((scrapeA.assets || []).map((a) => a.url));
   const assetsB = new Set((scrapeB.assets || []).map((a) => a.url));
   result.assets = {
-    added: [...assetsB].filter((a) => !assetsA.has(a)),
+    added:   [...assetsB].filter((a) => !assetsA.has(a)),
     removed: [...assetsA].filter((a) => !assetsB.has(a)),
   };
 
-  // Pre-computed summary counts so the frontend doesn't have to recount
   result.summary = {
     pages:    { added: result.pages.added.length, removed: result.pages.removed.length },
     apiCalls: {
       added:   result.apiCalls.graphql.added.length + result.apiCalls.rest.added.length,
       removed: result.apiCalls.graphql.removed.length + result.apiCalls.rest.removed.length,
     },
-    assets:   { added: result.assets.added.length, removed: result.assets.removed.length },
-    content:  {
+    assets:  { added: result.assets.added.length, removed: result.assets.removed.length },
+    content: {
       added:   (result.textContent?.added.length || 0) + (result.links?.added.length || 0),
       removed: (result.textContent?.removed.length || 0) + (result.links?.removed.length || 0),
     },
+    semantic: result.semantic ? {
+      similarity:      result.semantic.similarity,
+      similarityLabel: result.semantic.similarityLabel,
+      pricesAdded:     result.semantic.priceChanges.added.length,
+      pricesRemoved:   result.semantic.priceChanges.removed.length,
+      changedPages:    result.semantic.changedPages.length,
+    } : null,
   };
 
   return result;
