@@ -3172,7 +3172,11 @@ document.getElementById('btn-download-api').addEventListener('click', () => {
 
 // ---- Assets rendering ----
 function renderAssets(assets) {
-  if (!assets || assets.length === 0) return;
+  if (!assets || assets.length === 0) {
+    const countLabel = document.getElementById('assets-count-label');
+    if (countLabel) countLabel.textContent = 'Showing 0 of 0';
+    return;
+  }
 
   _allAssetsCache = assets;
 
@@ -4218,6 +4222,7 @@ document.getElementById('btn-infer-schema')?.addEventListener('click', async fun
 // ---- Scheduler ----
 async function loadSchedules() {
   const list = document.getElementById('schedule-list');
+  const count = document.getElementById('schedule-filter-count');
   if (!list) return;
   try {
     const res = await fetch('/api/schedules');
@@ -4226,6 +4231,7 @@ async function loadSchedules() {
     _allSchedulesCache = schedules;
     if (!schedules.length) {
       list.innerHTML = '<p class="empty-hint">No schedules yet.</p>';
+      if (count) count.textContent = '0 / 0';
       return;
     }
     filterSchedules();
