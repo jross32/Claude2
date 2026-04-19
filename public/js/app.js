@@ -272,10 +272,21 @@ function openPresetModal(editIdx = -1) {
     document.getElementById('preset-all-requests').checked = !!p.captureAllRequests;
     setImagesUI(!!p.captureImages, p.imageLimit);
     setAvoidTags(p.avoidTags || ['logout', 'cart']);
+    // New capture options (7)
+    const _pSet = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+    _pSet('preset-iframe-apis', p.captureIframeAPIs);
+    _pSet('preset-sse', p.captureSSE);
+    _pSet('preset-beacons', p.captureBeacons);
+    _pSet('preset-binary', p.captureBinaryResponses);
+    _pSet('preset-sw', p.captureServiceWorkers);
+    _pSet('preset-bypass-sw', p.bypassServiceWorkers);
+    _pSet('preset-dropdowns', p.captureDropdowns);
     document.getElementById('preset-scroll').checked = p.autoScroll !== false;
     document.getElementById('preset-screenshots').checked = !!p.captureScreenshots;
     document.getElementById('preset-capture-speed').value = p.captureSpeed || 1;
     document.getElementById('preset-capture-speed-val').textContent = p.captureSpeed || 1;
+    const wce = document.getElementById('preset-worker-count'); if (wce) wce.value = p.workerCount || 0;
+    const pde = document.getElementById('preset-polite-delay'); if (pde) pde.value = String(p.politeDelay || 0);
     document.getElementById('preset-slow-motion').value = p.slowMotion || 0;
     document.getElementById('preset-liveview').checked = p.liveView !== false;
     document.getElementById('preset-maxpages').value = p.maxPages || 100;
@@ -295,11 +306,23 @@ function openPresetModal(editIdx = -1) {
     const captImgOn = document.getElementById('capture-images').checked;
     setImagesUI(captImgOn, document.getElementById('image-limit').value);
     setAvoidTags([...document.querySelectorAll('.avoid-tag:checked')].map(el => el.value));
+    // Copy 7 new capture options from main panel
+    const _pCopy = (destId, srcId) => { const d = document.getElementById(destId); const s = document.getElementById(srcId); if (d && s) d.checked = s.checked; };
+    _pCopy('preset-iframe-apis', 'capture-iframe-apis');
+    _pCopy('preset-sse', 'capture-sse');
+    _pCopy('preset-beacons', 'capture-beacons');
+    _pCopy('preset-binary', 'capture-binary');
+    _pCopy('preset-sw', 'capture-sw');
+    _pCopy('preset-bypass-sw', 'bypass-sw');
+    _pCopy('preset-dropdowns', 'capture-dropdowns');
     document.getElementById('preset-scroll').checked = document.getElementById('auto-scroll').checked;
     document.getElementById('preset-screenshots').checked = document.getElementById('capture-screenshots').checked;
     const csVal = document.getElementById('capture-speed').value || 1;
     document.getElementById('preset-capture-speed').value = csVal;
     document.getElementById('preset-capture-speed-val').textContent = csVal;
+    const wcE = document.getElementById('preset-worker-count'); if (wcE) wcE.value = document.getElementById('worker-count')?.value || 0;
+    const pdE = document.getElementById('preset-polite-delay');
+    if (pdE) pdE.value = document.getElementById('polite-delay')?.value || '0';
     document.getElementById('preset-slow-motion').value = document.getElementById('slow-motion').value || 0;
     document.getElementById('preset-liveview').checked = document.getElementById('live-view').value === 'true';
     document.getElementById('preset-maxpages').value = document.getElementById('max-pages').value || 100;
@@ -366,11 +389,19 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
     captureAllRequests: document.getElementById('preset-all-requests').checked,
     captureImages,
     imageLimit: captureImages ? (parseInt(document.getElementById('preset-image-limit').value) || 0) : 0,
+    captureIframeAPIs: document.getElementById('preset-iframe-apis')?.checked || false,
+    captureSSE: document.getElementById('preset-sse')?.checked || false,
+    captureBeacons: document.getElementById('preset-beacons')?.checked || false,
+    captureBinaryResponses: document.getElementById('preset-binary')?.checked || false,
+    captureServiceWorkers: document.getElementById('preset-sw')?.checked || false,
+    bypassServiceWorkers: document.getElementById('preset-bypass-sw')?.checked || false,
+    captureDropdowns: document.getElementById('preset-dropdowns')?.checked || false,
     avoidTags: [...document.querySelectorAll('.preset-avoid-tag:checked')].map(el => el.value),
     autoScroll: document.getElementById('preset-scroll').checked,
     captureScreenshots: document.getElementById('preset-screenshots').checked,
     captureSpeed: parseInt(document.getElementById('preset-capture-speed').value, 10) || 1,
-    workerCount: parseInt(document.getElementById('worker-count')?.value, 10) || 0,
+    workerCount: parseInt(document.getElementById('preset-worker-count')?.value, 10) || 0,
+    politeDelay: parseInt(document.getElementById('preset-polite-delay')?.value, 10) || 0,
     slowMotion: parseInt(document.getElementById('preset-slow-motion').value, 10) || 0,
     fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
@@ -407,6 +438,12 @@ function showPresetConfirm(idx) {
       ${preset.fullCrawl ? '<span class="preset-badge">🌐 Full Crawl</span>' : `<span class="preset-badge">${preset.maxPages ? preset.maxPages + ' pages' : '∞ pages'}</span>`}
       ${preset.captureGraphQL ? '<span class="preset-badge">GraphQL</span>' : ''}
       ${preset.captureREST ? '<span class="preset-badge">REST</span>' : ''}
+      ${preset.captureSSE ? '<span class="preset-badge">SSE</span>' : ''}
+      ${preset.captureServiceWorkers ? '<span class="preset-badge">SW</span>' : ''}
+      ${preset.captureAllRequests ? '<span class="preset-badge">Full HAR</span>' : ''}
+      ${preset.captureImages ? '<span class="preset-badge">Images</span>' : ''}
+      ${preset.politeDelay ? `<span class="preset-badge">${preset.politeDelay}ms delay</span>` : ''}
+      ${preset.workerCount ? `<span class="preset-badge">${preset.workerCount} workers</span>` : `<span class="preset-badge">Speed ${preset.captureSpeed || 1}</span>`}
       ${preset.liveView !== false ? '<span class="preset-badge">Live View</span>' : '<span class="preset-badge">Headless</span>'}
     </div>
   `;
@@ -433,6 +470,15 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   document.getElementById('capture-images').checked = imgOn;
   document.getElementById('images-inline-wrap').style.display = imgOn ? 'inline' : 'none';
   document.getElementById('image-limit').value = preset.imageLimit || 0;
+  // New capture options (7)
+  const _setCb = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+  _setCb('capture-iframe-apis', preset.captureIframeAPIs);
+  _setCb('capture-sse', preset.captureSSE);
+  _setCb('capture-beacons', preset.captureBeacons);
+  _setCb('capture-binary', preset.captureBinaryResponses);
+  _setCb('capture-sw', preset.captureServiceWorkers);
+  _setCb('bypass-sw', preset.bypassServiceWorkers);
+  _setCb('capture-dropdowns', preset.captureDropdowns);
   // Avoid tags
   const avoidTags = preset.avoidTags || ['logout', 'cart'];
   document.querySelectorAll('.avoid-tag').forEach(cb => { cb.checked = avoidTags.includes(cb.value); });
@@ -447,6 +493,9 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   document.getElementById('capture-speed-badge').textContent = presetWc
     ? `${presetWc} workers (custom)`
     : (_captureSpeedLabels[presetCsVal] || `${presetCsVal}`);
+  // Polite delay
+  const pdEl = document.getElementById('polite-delay');
+  if (pdEl) pdEl.value = String(preset.politeDelay || 0);
   document.getElementById('slow-motion').value = preset.slowMotion || 0;
   // Full crawl + max pages
   const fc = !!preset.fullCrawl;
@@ -3711,6 +3760,7 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
   const maxPages = parseInt(document.getElementById('batch-max-pages')?.value, 10)  || 10;
   const workers  = parseInt(document.getElementById('batch-workers')?.value, 10)    || 2;
   const politeDelay = parseInt(document.getElementById('batch-polite-delay')?.value, 10) || 0;
+  const captureSpeed = parseInt(document.getElementById('batch-capture-speed')?.value, 10) || 1;
   const batchFullCrawl = document.getElementById('batch-full-crawl')?.checked ?? false;
 
   const captureGraphQL    = document.getElementById('batch-graphql')?.checked    ?? true;
@@ -3745,11 +3795,14 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
     if (statusEl) statusEl.textContent = 'scraping…';
     try {
       const res = await fetch('/api/scrape', { method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ url, scrapeDepth: depth, maxPages, workers, politeDelay, fullCrawl: batchFullCrawl, captureGraphQL, captureREST, captureAssets, captureImages, autoScroll, captureScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
+        body: JSON.stringify({ url, scrapeDepth: depth, maxPages, workerCount: workers, politeDelay, fullCrawl: batchFullCrawl, captureSpeed, captureGraphQL, captureREST, captureAssets, captureImages, autoScroll, captureScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      batchResults.push({ url, data, ok: true });
-      if (statusEl) { statusEl.textContent = `done (${data.pages?.length || 0} pages)`; statusEl.style.color = 'var(--success)'; }
+      batchResults.push({ url, sessionId: data.sessionId, ok: true });
+      if (statusEl) {
+        const shortId = data.sessionId ? data.sessionId.substring(0, 8) : '—';
+        statusEl.innerHTML = `<span style="color:var(--success)">&#10003; started</span> <span style="font-size:0.75rem;color:var(--text3)" title="${escapeHTML(data.sessionId || '')}">${shortId}…</span>`;
+      }
     } catch (err) {
       batchResults.push({ url, error: err.message, ok: false });
       if (statusEl) { statusEl.textContent = 'error'; statusEl.style.color = 'var(--danger)'; }
@@ -3765,7 +3818,7 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
         <div class="batch-result-item" style="padding:10px 0;border-bottom:1px solid var(--border)">
           <strong>${escapeHTML(r.url)}</strong>
           ${r.ok
-            ? `<span style="color:var(--success);margin-left:10px">${(r.data.pages?.length || 0)} pages</span>`
+            ? `<span style="color:var(--success);margin-left:10px">&#10003; started</span><span style="font-size:0.78rem;color:var(--text3);margin-left:8px">session: ${escapeHTML(r.sessionId || '—')}</span>`
             : `<span style="color:var(--danger);margin-left:10px">${escapeHTML(r.error)}</span>`}
         </div>`).join('');
     }
@@ -4007,9 +4060,11 @@ document.getElementById('btn-create-schedule')?.addEventListener('click', async 
     bypassServiceWorkers:   document.getElementById('sched-bypass-sw')?.checked  ?? false,
     captureDropdowns:       document.getElementById('sched-dropdowns')?.checked  ?? false,
   };
+  const schedPoliteDelay = parseInt(document.getElementById('sched-polite-delay')?.value, 10) || 0;
+  const schedCaptureSpeed = parseInt(document.getElementById('sched-capture-speed')?.value, 10) || 1;
   try {
     const res = await fetch('/api/schedules', { method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, scrapeDepth: schedDepth, fullCrawl: schedFullCrawl, maxPages: parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100, ...schedCapture } }) });
+      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, scrapeDepth: schedDepth, fullCrawl: schedFullCrawl, maxPages: parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100, politeDelay: schedPoliteDelay, captureSpeed: schedCaptureSpeed, ...schedCapture } }) });
     if (!res.ok) throw new Error(await res.text());
     showToast('Schedule created');
     loadSchedules();
@@ -4033,6 +4088,14 @@ document.getElementById('btn-cron-help')?.addEventListener('click', () => {
 document.getElementById('btn-cron-help-close')?.addEventListener('click', () => {
   const card = document.getElementById('cron-help-card');
   if (card) card.style.display = 'none';
+});
+document.getElementById('sched-capture-speed')?.addEventListener('input', function () {
+  const el = document.getElementById('sched-capture-speed-val');
+  if (el) el.textContent = this.value;
+});
+document.getElementById('batch-capture-speed')?.addEventListener('input', function () {
+  const el = document.getElementById('batch-capture-speed-val');
+  if (el) el.textContent = this.value;
 });
 
 // ---- CSV export utility ----
