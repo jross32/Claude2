@@ -163,7 +163,7 @@
               <span style="font-size:0.75rem;color:var(--text3)">(overrides slider, max 100)</span>
             </div>
             <div class="capture-speed-row" style="margin-top:6px;align-items:center;gap:8px">
-              <span class="capture-speed-label" style="font-size:0.78rem;color:var(--text3)">Politeness delay</span>
+              <span class="capture-speed-label" style="font-size:0.78rem;color:var(--text3)">Polite Delay (ms)</span>
               <select id="polite-delay" style="padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:0.82rem" title="Wait between page requests to avoid overloading the server">
                 <option value="0">None</option>
                 <option value="500">500ms</option>
@@ -864,8 +864,8 @@
                 <input type="number" id="batch-depth" value="1" min="1" max="5" />
               </div>
               <div class="field">
-                <label for="batch-max-pages">Max Pages / URL</label>
-                <input type="number" id="batch-max-pages" value="10" min="1" max="500" />
+                <label for="batch-max-pages">Max Pages / URL <span class="hint">(0 = unlimited)</span></label>
+                <input type="number" id="batch-max-pages" value="10" min="0" max="500" />
               </div>
               <div class="field">
                 <label for="batch-workers">Workers</label>

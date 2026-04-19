@@ -187,6 +187,10 @@ function renderPresets() {
   // Remove existing preset cards (not the empty msg)
   container.querySelectorAll('.preset-item').forEach(el => el.remove());
   list.forEach((preset, idx) => {
+    const clickSteps = Array.isArray(preset.clickSequence) ? preset.clickSequence.length : 0;
+    const speedBadge = preset.workerCount
+      ? `${preset.workerCount} workers`
+      : `Speed ${preset.captureSpeed || 1}`;
     const card = document.createElement('div');
     card.className = 'preset-item';
     card.dataset.idx = idx;
@@ -202,6 +206,9 @@ function renderPresets() {
         <div class="preset-item-badges">
           ${preset.limitDepth ? `<span class="preset-badge">Depth ${preset.scrapeDepth}</span>` : '<span class="preset-badge">Depth ∞</span>'}
           ${preset.fullCrawl ? '<span class="preset-badge">🌐 Full Crawl</span>' : `<span class="preset-badge">${preset.maxPages ? preset.maxPages + ' pages' : '∞ pages'}</span>`}
+          <span class="preset-badge">${speedBadge}</span>
+          ${preset.politeDelay ? `<span class="preset-badge">${preset.politeDelay}ms delay</span>` : ''}
+          ${clickSteps ? `<span class="preset-badge">${clickSteps} clicks</span>` : ''}
           ${preset.liveView !== false ? '<span class="preset-badge">Live</span>' : ''}
         </div>
       </div>
@@ -377,6 +384,11 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
   const limitDepth = document.getElementById('preset-limitdepth').checked;
   const fullCrawl  = document.getElementById('preset-fullcrawl').checked;
   const captureImages = document.getElementById('preset-images').checked;
+  const editIdxRaw = document.getElementById('btn-preset-save').dataset.editIdx;
+  const existingPreset = editIdxRaw !== undefined ? getPresets()[parseInt(editIdxRaw, 10)] : null;
+  const currentClickSequence = window._getClickSequence?.() || [];
+  const preservedClickSequence = Array.isArray(existingPreset?.clickSequence) ? existingPreset.clickSequence : [];
+  const clickSequence = currentClickSequence.length ? currentClickSequence : preservedClickSequence;
   const preset = {
     name, url,
     iconUrl: iconUrl || '',
@@ -406,10 +418,10 @@ document.getElementById('btn-preset-save').addEventListener('click', () => {
     fullCrawl,
     liveView: document.getElementById('preset-liveview').checked,
     maxPages: fullCrawl ? 0 : (parseInt(document.getElementById('preset-maxpages').value) || 100),
+    clickSequence,
   };
   const list = getPresets();
-  const editIdx = document.getElementById('btn-preset-save').dataset.editIdx;
-  if (editIdx !== undefined) list[parseInt(editIdx)] = preset;
+  if (editIdxRaw !== undefined) list[parseInt(editIdxRaw, 10)] = preset;
   else list.push(preset);
   savePresets(list);
   renderPresets();
@@ -443,6 +455,7 @@ function showPresetConfirm(idx) {
       ${preset.captureAllRequests ? '<span class="preset-badge">Full HAR</span>' : ''}
       ${preset.captureImages ? '<span class="preset-badge">Images</span>' : ''}
       ${preset.politeDelay ? `<span class="preset-badge">${preset.politeDelay}ms delay</span>` : ''}
+      ${Array.isArray(preset.clickSequence) && preset.clickSequence.length ? `<span class="preset-badge">${preset.clickSequence.length} clicks</span>` : ''}
       ${preset.workerCount ? `<span class="preset-badge">${preset.workerCount} workers</span>` : `<span class="preset-badge">Speed ${preset.captureSpeed || 1}</span>`}
       ${preset.liveView !== false ? '<span class="preset-badge">Live View</span>' : '<span class="preset-badge">Headless</span>'}
     </div>
@@ -507,6 +520,7 @@ document.getElementById('btn-confirm-run').addEventListener('click', async () =>
   document.getElementById('limit-depth').checked = ld;
   document.getElementById('depth-inline-wrap').style.display = ld ? 'inline' : 'none';
   document.getElementById('scrape-depth').value = preset.scrapeDepth || 3;
+  if (window._setClickSequence) window._setClickSequence(preset.clickSequence || []);
   // Set live view toggle
   const liveOn = preset.liveView !== false;
   document.getElementById('live-view').value = String(liveOn);
@@ -3762,6 +3776,7 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
   const politeDelay = parseInt(document.getElementById('batch-polite-delay')?.value, 10) || 0;
   const captureSpeed = parseInt(document.getElementById('batch-capture-speed')?.value, 10) || 1;
   const batchFullCrawl = document.getElementById('batch-full-crawl')?.checked ?? false;
+  const batchMaxPages = batchFullCrawl ? 0 : maxPages;
 
   const captureGraphQL    = document.getElementById('batch-graphql')?.checked    ?? true;
   const captureREST       = document.getElementById('batch-rest')?.checked       ?? true;
@@ -3795,7 +3810,7 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
     if (statusEl) statusEl.textContent = 'scraping…';
     try {
       const res = await fetch('/api/scrape', { method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ url, scrapeDepth: depth, maxPages, workerCount: workers, politeDelay, fullCrawl: batchFullCrawl, captureSpeed, captureGraphQL, captureREST, captureAssets, captureImages, autoScroll, captureScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
+        body: JSON.stringify({ url, scrapeDepth: depth, maxPages: batchMaxPages, workerCount: workers, politeDelay, fullCrawl: batchFullCrawl, captureSpeed, captureGraphQL, captureREST, captureAssets, captureImages, autoScroll, captureScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       batchResults.push({ url, sessionId: data.sessionId, ok: true });
@@ -4022,7 +4037,7 @@ async function loadSchedules() {
         <div class="schedule-card-info">
           <div class="schedule-card-url">${escapeHTML(s.scrapeOptions?.startUrl || s.scrapeOptions?.url || '')}</div>
           <span class="schedule-card-cron">${escapeHTML(s.cronExpr)}</span>
-          <div class="schedule-card-meta">Next: ${s.nextRun ? new Date(s.nextRun).toLocaleString() : 'N/A'}</div>
+          <div class="schedule-card-meta">Next: ${s.nextRunAt ? new Date(s.nextRunAt).toLocaleString() : 'N/A'}</div>
         </div>
         <button class="btn-xs btn-danger sched-del" data-id="${escapeAttr(s.id)}">Delete</button>
       </div>`).join('');
@@ -4062,9 +4077,11 @@ document.getElementById('btn-create-schedule')?.addEventListener('click', async 
   };
   const schedPoliteDelay = parseInt(document.getElementById('sched-polite-delay')?.value, 10) || 0;
   const schedCaptureSpeed = parseInt(document.getElementById('sched-capture-speed')?.value, 10) || 1;
+  const schedMaxPagesInput = parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100;
+  const schedMaxPages = schedFullCrawl ? 0 : schedMaxPagesInput;
   try {
     const res = await fetch('/api/schedules', { method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, scrapeDepth: schedDepth, fullCrawl: schedFullCrawl, maxPages: parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100, politeDelay: schedPoliteDelay, captureSpeed: schedCaptureSpeed, ...schedCapture } }) });
+      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, scrapeDepth: schedDepth, fullCrawl: schedFullCrawl, maxPages: schedMaxPages, politeDelay: schedPoliteDelay, captureSpeed: schedCaptureSpeed, ...schedCapture } }) });
     if (!res.ok) throw new Error(await res.text());
     showToast('Schedule created');
     loadSchedules();
@@ -4097,6 +4114,31 @@ document.getElementById('batch-capture-speed')?.addEventListener('input', functi
   const el = document.getElementById('batch-capture-speed-val');
   if (el) el.textContent = this.value;
 });
+
+function _setUnlimitedMaxPages(toggleId, inputId, defaultValue) {
+  const toggle = document.getElementById(toggleId);
+  const input = document.getElementById(inputId);
+  if (!toggle || !input) return;
+
+  const apply = () => {
+    if (toggle.checked) {
+      if (!input.dataset.prevValue) input.dataset.prevValue = input.value || String(defaultValue);
+      input.disabled = true;
+      input.value = '';
+      input.placeholder = 'Unlimited';
+    } else {
+      input.disabled = false;
+      input.placeholder = '';
+      input.value = input.dataset.prevValue || String(defaultValue);
+    }
+  };
+
+  toggle.addEventListener('change', apply);
+  apply();
+}
+
+_setUnlimitedMaxPages('batch-full-crawl', 'batch-max-pages', 10);
+_setUnlimitedMaxPages('sched-full-crawl', 'sched-max-pages', 100);
 
 // ---- CSV export utility ----
 function downloadCSV(rows, headers, filename) {

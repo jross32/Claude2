@@ -1349,7 +1349,7 @@ body.sidebar-open .sidebar-overlay { display: block; }
 .preset-item-info { display: flex; flex-direction: column; min-width: 0; }
 .preset-item-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preset-item-url  { font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.preset-item-badges { display: flex; gap: 4px; flex-shrink: 0; margin-left: 10px; }
+.preset-item-badges { display: flex; gap: 4px; flex-shrink: 0; margin-left: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .preset-badge { background: var(--bg4); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; font-size: 10px; color: var(--text2); white-space: nowrap; }
 .preset-item-actions { display: flex; gap: 6px; margin-left: 10px; flex-shrink: 0; }
 .btn-sm { padding: 5px 12px; font-size: 13px; }
@@ -1420,6 +1420,38 @@ body.sidebar-open .sidebar-overlay { display: block; }
 .preset-confirm-name { font-size: 16px; font-weight: 700; color: var(--text); }
 .preset-confirm-url  { font-size: 12px; color: var(--text3); margin-top: 2px; }
 .preset-confirm-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+
+/* Preset modal polish */
+#preset-modal .modal-body {
+  gap: 10px;
+}
+
+#preset-modal .field {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+#preset-modal .field > label {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+#preset-modal .field input[type="text"],
+#preset-modal .field input[type="number"],
+#preset-modal .field select,
+#preset-modal .field input[type="range"] {
+  margin-top: 6px;
+}
+
+#preset-modal .field .checkboxes {
+  margin-top: 8px;
+}
+
+#preset-modal .field .checkboxes .checkbox-label {
+  align-items: flex-start;
+}
 
 /* Capture Modes modal */
 .capture-modes-modal { max-width: 720px; }
