@@ -202,6 +202,8 @@ let activeRunId = null;
 const _runDataCache = new Map(); // cache full run data keyed by run id
 let _comparePickA = null; // first run selected for quick compare from Runs panel
 let _allSchedulesCache = [];
+let _allAssetsCache = [];
+let _currentApiPayload = null;
 
 // ---- Auth toggle ----
 // Auth section is shown automatically when a login form is detected — no manual toggle
@@ -2428,6 +2430,19 @@ function renderResults(data) {
   const detailPanel = document.getElementById('card-detail-panel');
   const detailTitle = document.getElementById('card-detail-title');
   const detailBody = document.getElementById('card-detail-body');
+  const filterRow = document.getElementById('card-detail-filter-row');
+  const searchInput = document.getElementById('card-detail-search');
+  const clearBtn = document.getElementById('card-detail-clear');
+  const matchCount = document.getElementById('card-detail-match-count');
+
+  const updateDetailFilterMetrics = () => {
+    if (!detailBody || !matchCount) return;
+    const rows = [...detailBody.querySelectorAll('.cd-row')];
+    if (!rows.length) { matchCount.textContent = '0 / 0'; return; }
+    const visible = rows.filter((row) => row.style.display !== 'none').length;
+    matchCount.textContent = `${visible} / ${rows.length}`;
+  };
+
   document.getElementById('card-detail-close').onclick = () => {
     detailPanel.style.display = 'none';
     activeCardKey = null;
@@ -2454,8 +2469,6 @@ function renderResults(data) {
         detailTitle.textContent = c.label;
         detailBody.innerHTML = buildCardDetail(c.key, window._scraperResult);
         // Show search filter for filterable card types
-        const filterRow = document.getElementById('card-detail-filter-row');
-        const searchInput = document.getElementById('card-detail-search');
         const filterableTypes = ['pages', 'graphql', 'rest', 'all', 'links', 'assets', 'scripts', 'errors'];
         if (filterRow) {
           filterRow.style.display = filterableTypes.includes(c.key) ? 'block' : 'none';
@@ -2466,9 +2479,19 @@ function renderResults(data) {
               detailBody.querySelectorAll('.cd-row').forEach(row => {
                 row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
               });
+              updateDetailFilterMetrics();
+            };
+          }
+          if (clearBtn) {
+            clearBtn.onclick = () => {
+              if (searchInput) {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input'));
+              }
             };
           }
         }
+        updateDetailFilterMetrics();
         detailPanel.style.display = 'block';
         detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
@@ -2675,6 +2698,45 @@ function renderResults(data) {
   const viewer = document.getElementById('json-viewer');
   viewer.innerHTML = '';
   viewer.appendChild(renderJSONNode(displayData));
+
+  updateResultsJumpbar();
+}
+
+function updateResultsJumpbar() {
+  const bar = document.getElementById('results-jumpbar');
+  if (!bar) return;
+  const targets = [
+    { id: 'summary-grid', label: 'Summary' },
+    { id: 'visited-urls-section', label: 'Visited URLs' },
+    { id: 'auth-redirects-section', label: 'Auth Redirects' },
+    { id: 'failed-pages-section', label: 'Failed Pages' },
+    { id: 'tech-section', label: 'Tech' },
+    { id: 'security-section', label: 'Security' },
+    { id: 'cookies-section', label: 'Cookies' },
+    { id: 'perf-section', label: 'Performance' },
+    { id: 'console-section', label: 'Console' },
+    { id: 'dl-images-section', label: 'Images' },
+    { id: 'results-layout', label: 'JSON' },
+  ];
+  const visible = targets.filter((target) => {
+    const el = document.getElementById(target.id);
+    return el && el.style.display !== 'none';
+  });
+  if (!visible.length) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+  bar.style.display = 'flex';
+  bar.innerHTML = visible.map((target) =>
+    `<button class="results-jumpbtn" data-target="${escapeAttr(target.id)}">${escapeHTML(target.label)}</button>`
+  ).join('');
+  bar.querySelectorAll('.results-jumpbtn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const el = document.getElementById(btn.dataset.target);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 }
 
 function formatBytes(bytes) {
@@ -2868,13 +2930,51 @@ function renderEndpointBanner(bannerId, urls) {
     urls.map(u => `<span class="endpoint-banner-url">${escapeHTML(u)}</span>`).join('');
 }
 
+function _getApiSearchQuery() {
+  return (document.getElementById('api-search')?.value || '').toLowerCase().trim();
+}
+
+function _apiCallMatchesQuery(call, query) {
+  if (!query) return true;
+  const status = String(call?.response?.status || call?.status || call?.statusCode || '');
+  const method = String(call?.method || 'GET');
+  const name = extractGQLName(call);
+  const haystack = [
+    call?.url,
+    method,
+    status,
+    name,
+    call?.contentType,
+    call?.note,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(query);
+}
+
+function _filterApiCollection(list, query) {
+  return (list || []).filter((item) => {
+    if (!query) return true;
+    return _apiCallMatchesQuery(item, query);
+  });
+}
+
+function _renderApiFromCache() {
+  if (!_currentApiPayload) return;
+  renderAPICalls(
+    _currentApiPayload.apiCalls,
+    _currentApiPayload.websockets,
+    _currentApiPayload.serviceWorkers
+  );
+}
+
 function renderAPICalls(apiCalls, websockets, serviceWorkers) {
+  _currentApiPayload = { apiCalls, websockets, serviceWorkers };
   if (!apiCalls) return;
   const ws = websockets || [];
   const sw = serviceWorkers || [];
   const sseList = apiCalls.sse || [];
   const beaconList = apiCalls.beacons || [];
   const binaryList = apiCalls.binary || [];
+  const query = _getApiSearchQuery();
 
   const hasData = (apiCalls.graphql?.length || 0) + (apiCalls.rest?.length || 0)
     + ws.length + sseList.length + beaconList.length + binaryList.length + sw.length > 0;
@@ -2895,13 +2995,13 @@ function renderAPICalls(apiCalls, websockets, serviceWorkers) {
   renderEndpointBanner('gql-endpoint-banner', gqlEndpoints);
   renderEndpointBanner('rest-endpoint-banner', restOrigins);
 
-  renderCallList(document.getElementById('graphql-list'), apiCalls.graphql || [], true);
-  renderCallList(document.getElementById('rest-list'), apiCalls.rest || [], false);
-  renderWebSocketList(document.getElementById('websocket-list'), ws);
-  renderSSEList(document.getElementById('sse-list'), sseList);
-  renderSimpleCallList(document.getElementById('beacons-list'), beaconList, 'Beacon');
-  renderSimpleCallList(document.getElementById('binary-list'), binaryList, 'Binary');
-  renderSWList(document.getElementById('sw-list'), sw);
+  renderCallList(document.getElementById('graphql-list'), _filterApiCollection(apiCalls.graphql, query), true);
+  renderCallList(document.getElementById('rest-list'), _filterApiCollection(apiCalls.rest, query), false);
+  renderWebSocketList(document.getElementById('websocket-list'), _filterApiCollection(ws, query));
+  renderSSEList(document.getElementById('sse-list'), _filterApiCollection(sseList, query));
+  renderSimpleCallList(document.getElementById('beacons-list'), _filterApiCollection(beaconList, query), 'Beacon');
+  renderSimpleCallList(document.getElementById('binary-list'), _filterApiCollection(binaryList, query), 'Binary');
+  renderSWList(document.getElementById('sw-list'), _filterApiCollection(sw, query));
 }
 
 function renderSSEList(container, list) {
@@ -3047,6 +3147,18 @@ document.querySelectorAll('.api-tab').forEach((tab) => {
   });
 });
 
+document.getElementById('api-search')?.addEventListener('input', _renderApiFromCache);
+document.getElementById('btn-api-expand-all')?.addEventListener('click', () => {
+  const panel = document.querySelector('.api-tab-panel.active');
+  if (!panel) return;
+  panel.querySelectorAll('.call-body, .api-ws-body').forEach((node) => { node.style.display = 'block'; });
+});
+document.getElementById('btn-api-collapse-all')?.addEventListener('click', () => {
+  const panel = document.querySelector('.api-tab-panel.active');
+  if (!panel) return;
+  panel.querySelectorAll('.call-body, .api-ws-body').forEach((node) => { node.style.display = 'none'; });
+});
+
 document.getElementById('btn-copy-api').addEventListener('click', () => {
   if (!scrapedData?.apiCalls) return;
   navigator.clipboard.writeText(JSON.stringify(scrapedData.apiCalls, null, 2));
@@ -3062,10 +3174,12 @@ document.getElementById('btn-download-api').addEventListener('click', () => {
 function renderAssets(assets) {
   if (!assets || assets.length === 0) return;
 
+  _allAssetsCache = assets;
+
   document.getElementById('assets-empty').style.display = 'none';
   document.getElementById('assets-content').style.display = 'block';
 
-  renderAssetGrid(assets);
+  renderAssetGrid(assets, assets.length);
 
   document.getElementById('asset-type-filter').addEventListener('change', () => filterAssets(assets));
   document.getElementById('asset-search').addEventListener('input', () => filterAssets(assets));
@@ -3078,12 +3192,17 @@ function filterAssets(assets) {
     (type === 'all' || a.type === type) &&
     (!search || a.url.toLowerCase().includes(search))
   );
-  renderAssetGrid(filtered);
+  renderAssetGrid(filtered, assets.length);
 }
 
-function renderAssetGrid(assets) {
+function renderAssetGrid(assets, totalCount = null) {
   const grid = document.getElementById('asset-grid');
+  const countLabel = document.getElementById('assets-count-label');
   grid.innerHTML = '';
+  if (countLabel) {
+    const total = totalCount == null ? assets.length : totalCount;
+    countLabel.textContent = `Showing ${assets.length} of ${total}`;
+  }
   assets.slice(0, 200).forEach((asset) => {
     const card = document.createElement('div');
     card.className = 'asset-card';
@@ -3902,11 +4021,23 @@ function _filterRuns() {
   const q      = (document.getElementById('runs-search')?.value || '').toLowerCase().trim();
   const status = document.getElementById('runs-filter-status')?.value || '';
   const source = document.getElementById('runs-filter-source')?.value || '';
+  const sort   = document.getElementById('runs-sort')?.value || 'newest';
   const filtered = _allRunsCache.filter(r => {
     const matchQ      = !q || (r.url || '').toLowerCase().includes(q) || (r.id || '').toLowerCase().includes(q);
     const matchStatus = !status || r.status === status;
     const matchSource = !source || r.source === source;
     return matchQ && matchStatus && matchSource;
+  });
+  filtered.sort((a, b) => {
+    if (sort === 'oldest') return new Date(a.ts) - new Date(b.ts);
+    if (sort === 'pages') return (b.pageCount || 0) - (a.pageCount || 0) || (new Date(b.ts) - new Date(a.ts));
+    if (sort === 'api') return (b.apiCount || 0) - (a.apiCount || 0) || (new Date(b.ts) - new Date(a.ts));
+    if (sort === 'domain') {
+      const aHost = (() => { try { return new URL(a.url).hostname; } catch { return a.url || ''; } })().toLowerCase();
+      const bHost = (() => { try { return new URL(b.url).hostname; } catch { return b.url || ''; } })().toLowerCase();
+      return aHost.localeCompare(bHost);
+    }
+    return new Date(b.ts) - new Date(a.ts);
   });
   renderRunCards(filtered);
   _updateRunsStats(filtered);
@@ -3915,6 +4046,7 @@ function _filterRuns() {
 document.getElementById('runs-search')?.addEventListener('input', _filterRuns);
 document.getElementById('runs-filter-status')?.addEventListener('change', _filterRuns);
 document.getElementById('runs-filter-source')?.addEventListener('change', _filterRuns);
+document.getElementById('runs-sort')?.addEventListener('change', _filterRuns);
 
 // Also show/hide the Clear All button (only when runs exist)
 document.getElementById('btn-runs-clear-all')?.addEventListener('click', async () => {
@@ -4218,15 +4350,20 @@ function renderScheduleCards(schedules) {
 function filterSchedules() {
   const q = (document.getElementById('schedule-search')?.value || '').toLowerCase().trim();
   const crawl = document.getElementById('schedule-filter-crawl')?.value || '';
+  const status = document.getElementById('schedule-filter-status')?.value || '';
   const sortMode = document.getElementById('schedule-sort')?.value || 'next';
   const filtered = _allSchedulesCache.filter((s) => {
     const url = (s.scrapeOptions?.startUrl || s.scrapeOptions?.url || '').toLowerCase();
     const cron = String(s.cronExpr || '').toLowerCase();
     const full = !!s.scrapeOptions?.fullCrawl;
+    const schedStatus = String(s.status || 'idle').toLowerCase();
     const qOk = !q || url.includes(q) || cron.includes(q);
     const crawlOk = !crawl || (crawl === 'full' ? full : !full);
-    return qOk && crawlOk;
+    const statusOk = !status || status === schedStatus;
+    return qOk && crawlOk && statusOk;
   });
+  const count = document.getElementById('schedule-filter-count');
+  if (count) count.textContent = `${filtered.length} / ${_allSchedulesCache.length}`;
   renderScheduleCards(_sortSchedules(filtered, sortMode));
 }
 
@@ -4293,7 +4430,19 @@ document.getElementById('btn-refresh-schedules')?.addEventListener('click', load
 document.querySelector('[data-panel="schedule"]')?.addEventListener('click', loadSchedules);
 document.getElementById('schedule-search')?.addEventListener('input', filterSchedules);
 document.getElementById('schedule-filter-crawl')?.addEventListener('change', filterSchedules);
+document.getElementById('schedule-filter-status')?.addEventListener('change', filterSchedules);
 document.getElementById('schedule-sort')?.addEventListener('change', filterSchedules);
+document.getElementById('btn-schedule-clear-filters')?.addEventListener('click', () => {
+  const search = document.getElementById('schedule-search');
+  const crawl = document.getElementById('schedule-filter-crawl');
+  const status = document.getElementById('schedule-filter-status');
+  const sort = document.getElementById('schedule-sort');
+  if (search) search.value = '';
+  if (crawl) crawl.value = '';
+  if (status) status.value = '';
+  if (sort) sort.value = 'next';
+  filterSchedules();
+});
 
 // ---- Cron presets & help card ----
 document.querySelectorAll('.cron-preset').forEach(btn => {

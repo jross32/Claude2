@@ -7,3 +7,10 @@ node_modules/
 scrape-saves/
 
 references/
+
+# Runtime/generated artifacts
+.playwright-mcp/
+logs/requests/
+logs/tool-usage.json
+logs/tool-usage.txt
+artifacts/

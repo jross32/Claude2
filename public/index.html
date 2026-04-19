@@ -593,6 +593,7 @@
         <div class="results-content" id="results-content" style="display:none">
           <!-- Summary cards -->
           <div class="summary-grid" id="summary-grid"></div>
+          <div class="results-jumpbar" id="results-jumpbar" style="display:none"></div>
           <!-- Expandable card detail panel -->
           <div class="card-detail-panel" id="card-detail-panel" style="display:none">
             <div class="card-detail-header">
@@ -601,6 +602,8 @@
             </div>
             <div class="cd-filter-row" id="card-detail-filter-row" style="display:none">
               <input type="text" id="card-detail-search" placeholder="Filter..." autocomplete="off" />
+              <span class="cd-filter-count" id="card-detail-match-count">0 / 0</span>
+              <button class="btn-xs" id="card-detail-clear" type="button">Clear</button>
             </div>
             <div class="card-detail-body" id="card-detail-body"></div>
           </div>
@@ -719,6 +722,11 @@
           <p>No API calls captured yet.</p>
         </div>
         <div class="api-content" id="api-content" style="display:none">
+          <div class="api-tools-row" id="api-tools-row">
+            <input type="text" id="api-search" class="api-search" placeholder="Filter API calls by URL, name, method, status..." autocomplete="off" />
+            <button class="btn-xs" id="btn-api-expand-all" type="button">Expand All</button>
+            <button class="btn-xs" id="btn-api-collapse-all" type="button">Collapse All</button>
+          </div>
           <div class="api-tabs">
             <button class="api-tab active" data-tab="graphql">GraphQL <span class="badge" id="gql-count">0</span></button>
             <button class="api-tab" data-tab="rest">REST <span class="badge" id="rest-count">0</span></button>
@@ -776,7 +784,10 @@
       <section class="panel" id="panel-assets">
         <div class="panel-header">
           <h1>Assets</h1>
-          <button class="btn-secondary" id="btn-download-assets">&#8659; Download List</button>
+          <div class="panel-actions">
+            <span class="assets-count-label" id="assets-count-label">Showing 0</span>
+            <button class="btn-secondary" id="btn-download-assets">&#8659; Download List</button>
+          </div>
         </div>
         <div class="assets-empty" id="assets-empty">
           <div class="empty-icon">&#128444;</div>
@@ -1180,11 +1191,19 @@
             <option value="full">Full crawl</option>
             <option value="limited">Limited pages</option>
           </select>
+          <select id="schedule-filter-status" class="schedule-filter-select">
+            <option value="">All statuses</option>
+            <option value="running">Running</option>
+            <option value="idle">Idle</option>
+            <option value="error">Error</option>
+          </select>
           <select id="schedule-sort" class="schedule-filter-select">
             <option value="next">Sort: Next run</option>
             <option value="newest">Sort: Newest</option>
             <option value="url">Sort: URL</option>
           </select>
+          <button class="btn-xs" id="btn-schedule-clear-filters" type="button">Reset</button>
+          <span class="schedule-filter-count" id="schedule-filter-count">0 / 0</span>
         </div>
         <div class="schedule-list" id="schedule-list">
           <p class="empty-hint">No schedules yet.</p>
@@ -1214,6 +1233,13 @@
             <option value="">All sources</option>
             <option value="server">Saved on server</option>
             <option value="local">Local only</option>
+          </select>
+          <select id="runs-sort" class="runs-status-filter">
+            <option value="newest">Sort: Newest</option>
+            <option value="oldest">Sort: Oldest</option>
+            <option value="pages">Sort: Pages</option>
+            <option value="api">Sort: API calls</option>
+            <option value="domain">Sort: Domain</option>
           </select>
         </div>
         <div class="runs-stats-bar" id="runs-stats-bar">
