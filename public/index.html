@@ -1166,6 +1166,19 @@
             </div>
           </div>
         </div>
+        <div class="schedule-filter-bar" id="schedule-filter-bar">
+          <input type="text" id="schedule-search" class="schedule-search" placeholder="&#128269; Filter schedules by URL or cron..." autocomplete="off" />
+          <select id="schedule-filter-crawl" class="schedule-filter-select">
+            <option value="">All crawl modes</option>
+            <option value="full">Full crawl</option>
+            <option value="limited">Limited pages</option>
+          </select>
+          <select id="schedule-sort" class="schedule-filter-select">
+            <option value="next">Sort: Next run</option>
+            <option value="newest">Sort: Newest</option>
+            <option value="url">Sort: URL</option>
+          </select>
+        </div>
         <div class="schedule-list" id="schedule-list">
           <p class="empty-hint">No schedules yet.</p>
         </div>
@@ -1189,6 +1202,17 @@
             <option value="running">Running</option>
             <option value="stopped">Stopped</option>
           </select>
+          <select id="runs-filter-source" class="runs-status-filter">
+            <option value="">All sources</option>
+            <option value="server">Saved on server</option>
+            <option value="local">Local only</option>
+          </select>
+        </div>
+        <div class="runs-stats-bar" id="runs-stats-bar">
+          <div class="runs-stat-chip"><span id="runs-stat-total">0</span> total</div>
+          <div class="runs-stat-chip"><span id="runs-stat-server">0</span> server</div>
+          <div class="runs-stat-chip"><span id="runs-stat-local">0</span> local</div>
+          <div class="runs-stat-chip"><span id="runs-stat-active">0</span> active</div>
         </div>
         <div id="runs-active-banner" class="runs-active-banner" style="display:none">
           <span id="runs-active-label"></span>
