@@ -689,6 +689,10 @@
             <button class="api-tab active" data-tab="graphql">GraphQL <span class="badge" id="gql-count">0</span></button>
             <button class="api-tab" data-tab="rest">REST <span class="badge" id="rest-count">0</span></button>
             <button class="api-tab" data-tab="websocket">WebSocket <span class="badge" id="ws-count">0</span></button>
+            <button class="api-tab" data-tab="sse">SSE <span class="badge" id="sse-count">0</span></button>
+            <button class="api-tab" data-tab="beacons">Beacons <span class="badge" id="beacons-count">0</span></button>
+            <button class="api-tab" data-tab="binary">Binary <span class="badge" id="binary-count">0</span></button>
+            <button class="api-tab" data-tab="service-workers">SW <span class="badge" id="sw-count">0</span></button>
             <button class="api-tab" data-tab="schema">Schema</button>
           </div>
           <div class="api-tab-panel active" id="tab-graphql">
@@ -701,6 +705,18 @@
           </div>
           <div class="api-tab-panel" id="tab-websocket">
             <div class="call-list" id="websocket-list"></div>
+          </div>
+          <div class="api-tab-panel" id="tab-sse">
+            <div class="call-list" id="sse-list"></div>
+          </div>
+          <div class="api-tab-panel" id="tab-beacons">
+            <div class="call-list" id="beacons-list"></div>
+          </div>
+          <div class="api-tab-panel" id="tab-binary">
+            <div class="call-list" id="binary-list"></div>
+          </div>
+          <div class="api-tab-panel" id="tab-service-workers">
+            <div class="call-list" id="sw-list"></div>
           </div>
           <div class="api-tab-panel" id="tab-schema">
             <div class="schema-content" id="schema-content">
@@ -820,6 +836,10 @@
               <div class="field">
                 <label for="batch-workers">Workers</label>
                 <input type="number" id="batch-workers" value="2" min="1" max="10" title="Concurrent browser tabs per URL" />
+              </div>
+              <div class="field">
+                <label for="batch-polite-delay">Polite Delay (ms) <span class="hint">wait between pages</span></label>
+                <input type="number" id="batch-polite-delay" value="0" min="0" max="5000" step="100" style="width:120px" />
               </div>
             </div>
           </div>

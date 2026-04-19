@@ -842,6 +842,32 @@ const _CAPTURE_PRESETS = [
     lock: true,
   },
   {
+    id: 'sw-analyst',
+    name: 'SW Analyst',
+    short: 'Service worker & offline cache analysis.',
+    description: 'Focused on sites that use service workers for caching, offline functionality, or push notifications. Detects registered service workers, bypasses caches to see raw network traffic, and captures all API calls including SSE and beacons. Use this when you need to understand how a PWA or offline-capable site manages its resources.',
+    options: {
+      capturePageUrls: true,
+      captureGraphQL: true,
+      captureREST: true,
+      captureAssets: false,
+      captureAllRequests: true,
+      captureImages: false,
+      autoScroll: true,
+      captureScreenshots: false,
+      captureIframeAPIs: true,
+      captureSSE: true,
+      captureBeacons: true,
+      captureBinaryResponses: false,
+      captureServiceWorkers: true,
+      bypassServiceWorkers: true,
+      captureDropdowns: false,
+      imageLimit: 0,
+    },
+    icon: 'shield',
+    lock: true,
+  },
+  {
     id: 'custom',
     name: 'Custom',
     short: 'Pick exactly what to capture.',
@@ -1026,6 +1052,11 @@ function _iconSvg(kind) {
     case 'sliders':
       return `<svg class="cm-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M4 6h10"/><path d="M4 18h14"/><path d="M4 12h6"/><circle cx="16" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>
+      </svg>`;
+    case 'shield':
+      return `<svg class="cm-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L4 6v6c0 5.25 3.5 9.74 8 11 4.5-1.26 8-5.75 8-11V6l-8-4z"/>
+        <path d="M9 12l2 2 4-4"/>
       </svg>`;
     case 'spark':
     default:
@@ -1766,7 +1797,7 @@ function onSessionComplete(sessionId, data) {
   finalizeSession(sessionId, true);
 
   renderResults(data);
-  renderAPICalls(data.apiCalls);
+  renderAPICalls(data.apiCalls, data.websockets, data.serviceWorkers);
   renderAssets(data.assets);
   enableRefactor(data);
 
@@ -2666,15 +2697,26 @@ function renderEndpointBanner(bannerId, urls) {
     urls.map(u => `<span class="endpoint-banner-url">${escapeHTML(u)}</span>`).join('');
 }
 
-function renderAPICalls(apiCalls) {
+function renderAPICalls(apiCalls, websockets, serviceWorkers) {
   if (!apiCalls) return;
+  const ws = websockets || [];
+  const sw = serviceWorkers || [];
+  const sseList = apiCalls.sse || [];
+  const beaconList = apiCalls.beacons || [];
+  const binaryList = apiCalls.binary || [];
 
-  const hasData = (apiCalls.graphql?.length || 0) + (apiCalls.rest?.length || 0) > 0;
+  const hasData = (apiCalls.graphql?.length || 0) + (apiCalls.rest?.length || 0)
+    + ws.length + sseList.length + beaconList.length + binaryList.length + sw.length > 0;
   document.getElementById('api-empty').style.display = hasData ? 'none' : 'flex';
   document.getElementById('api-content').style.display = hasData ? 'block' : 'none';
 
   document.getElementById('gql-count').textContent = apiCalls.graphql?.length || 0;
   document.getElementById('rest-count').textContent = apiCalls.rest?.length || 0;
+  document.getElementById('ws-count').textContent = ws.length;
+  document.getElementById('sse-count').textContent = sseList.length;
+  document.getElementById('beacons-count').textContent = beaconList.length;
+  document.getElementById('binary-count').textContent = binaryList.length;
+  document.getElementById('sw-count').textContent = sw.length;
 
   // Endpoint banners
   const gqlEndpoints = [...new Set((apiCalls.graphql || []).map(c => c.url))];
@@ -2684,6 +2726,104 @@ function renderAPICalls(apiCalls) {
 
   renderCallList(document.getElementById('graphql-list'), apiCalls.graphql || [], true);
   renderCallList(document.getElementById('rest-list'), apiCalls.rest || [], false);
+  renderWebSocketList(document.getElementById('websocket-list'), ws);
+  renderSSEList(document.getElementById('sse-list'), sseList);
+  renderSimpleCallList(document.getElementById('beacons-list'), beaconList, 'Beacon');
+  renderSimpleCallList(document.getElementById('binary-list'), binaryList, 'Binary');
+  renderSWList(document.getElementById('sw-list'), sw);
+}
+
+function renderSSEList(container, list) {
+  if (!container) return;
+  if (!list.length) { container.innerHTML = '<p class="cd-empty">No SSE streams captured.</p>'; return; }
+  container.innerHTML = list.map(e => `
+    <div class="call-card">
+      <div class="call-header">
+        <span class="call-method method-GET">GET</span>
+        <span class="call-graphql-badge" style="background:var(--purple,#8b5cf6)">SSE</span>
+        <span class="call-name">${escapeHTML((() => { try { const u = new URL(e.url); return u.pathname; } catch { return e.url; } })())}</span>
+        ${e.status ? `<span class="call-status ${e.status < 400 ? 'status-ok' : 'status-err'}">${e.status}</span>` : ''}
+        <span class="call-time">${formatTime(e.openedAt)}</span>
+      </div>
+      <div style="padding:8px 12px;font-size:12px;color:var(--text-muted)">
+        <div>${escapeHTML(e.url)}</div>
+        ${e.events?.length ? `<div style="margin-top:4px">${e.events.length} events captured</div>` : ''}
+        ${e.note ? `<div style="margin-top:4px;font-style:italic">${escapeHTML(e.note)}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function renderSimpleCallList(container, list, label) {
+  if (!container) return;
+  if (!list.length) { container.innerHTML = `<p class="cd-empty">No ${label} requests captured.</p>`; return; }
+  container.innerHTML = list.map(e => {
+    const path = (() => { try { const u = new URL(e.url); return u.pathname; } catch { return e.url; } })();
+    return `
+    <div class="call-card">
+      <div class="call-header">
+        <span class="call-method method-${(e.method || 'POST').toUpperCase()}">${e.method || 'POST'}</span>
+        <span class="call-graphql-badge" style="background:var(--warning-dim,#78450a)">${label}</span>
+        <span class="call-name">${escapeHTML(path)}</span>
+        ${e.status ? `<span class="call-status ${e.status < 400 ? 'status-ok' : 'status-err'}">${e.status}</span>` : ''}
+        <span class="call-time">${formatTime(e.timestamp || e.openedAt)}</span>
+      </div>
+      <div style="padding:8px 12px;font-size:12px;color:var(--text-muted)">
+        <div>${escapeHTML(e.url)}</div>
+        ${e.contentType ? `<div style="margin-top:4px">Content-Type: ${escapeHTML(e.contentType)}</div>` : ''}
+        ${e.contentLength ? `<div>Content-Length: ${escapeHTML(String(e.contentLength))}</div>` : ''}
+        ${e.note ? `<div style="margin-top:4px;font-style:italic">${escapeHTML(e.note)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderWebSocketList(container, list) {
+  if (!container) return;
+  if (!list.length) { container.innerHTML = '<p class="cd-empty">No WebSocket connections captured.</p>'; return; }
+  container.innerHTML = list.map((ws, i) => {
+    const path = (() => { try { const u = new URL(ws.url); return u.host + u.pathname; } catch { return ws.url; } })();
+    return `
+    <div class="call-card">
+      <div class="call-header api-ws-toggle" data-i="${i}" style="cursor:pointer">
+        <span class="call-method method-WS" style="background:#6366f1">WS</span>
+        <span class="call-name">${escapeHTML(path)}</span>
+        <span class="call-time">${formatTime(ws.openedAt)}</span>
+        <span class="badge" style="margin-left:auto">${ws.frames?.length || 0} frames</span>
+        <span>&#9660;</span>
+      </div>
+      <div class="api-ws-body" data-i="${i}" style="display:none;padding:8px 12px;font-size:12px">
+        <div style="color:var(--text-muted);margin-bottom:6px">${escapeHTML(ws.url)}</div>
+        ${(ws.frames || []).slice(0, 50).map(f => `
+          <div style="margin:3px 0;padding:4px 8px;border-radius:4px;background:${f.dir === 'sent' ? 'rgba(99,102,241,.15)' : 'rgba(16,185,129,.1)'}">
+            <span style="color:${f.dir === 'sent' ? '#818cf8' : '#34d399'};font-weight:600;margin-right:8px">${f.dir === 'sent' ? '▶' : '◀'}</span>
+            <code style="font-size:11px">${escapeHTML(String(f.payload || '').substring(0, 200))}</code>
+            <span style="float:right;color:var(--text-muted);font-size:10px">${formatTime(f.time)}</span>
+          </div>`).join('')}
+        ${ws.frames?.length > 50 ? `<p style="color:var(--text-muted);font-size:11px">+ ${ws.frames.length - 50} more frames…</p>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('.api-ws-toggle').forEach(header => {
+    header.addEventListener('click', function() {
+      const i = this.dataset.i;
+      const body = container.querySelector(`.api-ws-body[data-i="${i}"]`);
+      if (body) body.style.display = body.style.display === 'none' ? 'block' : 'none';
+    });
+  });
+}
+
+function renderSWList(container, list) {
+  if (!container) return;
+  if (!list.length) { container.innerHTML = '<p class="cd-empty">No service workers detected.</p>'; return; }
+  container.innerHTML = list.map(sw => `
+    <div class="call-card">
+      <div class="call-header">
+        <span class="call-method method-SW" style="background:#7c3aed">SW</span>
+        <span class="call-name">${escapeHTML(sw.url || sw.scriptURL || String(sw))}</span>
+        ${sw.state ? `<span class="call-status status-ok">${escapeHTML(sw.state)}</span>` : ''}
+      </div>
+      ${sw.scope ? `<div style="padding:6px 12px;font-size:12px;color:var(--text-muted)">Scope: ${escapeHTML(sw.scope)}</div>` : ''}
+    </div>`).join('');
 }
 
 function renderCallList(container, calls, isGraphQL) {
@@ -2950,7 +3090,7 @@ function renderHistory() {
       window._scraperResult = entry.data;
       scrapedData = entry.data;
       renderResults(entry.data);
-      renderAPICalls(entry.data.apiCalls);
+      renderAPICalls(entry.data.apiCalls, entry.data.websockets, entry.data.serviceWorkers);
       renderAssets(entry.data.assets);
       enableRefactor(entry.data);
       document.querySelector('[data-panel="results"]').click();
@@ -3275,7 +3415,7 @@ async function openRun(id, source) {
     syncAIUrlFromCurrentContext(true);
 
     renderResults(data);
-    renderAPICalls(data.apiCalls);
+    renderAPICalls(data.apiCalls, data.websockets, data.serviceWorkers);
     renderAssets(data.assets);
     enableRefactor(data);
 
@@ -3497,6 +3637,7 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
   const depth    = parseInt(document.getElementById('batch-depth')?.value, 10)     || 1;
   const maxPages = parseInt(document.getElementById('batch-max-pages')?.value, 10)  || 10;
   const workers  = parseInt(document.getElementById('batch-workers')?.value, 10)    || 2;
+  const politeDelay = parseInt(document.getElementById('batch-polite-delay')?.value, 10) || 0;
 
   const captureGraphQL    = document.getElementById('batch-graphql')?.checked    ?? true;
   const captureREST       = document.getElementById('batch-rest')?.checked       ?? true;
@@ -3530,7 +3671,7 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
     if (statusEl) statusEl.textContent = 'scraping…';
     try {
       const res = await fetch('/api/scrape', { method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ url, depth, maxPages, captureGraphQL, captureREST, captureAssets, downloadImages, autoScroll, takeScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
+        body: JSON.stringify({ url, depth, maxPages, workers, politeDelay, captureGraphQL, captureREST, captureAssets, downloadImages, autoScroll, takeScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       batchResults.push({ url, data, ok: true });
@@ -3885,7 +4026,7 @@ function renderSaves(saves) {
         window._scraperResult = data;
         scrapedData = data;
         renderResults(data);
-        renderAPICalls(data.apiCalls);
+        renderAPICalls(data.apiCalls, data.websockets, data.serviceWorkers);
         renderAssets(data.assets);
         enableRefactor(data);
         document.querySelector('[data-panel="results"]').click();
