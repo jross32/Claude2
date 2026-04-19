@@ -12,6 +12,12 @@ No approval prompts should ever appear. If one does, add it to `.claude/settings
 
 ---
 
+## MCP Server Reference
+
+For the full MCP tool catalog, classification details, source-module mapping, and rules for adding new tools, see **[MCP.md](MCP.md)**. Update that file whenever tools are added or changed.
+
+---
+
 ## Project Overview
 
 This is a **general-purpose web scraper** (Node.js + Express + Playwright).
@@ -38,6 +44,9 @@ APA-specific config lives in `.env` (gitignored) — not in `src/`.
 | `src/entity-extractor.js` | Email, phone, URL, address pattern extraction | Stable |
 | `src/har-exporter.js` | HAR 1.2 format export | Stable |
 | `src/git-autosave.js` | Auto-commit & push on 10-min interval (starts with server) | Stable |
+| `src/oidc-tester.js` | OIDC/OAuth2 security test suite (8 test types) | Stable |
+| `mcp-server.js` | MCP server — 49 tools, classification sets, handlers | Stable |
+| `MCP.md` | Living reference for all MCP tools — update when adding/changing tools | Stable |
 | `public/index.html` | Single-page frontend UI (large — edit carefully) | **Fragile** |
 | `public/js/app.js` | Frontend logic | **Fragile** |
 | `public/css/style.css` | Styling | Stable |
