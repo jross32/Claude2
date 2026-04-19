@@ -2226,6 +2226,32 @@ body.sidebar-open .sidebar-overlay { display: block; }
 }
 .avoid-tags-grid { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 
+/* Click sequence builder */
+.click-seq-list { display: flex; flex-direction: column; gap: 6px; }
+.click-seq-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 8px; background: var(--bg3); border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.click-seq-num {
+  font-size: 11px; color: var(--text3); font-weight: 700;
+  width: 20px; text-align: right; flex-shrink: 0;
+}
+.click-seq-input, .click-seq-wait {
+  flex: 1; min-width: 120px; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-family: var(--mono); font-size: 12px;
+  padding: 4px 8px;
+}
+.click-seq-input:focus, .click-seq-wait:focus { outline: none; border-color: var(--accent); }
+.click-seq-label { font-size: 11px; color: var(--text3); white-space: nowrap; }
+.click-seq-remove {
+  background: none; border: none; color: var(--text3); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+  flex-shrink: 0;
+}
+.click-seq-remove:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
+
 /* Session log toggle button */
 .session-log-toggle {
   background: none !important;

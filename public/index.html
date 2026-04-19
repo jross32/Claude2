@@ -350,6 +350,19 @@
                 </div>
               </div>
             </div>
+
+            <!-- Click sequence builder (collapsible) -->
+            <div class="proxy-section" id="click-seq-section">
+              <button class="avoid-links-toggle" id="click-seq-toggle" type="button">
+                <span>&#128433; Click Sequence <span class="badge" id="click-seq-count" style="display:none">0</span></span>
+                <span class="avoid-links-chevron" id="click-seq-chevron">&#9660;</span>
+              </button>
+              <div class="avoid-links-panel" id="click-seq-panel" style="display:none">
+                <div class="field-hint" style="margin-bottom:8px">Clicks to perform on the page before scraping starts. Useful for dismissing modals, accepting cookies, or navigating to a specific state.</div>
+                <div id="click-seq-list" class="click-seq-list"></div>
+                <button class="btn-secondary btn-sm" id="btn-click-seq-add" type="button" style="margin-top:8px">&#43; Add Step</button>
+              </div>
+            </div>
           </div>
 
           <!-- Actions -->
@@ -841,6 +854,12 @@
                 <label for="batch-polite-delay">Polite Delay (ms) <span class="hint">wait between pages</span></label>
                 <input type="number" id="batch-polite-delay" value="0" min="0" max="5000" step="100" style="width:120px" />
               </div>
+              <div class="field" style="align-self:flex-end;padding-bottom:4px">
+                <label class="checkbox-label" style="white-space:nowrap">
+                  <input type="checkbox" id="batch-full-crawl" />
+                  <span>&#127760; Full site crawl</span>
+                </label>
+              </div>
             </div>
           </div>
           <div class="form-section">
@@ -996,7 +1015,17 @@
             </div>
             <div class="field">
               <label>Max Pages <span class="hint">(0 = unlimited)</span></label>
-              <input type="number" id="sched-max-pages" value="100" min="0" max="10000" style="width:120px" />
+              <div class="field-row" style="gap:12px;align-items:flex-end">
+                <input type="number" id="sched-max-pages" value="100" min="0" max="10000" style="width:120px" />
+                <label class="checkbox-label" style="white-space:nowrap">
+                  <input type="checkbox" id="sched-full-crawl" />
+                  <span>&#127760; Full site crawl</span>
+                </label>
+              </div>
+            </div>
+            <div class="field">
+              <label for="sched-depth">Scrape Depth <span class="hint">(levels deep from start URL)</span></label>
+              <input type="number" id="sched-depth" value="3" min="1" max="99" style="width:80px" />
             </div>
           </div>
           <div class="form-section">

@@ -1394,6 +1394,75 @@ document.getElementById('avoid-links-toggle').addEventListener('click', () => {
     chevron.innerHTML = open ? '&#9650;' : '&#9660;';
   });
 })();
+
+// ---- Click Sequence builder ----
+(function () {
+  const toggle  = document.getElementById('click-seq-toggle');
+  const panel   = document.getElementById('click-seq-panel');
+  const chevron = document.getElementById('click-seq-chevron');
+  const list    = document.getElementById('click-seq-list');
+  const addBtn  = document.getElementById('btn-click-seq-add');
+  const countBadge = document.getElementById('click-seq-count');
+  if (!toggle || !panel || !list || !addBtn) return;
+
+  let stepCount = 0;
+
+  function updateBadge() {
+    const rows = list.querySelectorAll('.click-seq-row').length;
+    if (countBadge) {
+      countBadge.textContent = rows;
+      countBadge.style.display = rows > 0 ? 'inline-block' : 'none';
+    }
+  }
+
+  function addStep(selectorVal, waitForVal) {
+    stepCount++;
+    const row = document.createElement('div');
+    row.className = 'click-seq-row';
+    row.innerHTML = `
+      <span class="click-seq-num">#${stepCount}</span>
+      <input type="text" class="click-seq-input" placeholder="CSS selector to click (e.g. #cookie-accept)" value="${escapeAttr(selectorVal || '')}" />
+      <span class="click-seq-label">wait for</span>
+      <input type="text" class="click-seq-wait" placeholder="selector to wait for (optional)" value="${escapeAttr(waitForVal || '')}" />
+      <button class="click-seq-remove" type="button" title="Remove step">&#215;</button>
+    `;
+    row.querySelector('.click-seq-remove').addEventListener('click', () => {
+      row.remove();
+      // Re-number remaining rows
+      list.querySelectorAll('.click-seq-row').forEach((r, i) => {
+        const num = r.querySelector('.click-seq-num');
+        if (num) num.textContent = '#' + (i + 1);
+      });
+      updateBadge();
+    });
+    list.appendChild(row);
+    updateBadge();
+  }
+
+  toggle.addEventListener('click', () => {
+    const open = panel.style.display === 'none';
+    panel.style.display = open ? 'block' : 'none';
+    chevron.innerHTML = open ? '&#9650;' : '&#9660;';
+  });
+
+  addBtn.addEventListener('click', () => addStep('', ''));
+
+  // Expose getter for startScrapeSession
+  window._getClickSequence = () => {
+    return [...list.querySelectorAll('.click-seq-row')].map(row => {
+      const selector = row.querySelector('.click-seq-input')?.value.trim() || '';
+      const waitFor  = row.querySelector('.click-seq-wait')?.value.trim()  || '';
+      return selector ? { selector, ...(waitFor ? { waitFor } : {}) } : null;
+    }).filter(Boolean);
+  };
+
+  // Expose setter (for loading saved scrapes)
+  window._setClickSequence = (steps) => {
+    list.innerHTML = '';
+    stepCount = 0;
+    (steps || []).forEach(s => addStep(s.selector || '', s.waitFor || ''));
+  };
+})();
 // Render selected tag pills into a container
 function renderAvoidPills(pillsContainerId, cbSelector) {
   const container = document.getElementById(pillsContainerId);
@@ -1468,6 +1537,10 @@ async function startScrapeSession(name, faviconUrl) {
     fullCrawl: document.getElementById('full-crawl').checked,
     maxPages: document.getElementById('full-crawl').checked ? 0 : (parseInt(document.getElementById('max-pages').value, 10) || 100),
   };
+
+  // Attach click sequence if any steps are configured
+  const clickSeq = window._getClickSequence?.() || [];
+  if (clickSeq.length > 0) payload.clickSequence = clickSeq;
 
   // Attach proxy config if a server is specified
   const proxyServer = document.getElementById('proxy-server')?.value.trim();
@@ -3638,13 +3711,14 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
   const maxPages = parseInt(document.getElementById('batch-max-pages')?.value, 10)  || 10;
   const workers  = parseInt(document.getElementById('batch-workers')?.value, 10)    || 2;
   const politeDelay = parseInt(document.getElementById('batch-polite-delay')?.value, 10) || 0;
+  const batchFullCrawl = document.getElementById('batch-full-crawl')?.checked ?? false;
 
   const captureGraphQL    = document.getElementById('batch-graphql')?.checked    ?? true;
   const captureREST       = document.getElementById('batch-rest')?.checked       ?? true;
   const captureAssets     = document.getElementById('batch-assets')?.checked     ?? false;
-  const downloadImages    = document.getElementById('batch-images')?.checked     ?? false;
+  const captureImages     = document.getElementById('batch-images')?.checked     ?? false;
   const autoScroll        = document.getElementById('batch-auto-scroll')?.checked ?? false;
-  const takeScreenshots   = document.getElementById('batch-screenshots')?.checked  ?? false;
+  const captureScreenshots = document.getElementById('batch-screenshots')?.checked  ?? false;
   const captureAllRequests = document.getElementById('batch-all-requests')?.checked ?? false;
   const captureIframeAPIs  = document.getElementById('batch-iframe-apis')?.checked  ?? false;
   const captureSSE         = document.getElementById('batch-sse')?.checked          ?? false;
@@ -3671,7 +3745,7 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
     if (statusEl) statusEl.textContent = 'scraping…';
     try {
       const res = await fetch('/api/scrape', { method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ url, depth, maxPages, workers, politeDelay, captureGraphQL, captureREST, captureAssets, downloadImages, autoScroll, takeScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
+        body: JSON.stringify({ url, scrapeDepth: depth, maxPages, workers, politeDelay, fullCrawl: batchFullCrawl, captureGraphQL, captureREST, captureAssets, captureImages, autoScroll, captureScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       batchResults.push({ url, data, ok: true });
@@ -3915,6 +3989,8 @@ document.getElementById('btn-create-schedule')?.addEventListener('click', async 
   const cron = document.getElementById('sched-cron')?.value.trim();
   if (!url) return showToast('Enter a URL');
   if (!cron) return showToast('Enter a cron expression');
+  const schedFullCrawl = document.getElementById('sched-full-crawl')?.checked ?? false;
+  const schedDepth = parseInt(document.getElementById('sched-depth')?.value, 10) || 3;
   const schedCapture = {
     captureGraphQL:       document.getElementById('sched-graphql')?.checked     ?? true,
     captureREST:          document.getElementById('sched-rest')?.checked        ?? true,
@@ -3933,7 +4009,7 @@ document.getElementById('btn-create-schedule')?.addEventListener('click', async 
   };
   try {
     const res = await fetch('/api/schedules', { method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, maxPages: parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100, ...schedCapture } }) });
+      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, scrapeDepth: schedDepth, fullCrawl: schedFullCrawl, maxPages: parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100, ...schedCapture } }) });
     if (!res.ok) throw new Error(await res.text());
     showToast('Schedule created');
     loadSchedules();
