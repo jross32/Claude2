@@ -76,15 +76,26 @@ function handleSessionMessage(sessionId, msg) {
 }
 
 // ---- Navigation ----
+function setActiveNavPanel(btn) {
+  document.querySelectorAll('.nav-item').forEach((item) => {
+    item.classList.remove('active');
+    item.removeAttribute('aria-current');
+  });
+  document.querySelectorAll('.panel').forEach((panel) => panel.classList.remove('active'));
+  btn.classList.add('active');
+  btn.setAttribute('aria-current', 'page');
+  const panelId = `panel-${btn.dataset.panel}`;
+  document.getElementById(panelId)?.classList.add('active');
+}
+
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
-    btn.classList.add('active');
-    const panelId = `panel-${btn.dataset.panel}`;
-    document.getElementById(panelId)?.classList.add('active');
+    setActiveNavPanel(btn);
     // Close mobile sidebar drawer when a nav item is tapped
     document.body.classList.remove('sidebar-open');
+    const hamburger = document.getElementById('btn-hamburger');
+    hamburger?.setAttribute('aria-expanded', 'false');
+    hamburger?.setAttribute('aria-label', 'Open menu');
   });
 });
 
@@ -92,8 +103,19 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 (function () {
   const hamburger = document.getElementById('btn-hamburger');
   const overlay   = document.getElementById('sidebar-overlay');
-  function openSidebar()  { document.body.classList.add('sidebar-open'); }
-  function closeSidebar() { document.body.classList.remove('sidebar-open'); }
+  function updateHamburger(isOpen) {
+    if (!hamburger) return;
+    hamburger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    hamburger.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+  }
+  function openSidebar()  {
+    document.body.classList.add('sidebar-open');
+    updateHamburger(true);
+  }
+  function closeSidebar() {
+    document.body.classList.remove('sidebar-open');
+    updateHamburger(false);
+  }
   hamburger?.addEventListener('click', openSidebar);
   overlay?.addEventListener('click', closeSidebar);
   // Swipe-left to close
@@ -103,6 +125,7 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     if (!document.body.classList.contains('sidebar-open')) return;
     if (_touchStartX - e.changedTouches[0].clientX > 60) closeSidebar();
   }, { passive: true });
+  updateHamburger(false);
 })();
 
 // ── Theme toggle (sidebar + mobile topbar button) ────────────────────────────
@@ -110,14 +133,27 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
   const isDark = localStorage.getItem('wsp_theme') !== 'light';
   if (!isDark) document.body.classList.add('light');
 
+  function updateThemeButtons() {
+    const isLight = document.body.classList.contains('light');
+    const label = isLight ? 'Switch to dark theme' : 'Switch to light theme';
+    ['btn-theme-toggle', 'btn-theme-toggle-mobile'].forEach((id) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      button.title = label;
+      button.setAttribute('aria-label', label);
+    });
+  }
+
   function toggleTheme() {
     document.body.classList.toggle('light');
     const isLight = document.body.classList.contains('light');
     localStorage.setItem('wsp_theme', isLight ? 'light' : 'dark');
+    updateThemeButtons();
   }
 
   document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleTheme);
   document.getElementById('btn-theme-toggle-mobile')?.addEventListener('click', toggleTheme);
+  updateThemeButtons();
 })();
 
 // ── Desktop sidebar collapse (default closed) ────────────────────────────────
@@ -131,6 +167,7 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     const title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
     btn.title = title;
     btn.setAttribute('aria-label', title);
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   }
 
   function applyFromStorage() {

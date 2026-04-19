@@ -9,67 +9,67 @@
 <body>
   <div class="app">
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="primary-sidebar">
       <div class="logo">
         <span class="logo-icon">&#9741;</span>
         <span class="logo-text">WebScraper<span class="accent">Pro</span></span>
-        <button class="sidebar-collapse-btn" id="btn-sidebar-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">&#9664;</button>
+        <button class="sidebar-collapse-btn" id="btn-sidebar-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" aria-controls="primary-sidebar" aria-expanded="true">&#9664;</button>
       </div>
       <nav class="nav">
-        <button class="nav-item active" data-panel="scraper" title="Scraper">
+        <button class="nav-item active" data-panel="scraper" title="Scraper" aria-label="Open Scraper panel" aria-current="page">
           <span class="nav-icon">&#128247;</span>
           <span class="nav-label">Scraper</span>
         </button>
-        <button class="nav-item" data-panel="results" title="Results">
+        <button class="nav-item" data-panel="results" title="Results" aria-label="Open Results panel">
           <span class="nav-icon">&#128196;</span>
           <span class="nav-label">Results</span>
           <span class="badge" id="results-badge" style="display:none">0</span>
         </button>
-        <button class="nav-item" data-panel="api-calls" title="API Calls">
+        <button class="nav-item" data-panel="api-calls" title="API Calls" aria-label="Open API Calls panel">
           <span class="nav-icon">&#128257;</span>
           <span class="nav-label">API Calls</span>
           <span class="badge" id="api-badge" style="display:none">0</span>
         </button>
-        <button class="nav-item" data-panel="assets" title="Assets">
+        <button class="nav-item" data-panel="assets" title="Assets" aria-label="Open Assets panel">
           <span class="nav-icon">&#128444;</span>
           <span class="nav-label">Assets</span>
         </button>
-        <button class="nav-item" data-panel="refactor" title="Refactor">
+        <button class="nav-item" data-panel="refactor" title="Refactor" aria-label="Open Refactor panel">
           <span class="nav-icon">&#9998;</span>
           <span class="nav-label">Refactor</span>
         </button>
-        <button class="nav-item" data-panel="batch" title="Batch">
+        <button class="nav-item" data-panel="batch" title="Batch" aria-label="Open Batch panel">
           <span class="nav-icon">&#128295;</span>
           <span class="nav-label">Batch</span>
         </button>
-        <button class="nav-item" data-panel="diff" title="Diff">
+        <button class="nav-item" data-panel="diff" title="Diff" aria-label="Open Diff panel">
           <span class="nav-icon">&#9870;</span>
           <span class="nav-label">Diff</span>
         </button>
-        <button class="nav-item" data-panel="schedule" title="Schedule">
+        <button class="nav-item" data-panel="schedule" title="Schedule" aria-label="Open Schedule panel">
           <span class="nav-icon">&#128336;</span>
           <span class="nav-label">Schedule</span>
         </button>
-        <button class="nav-item" data-panel="runs" title="Runs">
+        <button class="nav-item" data-panel="runs" title="Runs" aria-label="Open Runs panel">
           <span class="nav-icon">&#128202;</span>
           <span class="nav-label">Runs</span>
           <span class="badge" id="runs-badge" style="display:none">0</span>
         </button>
-        <button class="nav-item" data-panel="ai" title="AI Assistant">
+        <button class="nav-item" data-panel="ai" title="AI Assistant" aria-label="Open AI Assistant panel">
           <span class="nav-icon">&#129504;</span>
           <span class="nav-label">AI</span>
         </button>
-        <button class="nav-item" data-panel="apa-api" title="APA API">
+        <button class="nav-item" data-panel="apa-api" title="APA API" aria-label="Open APA API panel">
           <span class="nav-icon">&#128306;</span>
           <span class="nav-label">APA API</span>
         </button>
-        <button class="nav-item" data-panel="logs" title="Tool Logs">
+        <button class="nav-item" data-panel="logs" title="Tool Logs" aria-label="Open Tool Logs panel">
           <span class="nav-icon">&#128202;</span>
           <span class="nav-label">Logs</span>
         </button>
       </nav>
       <div class="sidebar-footer">
-        <button class="btn-theme-toggle" id="btn-theme-toggle" title="Toggle light/dark theme">&#9728;</button>
+        <button class="btn-theme-toggle" id="btn-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle light and dark theme">&#9728;</button>
         <span class="version">v2.0.0</span>
       </div>
     </aside>
@@ -81,9 +81,9 @@
     <main class="main">
       <!-- Mobile top bar -->
       <div class="mobile-topbar">
-        <button class="btn-hamburger" id="btn-hamburger" aria-label="Open menu">&#9776;</button>
+        <button class="btn-hamburger" id="btn-hamburger" aria-label="Open menu" aria-controls="primary-sidebar" aria-expanded="false">&#9776;</button>
         <span class="mobile-logo">WebScraper<span class="accent">Pro</span></span>
-        <button class="btn-theme-toggle" id="btn-theme-toggle-mobile" title="Toggle theme">&#9728;</button>
+        <button class="btn-theme-toggle" id="btn-theme-toggle-mobile" title="Toggle theme" aria-label="Toggle light and dark theme">&#9728;</button>
       </div>
 
       <!-- ===== SCRAPER PANEL ===== -->
