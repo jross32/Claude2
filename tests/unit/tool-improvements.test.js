@@ -127,9 +127,12 @@ async function main() {
     try { mcpSrc = fs.readFileSync(path.join(__dirname, '../../mcp-server.js'), 'utf8'); } catch {}
 
     // Use simple includes() to avoid line-ending regex issues
-    const hasMethod    = mcpSrc.includes("name: 'http_fetch'") && mcpSrc.includes("'method'") || mcpSrc.includes('"method"');
-    const hasBody      = mcpSrc.includes("name: 'http_fetch'") && (mcpSrc.includes("'body'") || mcpSrc.includes('"body"'));
-    const hasSessionId = mcpSrc.includes("name: 'http_fetch'") && mcpSrc.includes("'sessionId'");
+    // Schema keys are unquoted in object literals (method:, body:, sessionId:)
+    const ftIdx        = mcpSrc.indexOf("name: 'http_fetch'");
+    const schemaChunk  = mcpSrc.slice(ftIdx, ftIdx + 1200);
+    const hasMethod    = schemaChunk.includes('method:') || schemaChunk.includes("'method'") || schemaChunk.includes('"method"');
+    const hasBody      = schemaChunk.includes('body:') || schemaChunk.includes("'body'") || schemaChunk.includes('"body"');
+    const hasSessionId = schemaChunk.includes('sessionId:') || schemaChunk.includes("'sessionId'");
     const handlerHasMethod  = mcpSrc.includes("case 'http_fetch'") && mcpSrc.includes('input.method');
     const handlerHasBody    = mcpSrc.includes("case 'http_fetch'") && (mcpSrc.includes('input.body') || mcpSrc.includes('postData'));
     const handlerHasCookies = mcpSrc.includes("case 'http_fetch'") && (mcpSrc.includes('Cookie') || mcpSrc.includes('cookieHeader'));
