@@ -854,6 +854,34 @@
                 <input type="checkbox" id="batch-all-requests" />
                 <span>Capture All Requests (HAR)</span>
               </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-iframe-apis" />
+                <span>Capture Iframe APIs</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-sse" />
+                <span>Capture SSE</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-beacons" />
+                <span>Capture Beacons</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-binary" />
+                <span>Capture Binary</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-sw" />
+                <span>Detect Service Workers</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-bypass-sw" />
+                <span>Bypass Service Workers</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-dropdowns" />
+                <span>Interact with Dropdowns</span>
+              </label>
             </div>
           </div>
           <div class="form-actions">
@@ -949,6 +977,67 @@
             <div class="field">
               <label>Max Pages <span class="hint">(0 = unlimited)</span></label>
               <input type="number" id="sched-max-pages" value="100" min="0" max="10000" style="width:120px" />
+            </div>
+          </div>
+          <div class="form-section">
+            <h2 class="section-title"><span class="section-icon">&#128247;</span> Capture</h2>
+            <div class="checkboxes">
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-graphql" checked />
+                <span>Capture GraphQL</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-rest" checked />
+                <span>Capture REST</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-assets" />
+                <span>Capture Assets</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-images" />
+                <span>Download Images</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-auto-scroll" />
+                <span>Auto-scroll</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-screenshots" />
+                <span>Page Screenshots</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-all-requests" />
+                <span>Capture All Requests (HAR)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-iframe-apis" />
+                <span>Capture Iframe APIs</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-sse" />
+                <span>Capture SSE</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-beacons" />
+                <span>Capture Beacons</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-binary" />
+                <span>Capture Binary</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-sw" />
+                <span>Detect Service Workers</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-bypass-sw" />
+                <span>Bypass Service Workers</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="sched-dropdowns" />
+                <span>Interact with Dropdowns</span>
+              </label>
             </div>
           </div>
           <div class="form-actions">

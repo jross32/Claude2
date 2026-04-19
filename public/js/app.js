@@ -3505,6 +3505,13 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
   const autoScroll        = document.getElementById('batch-auto-scroll')?.checked ?? false;
   const takeScreenshots   = document.getElementById('batch-screenshots')?.checked  ?? false;
   const captureAllRequests = document.getElementById('batch-all-requests')?.checked ?? false;
+  const captureIframeAPIs  = document.getElementById('batch-iframe-apis')?.checked  ?? false;
+  const captureSSE         = document.getElementById('batch-sse')?.checked          ?? false;
+  const captureBeacons     = document.getElementById('batch-beacons')?.checked      ?? false;
+  const captureBinaryResponses = document.getElementById('batch-binary')?.checked   ?? false;
+  const captureServiceWorkers  = document.getElementById('batch-sw')?.checked       ?? false;
+  const bypassServiceWorkers   = document.getElementById('batch-bypass-sw')?.checked ?? false;
+  const captureDropdowns       = document.getElementById('batch-dropdowns')?.checked ?? false;
 
   const progress = document.getElementById('batch-progress');
   const list     = document.getElementById('batch-progress-list');
@@ -3523,7 +3530,7 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
     if (statusEl) statusEl.textContent = 'scraping…';
     try {
       const res = await fetch('/api/scrape', { method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ url, depth, maxPages, captureGraphQL, captureREST, captureAssets, downloadImages, autoScroll, takeScreenshots, captureAllRequests }) });
+        body: JSON.stringify({ url, depth, maxPages, captureGraphQL, captureREST, captureAssets, downloadImages, autoScroll, takeScreenshots, captureAllRequests, captureIframeAPIs, captureSSE, captureBeacons, captureBinaryResponses, captureServiceWorkers, bypassServiceWorkers, captureDropdowns }) });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       batchResults.push({ url, data, ok: true });
@@ -3767,9 +3774,25 @@ document.getElementById('btn-create-schedule')?.addEventListener('click', async 
   const cron = document.getElementById('sched-cron')?.value.trim();
   if (!url) return showToast('Enter a URL');
   if (!cron) return showToast('Enter a cron expression');
+  const schedCapture = {
+    captureGraphQL:       document.getElementById('sched-graphql')?.checked     ?? true,
+    captureREST:          document.getElementById('sched-rest')?.checked        ?? true,
+    captureAssets:        document.getElementById('sched-assets')?.checked      ?? false,
+    captureImages:        document.getElementById('sched-images')?.checked      ?? false,
+    autoScroll:           document.getElementById('sched-auto-scroll')?.checked ?? false,
+    captureScreenshots:   document.getElementById('sched-screenshots')?.checked ?? false,
+    captureAllRequests:   document.getElementById('sched-all-requests')?.checked ?? false,
+    captureIframeAPIs:    document.getElementById('sched-iframe-apis')?.checked  ?? false,
+    captureSSE:           document.getElementById('sched-sse')?.checked          ?? false,
+    captureBeacons:       document.getElementById('sched-beacons')?.checked      ?? false,
+    captureBinaryResponses: document.getElementById('sched-binary')?.checked     ?? false,
+    captureServiceWorkers:  document.getElementById('sched-sw')?.checked         ?? false,
+    bypassServiceWorkers:   document.getElementById('sched-bypass-sw')?.checked  ?? false,
+    captureDropdowns:       document.getElementById('sched-dropdowns')?.checked  ?? false,
+  };
   try {
     const res = await fetch('/api/schedules', { method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, maxPages: parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100 } }) });
+      body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, maxPages: parseInt(document.getElementById('sched-max-pages')?.value, 10) || 100, ...schedCapture } }) });
     if (!res.ok) throw new Error(await res.text());
     showToast('Schedule created');
     loadSchedules();
