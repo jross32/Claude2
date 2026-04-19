@@ -1223,9 +1223,12 @@ body.sidebar-open .sidebar-overlay { display: block; }
   .sidebar-footer .version { display: none; }
   .mobile-topbar { display: none; }
 
-  /* Show collapse button at tablet — collapsed = fully hidden since already icon-only */
+  /* Show collapse button at tablet — collapsed = thin 40px strip, only button visible */
   .sidebar-collapse-btn { display: inline-flex; align-items: center; justify-content: center; margin-left: 0; }
-  body.sidebar-collapsed .sidebar { width: 0; min-width: 0; overflow: hidden; border-right: none; }
+  body.sidebar-collapsed .sidebar { width: 40px; min-width: 40px; overflow: hidden; }
+  body.sidebar-collapsed .logo { padding: 18px 2px; justify-content: center; }
+  body.sidebar-collapsed .nav,
+  body.sidebar-collapsed .sidebar-footer { display: none; }
 
   .main { padding: clamp(16px, 2.5vw, 24px); }
   .panel-header h1 { font-size: clamp(18px, 2.5vw, 22px); }
