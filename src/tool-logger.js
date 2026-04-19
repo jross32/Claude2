@@ -119,26 +119,6 @@ function saveUsage(usage) {
   writeTxt(usage);
 }
 
-const SENSITIVE_KEYS = new Set([
-  'password', 'passwd', 'secret', 'api_key', 'apikey', 'token',
-  'bearer', 'authorization', 'auth', 'credential', 'credentials',
-]);
-
-function sanitizeArgs(args) {
-  if (!args || typeof args !== 'object') return args;
-  const out = {};
-  for (const [k, v] of Object.entries(args)) {
-    if (SENSITIVE_KEYS.has(k.toLowerCase())) {
-      out[k] = '[REDACTED]';
-    } else if (typeof v === 'object' && v !== null) {
-      out[k] = sanitizeArgs(v);
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
-}
-
 function truncateResult(result, maxChars = 4000) {
   if (result === null || result === undefined) return result;
   const str = JSON.stringify(result);
@@ -209,7 +189,7 @@ function record(toolName, args, result, durationMs, error) {
       durationMs,
       success:    !error,
       error:      error ? error.message : null,
-      args:       sanitizeArgs(args),
+      args:       args,
       result:     error ? null : truncateResult(result),
     };
 
