@@ -1223,6 +1223,10 @@ body.sidebar-open .sidebar-overlay { display: block; }
   .sidebar-footer .version { display: none; }
   .mobile-topbar { display: none; }
 
+  /* Show collapse button at tablet — collapsed = fully hidden since already icon-only */
+  .sidebar-collapse-btn { display: inline-flex; align-items: center; justify-content: center; margin-left: 0; }
+  body.sidebar-collapsed .sidebar { width: 0; min-width: 0; overflow: hidden; border-right: none; }
+
   .main { padding: clamp(16px, 2.5vw, 24px); }
   .panel-header h1 { font-size: clamp(18px, 2.5vw, 22px); }
   .form-card { max-width: 100%; padding: 20px; }
@@ -1246,7 +1250,7 @@ body.sidebar-open .sidebar-overlay { display: block; }
   .mobile-topbar { display: none; }
 }
 
-/* Desktop sidebar collapsed state (default closed) */
+/* Desktop sidebar collapsed state */
 @media (min-width: 1024px) {
   .sidebar-collapse-btn { display: inline-flex; align-items: center; justify-content: center; }
 

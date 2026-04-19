@@ -159,7 +159,8 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 // ── Desktop sidebar collapse (default closed) ────────────────────────────────
 (function () {
   const btn = document.getElementById('btn-sidebar-collapse');
-  const mq = window.matchMedia('(min-width: 1024px)');
+  // Collapse button is active at 768px+ (tablet and up)
+  const mq = window.matchMedia('(min-width: 768px)');
 
   function updateBtn(collapsed) {
     if (!btn) return;
@@ -190,7 +191,7 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     updateBtn(nextCollapsed);
   });
 
-  // Keep state sensible when resizing across the desktop breakpoint
+  // Keep state sensible when resizing across breakpoints
   if (mq.addEventListener) mq.addEventListener('change', applyFromStorage);
   else mq.addListener?.(applyFromStorage);
 
