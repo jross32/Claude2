@@ -1010,6 +1010,11 @@
           <h1>Scheduled Scraping</h1>
           <p class="subtitle">Run scrapes automatically on a schedule</p>
         </div>
+        <div class="panel-subtabs" id="schedule-subtabs">
+          <button class="panel-subtab active" id="sched-tab-create" data-target="schedule-create-section" type="button">Create</button>
+          <button class="panel-subtab" id="sched-tab-manage" data-target="schedule-manage-section" type="button">Manage</button>
+        </div>
+        <div id="schedule-create-section">
         <div class="form-card">
           <div class="form-section">
             <h2 class="section-title"><span class="section-icon">&#128336;</span> New Schedule</h2>
@@ -1166,6 +1171,8 @@
             </div>
           </div>
         </div>
+        </div>
+        <div id="schedule-manage-section" style="display:none">
         <div class="schedule-filter-bar" id="schedule-filter-bar">
           <input type="text" id="schedule-search" class="schedule-search" placeholder="&#128269; Filter schedules by URL or cron..." autocomplete="off" />
           <select id="schedule-filter-crawl" class="schedule-filter-select">
@@ -1181,6 +1188,7 @@
         </div>
         <div class="schedule-list" id="schedule-list">
           <p class="empty-hint">No schedules yet.</p>
+        </div>
         </div>
       </section>
 

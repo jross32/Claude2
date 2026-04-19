@@ -812,17 +812,80 @@ body.light .json-bool { color: #b45309; }
   margin-top: 20px;
   display: flex; flex-direction: column; gap: 10px;
 }
+.schedule-filter-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.schedule-search {
+  flex: 1;
+  min-width: 220px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  padding: 7px 12px;
+}
+.schedule-filter-select {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  padding: 7px 10px;
+}
+.panel-subtabs {
+  display: inline-flex;
+  gap: 6px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+  margin: 6px 0 12px;
+}
+.panel-subtab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.panel-subtab.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+  border-color: rgba(79, 142, 247, 0.35);
+}
+.panel-subtab:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
 .schedule-card {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px;
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
 }
 .schedule-card-info { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.schedule-card-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .schedule-card-url { font-family: var(--mono); font-size: 12px; color: var(--text); }
 .schedule-card-cron {
   font-size: 12px; background: var(--bg4); border: 1px solid var(--border);
   border-radius: 4px; padding: 2px 8px; display: inline-block; color: var(--accent);
   font-family: var(--mono);
+}
+.schedule-card-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.schedule-mini-badge {
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--text2);
+  background: var(--bg3);
 }
 .schedule-card-meta { font-size: 11px; color: var(--text3); }
 .schedule-card-status {
@@ -2488,6 +2551,25 @@ body.sidebar-open .sidebar-overlay { display: block; }
   outline: none;
 }
 .runs-status-filter:focus { border-color: var(--accent); }
+.runs-stats-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.runs-stat-chip {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text2);
+}
+.runs-stat-chip span {
+  font-weight: 700;
+  color: var(--accent);
+  margin-right: 4px;
+}
 
 /* ============================
    Tool Logs panel

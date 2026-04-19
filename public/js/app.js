@@ -201,6 +201,7 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 let activeRunId = null;
 const _runDataCache = new Map(); // cache full run data keyed by run id
 let _comparePickA = null; // first run selected for quick compare from Runs panel
+let _allSchedulesCache = [];
 
 // ---- Auth toggle ----
 // Auth section is shown automatically when a login form is detected — no manual toggle
@@ -210,9 +211,6 @@ const PRESETS_KEY = 'wsp_presets';
 
 function getPresets() {
   try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]'); } catch { return []; }
-}
-function savePresets(list) {
-  localStorage.setItem(PRESETS_KEY, JSON.stringify(list));
 }
 
 function renderPresets() {
@@ -3341,7 +3339,8 @@ async function loadRuns() {
   if (badge) { badge.textContent = runs.length; badge.style.display = runs.length ? 'inline-block' : 'none'; }
 
   _allRunsCache = runs;
-  renderRunCards(runs);
+  _filterRuns();
+  _updateRunsStats(runs);
   const clearBtn = document.getElementById('btn-runs-clear-all');
   if (clearBtn) clearBtn.style.display = runs.length ? 'inline-flex' : 'none';
 }
@@ -3884,27 +3883,54 @@ document.getElementById('btn-batch-scrape')?.addEventListener('click', async () 
 let _allRunsCache = [];
 const _origLoadRuns = typeof loadRuns === 'function' ? loadRuns : null;
 
+function _updateRunsStats(runs) {
+  const total = runs.length;
+  const server = runs.filter(r => r.source === 'server').length;
+  const local = runs.filter(r => r.source === 'local').length;
+  const active = runs.filter(r => r.status === 'running').length;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value);
+  };
+  set('runs-stat-total', total);
+  set('runs-stat-server', server);
+  set('runs-stat-local', local);
+  set('runs-stat-active', active);
+}
+
 function _filterRuns() {
   const q      = (document.getElementById('runs-search')?.value || '').toLowerCase().trim();
   const status = document.getElementById('runs-filter-status')?.value || '';
+  const source = document.getElementById('runs-filter-source')?.value || '';
   const filtered = _allRunsCache.filter(r => {
-    const matchQ      = !q || (r.url || '').toLowerCase().includes(q) || (r.sessionId || '').toLowerCase().includes(q);
+    const matchQ      = !q || (r.url || '').toLowerCase().includes(q) || (r.id || '').toLowerCase().includes(q);
     const matchStatus = !status || r.status === status;
-    return matchQ && matchStatus;
+    const matchSource = !source || r.source === source;
+    return matchQ && matchStatus && matchSource;
   });
   renderRunCards(filtered);
+  _updateRunsStats(filtered);
 }
 
 document.getElementById('runs-search')?.addEventListener('input', _filterRuns);
 document.getElementById('runs-filter-status')?.addEventListener('change', _filterRuns);
+document.getElementById('runs-filter-source')?.addEventListener('change', _filterRuns);
 
 // Also show/hide the Clear All button (only when runs exist)
 document.getElementById('btn-runs-clear-all')?.addEventListener('click', async () => {
-  if (!confirm('Clear all saved runs from local history?')) return;
+  if (!confirm('Clear all runs from both local history and server saves?')) return;
+  try {
+    const serverRuns = _allRunsCache.filter(r => r.source === 'server');
+    await Promise.all(serverRuns.map(r => fetch(`/api/saves/${encodeURIComponent(r.id)}`, { method: 'DELETE' })));
+  } catch {
+    showToast('Some server runs could not be deleted');
+  }
   clearHistory?.();
   _allRunsCache = [];
   renderRunCards([]);
+  _updateRunsStats([]);
   document.getElementById('btn-runs-clear-all').style.display = 'none';
+  showToast('All runs cleared');
 });
 
 // ---- Tool Logs panel ----
@@ -4065,29 +4091,166 @@ async function loadSchedules() {
     const res = await fetch('/api/schedules');
     if (!res.ok) throw new Error(await res.text());
     const schedules = await res.json();
+    _allSchedulesCache = schedules;
     if (!schedules.length) {
       list.innerHTML = '<p class="empty-hint">No schedules yet.</p>';
       return;
     }
-    list.innerHTML = schedules.map(s => `
-      <div class="schedule-card" data-id="${escapeAttr(s.id)}">
-        <div class="schedule-card-info">
-          <div class="schedule-card-url">${escapeHTML(s.scrapeOptions?.startUrl || s.scrapeOptions?.url || '')}</div>
-          <span class="schedule-card-cron">${escapeHTML(s.cronExpr)}</span>
-          <div class="schedule-card-meta">Next: ${s.nextRunAt ? new Date(s.nextRunAt).toLocaleString() : 'N/A'}</div>
-        </div>
-        <button class="btn-xs btn-danger sched-del" data-id="${escapeAttr(s.id)}">Delete</button>
-      </div>`).join('');
-    list.querySelectorAll('.sched-del').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        try {
-          await fetch(`/api/schedules/${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
-          loadSchedules();
-        } catch(e) { showToast('Delete failed: ' + e.message); }
-      });
-    });
+    filterSchedules();
   } catch(e) { list.innerHTML = `<p class="empty-hint">Failed to load: ${escapeHTML(e.message)}</p>`; }
 }
+
+function _sortSchedules(list, sortMode) {
+  const out = [...list];
+  if (sortMode === 'url') {
+    out.sort((a, b) => {
+      const aUrl = (a.scrapeOptions?.startUrl || a.scrapeOptions?.url || '').toLowerCase();
+      const bUrl = (b.scrapeOptions?.startUrl || b.scrapeOptions?.url || '').toLowerCase();
+      return aUrl.localeCompare(bUrl);
+    });
+    return out;
+  }
+  if (sortMode === 'newest') {
+    out.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return out;
+  }
+  out.sort((a, b) => {
+    const aNext = a.nextRunAt ? new Date(a.nextRunAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const bNext = b.nextRunAt ? new Date(b.nextRunAt).getTime() : Number.MAX_SAFE_INTEGER;
+    if (aNext !== bNext) return aNext - bNext;
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  });
+  return out;
+}
+
+function renderScheduleCards(schedules) {
+  const list = document.getElementById('schedule-list');
+  if (!list) return;
+  if (!schedules.length) {
+    list.innerHTML = '<p class="empty-hint">No schedules match your filter.</p>';
+    return;
+  }
+
+  list.innerHTML = schedules.map(s => {
+    const url = s.scrapeOptions?.startUrl || s.scrapeOptions?.url || '';
+    const full = !!s.scrapeOptions?.fullCrawl;
+    const maxPages = Number(s.scrapeOptions?.maxPages || 0);
+    const speed = Number(s.scrapeOptions?.captureSpeed || 1);
+    const delay = Number(s.scrapeOptions?.politeDelay || 0);
+    const status = String(s.status || 'idle').toLowerCase();
+    const statusClass = status === 'running' ? 'sched-running' : (status === 'error' ? 'sched-error' : 'sched-idle');
+    const nextRun = s.nextRunAt ? new Date(s.nextRunAt).toLocaleString() : 'N/A';
+    return `
+      <div class="schedule-card" data-id="${escapeAttr(s.id)}">
+        <div class="schedule-card-info">
+          <div class="schedule-card-url">${escapeHTML(url)}</div>
+          <span class="schedule-card-cron">${escapeHTML(s.cronExpr)}</span>
+          <div class="schedule-card-badges">
+            <span class="schedule-mini-badge ${statusClass}">${escapeHTML(status)}</span>
+            <span class="schedule-mini-badge">${full ? 'Full crawl' : `${maxPages || '∞'} pages`}</span>
+            <span class="schedule-mini-badge">Speed ${speed}</span>
+            ${delay ? `<span class="schedule-mini-badge">${delay}ms delay</span>` : ''}
+          </div>
+          <div class="schedule-card-meta">Next: ${escapeHTML(nextRun)}</div>
+        </div>
+        <div class="schedule-card-actions">
+          <button class="btn-xs sched-copy" data-cron="${escapeAttr(s.cronExpr)}" title="Copy cron">Copy Cron</button>
+          <button class="btn-xs btn-secondary sched-run" data-id="${escapeAttr(s.id)}" title="Run now">Run now</button>
+          <button class="btn-xs btn-danger sched-del" data-id="${escapeAttr(s.id)}">Delete</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('.sched-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await fetch(`/api/schedules/${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
+        showToast('Schedule deleted');
+        loadSchedules();
+      } catch (e) { showToast('Delete failed: ' + e.message); }
+    });
+  });
+
+  list.querySelectorAll('.sched-copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.cron || '');
+        showToast('Cron copied');
+      } catch {
+        showToast('Clipboard unavailable');
+      }
+    });
+  });
+
+  list.querySelectorAll('.sched-run').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const schedule = _allSchedulesCache.find(s => s.id === btn.dataset.id);
+      if (!schedule) return;
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      try {
+        const scrapeOptions = schedule.scrapeOptions || {};
+        const res = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(scrapeOptions),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const { sessionId } = await res.json();
+        const startUrl = scrapeOptions.startUrl || scrapeOptions.url || '';
+        const displayName = (() => { try { return new URL(startUrl).hostname; } catch { return startUrl || 'Scheduled run'; } })();
+        const favicon = startUrl ? `/api/favicon?url=${encodeURIComponent(startUrl)}` : '';
+        createSessionPanel(sessionId, displayName, favicon, false);
+        activeSessions.set(sessionId, { name: displayName, faviconUrl: favicon, liveView: false, expanded: true });
+        appendSessionLog(sessionId, `Started from schedule ${schedule.id}`, 'info');
+        showToast('Scheduled run started');
+        document.querySelector('[data-panel="scraper"]')?.click();
+      } catch (err) {
+        showToast('Run failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run now';
+      }
+    });
+  });
+}
+
+function filterSchedules() {
+  const q = (document.getElementById('schedule-search')?.value || '').toLowerCase().trim();
+  const crawl = document.getElementById('schedule-filter-crawl')?.value || '';
+  const sortMode = document.getElementById('schedule-sort')?.value || 'next';
+  const filtered = _allSchedulesCache.filter((s) => {
+    const url = (s.scrapeOptions?.startUrl || s.scrapeOptions?.url || '').toLowerCase();
+    const cron = String(s.cronExpr || '').toLowerCase();
+    const full = !!s.scrapeOptions?.fullCrawl;
+    const qOk = !q || url.includes(q) || cron.includes(q);
+    const crawlOk = !crawl || (crawl === 'full' ? full : !full);
+    return qOk && crawlOk;
+  });
+  renderScheduleCards(_sortSchedules(filtered, sortMode));
+}
+
+function setScheduleSubtab(targetId) {
+  const targets = {
+    'schedule-create-section': document.getElementById('schedule-create-section'),
+    'schedule-manage-section': document.getElementById('schedule-manage-section'),
+  };
+  Object.entries(targets).forEach(([id, el]) => {
+    if (!el) return;
+    el.style.display = id === targetId ? '' : 'none';
+  });
+  document.querySelectorAll('#schedule-subtabs .panel-subtab').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.target === targetId);
+  });
+}
+
+function initScheduleSubtabs() {
+  document.querySelectorAll('#schedule-subtabs .panel-subtab').forEach((btn) => {
+    btn.addEventListener('click', () => setScheduleSubtab(btn.dataset.target));
+  });
+}
+
+initScheduleSubtabs();
 
 document.getElementById('btn-create-schedule')?.addEventListener('click', async () => {
   const url = document.getElementById('sched-url')?.value.trim();
@@ -4121,12 +4284,16 @@ document.getElementById('btn-create-schedule')?.addEventListener('click', async 
       body: JSON.stringify({ cronExpr: cron, scrapeOptions: { startUrl: url, url, scrapeDepth: schedDepth, fullCrawl: schedFullCrawl, maxPages: schedMaxPages, politeDelay: schedPoliteDelay, captureSpeed: schedCaptureSpeed, ...schedCapture } }) });
     if (!res.ok) throw new Error(await res.text());
     showToast('Schedule created');
+    setScheduleSubtab('schedule-manage-section');
     loadSchedules();
   } catch(e) { showToast('Failed: ' + e.message); }
 });
 
 document.getElementById('btn-refresh-schedules')?.addEventListener('click', loadSchedules);
 document.querySelector('[data-panel="schedule"]')?.addEventListener('click', loadSchedules);
+document.getElementById('schedule-search')?.addEventListener('input', filterSchedules);
+document.getElementById('schedule-filter-crawl')?.addEventListener('change', filterSchedules);
+document.getElementById('schedule-sort')?.addEventListener('change', filterSchedules);
 
 // ---- Cron presets & help card ----
 document.querySelectorAll('.cron-preset').forEach(btn => {
