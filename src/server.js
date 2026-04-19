@@ -942,6 +942,92 @@ app.post('/api/oidc-test', async (req, res) => {
   }
 });
 
+// ---- Screenshot ----
+app.post('/api/screenshot', async (req, res) => {
+  const { url, fullPage = false, waitMs = 1000 } = req.body || {};
+  if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
+
+  const { chromium } = require('playwright-extra');
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const ctx = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' });
+    const page = await ctx.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (waitMs > 0) await page.waitForTimeout(waitMs);
+    const vp = page.viewportSize();
+    const buf = await page.screenshot({ type: 'png', fullPage: !!fullPage });
+    await browser.close();
+    browser = null;
+    res.json({
+      url,
+      screenshotBase64: buf.toString('base64'),
+      width: vp?.width || null,
+      height: vp?.height || null,
+      fullPage: !!fullPage,
+      capturedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+});
+
+// ---- Fill form ----
+app.post('/api/fill-form', async (req, res) => {
+  const { url, fields, submitSelector, waitMs = 2000 } = req.body || {};
+  if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
+  if (!Array.isArray(fields) || fields.length === 0) return res.status(400).json({ error: 'fields must be a non-empty array' });
+
+  const { chromium } = require('playwright-extra');
+  const { extractPageData } = require('./extractor');
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const ctx = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' });
+    const page = await ctx.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    for (const field of fields) {
+      await page.fill(field.selector, field.value);
+    }
+
+    if (submitSelector) {
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {}),
+        page.click(submitSelector),
+      ]);
+    } else {
+      const lastSelector = fields[fields.length - 1].selector;
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {}),
+        page.locator(lastSelector).press('Enter'),
+      ]);
+    }
+
+    if (waitMs > 0) await page.waitForTimeout(waitMs);
+
+    const resultUrl = page.url();
+    const pageData = await extractPageData(page, resultUrl, { lightMode: true });
+    await browser.close();
+    browser = null;
+
+    res.json({
+      url,
+      resultUrl,
+      pageTitle:  pageData.meta?.title || '',
+      fullText:   (pageData.fullText || '').slice(0, 8000),
+      links:      (pageData.links || []).slice(0, 50).map(l => ({ href: l.href, text: l.text })),
+      forms:      (pageData.forms || []).slice(0, 10),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
