@@ -1028,6 +1028,48 @@ app.post('/api/fill-form', async (req, res) => {
   }
 });
 
+// ---- Tool usage logs ----
+app.get('/api/tool-logs', (req, res) => {
+  const logPath = path.join(__dirname, '../logs/tool-usage.json');
+  try {
+    if (!fs.existsSync(logPath)) return res.json({ totalCalls: 0, tools: {} });
+    const data = JSON.parse(fs.readFileSync(logPath, 'utf8'));
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Tool request log list ----
+app.get('/api/tool-logs/requests', (req, res) => {
+  const reqDir = path.join(__dirname, '../logs/requests');
+  try {
+    if (!fs.existsSync(reqDir)) return res.json([]);
+    const today = new Date().toISOString().slice(0, 10);
+    const dayDir = path.join(reqDir, today);
+    if (!fs.existsSync(dayDir)) return res.json([]);
+    const files = fs.readdirSync(dayDir)
+      .filter(f => f.endsWith('.json'))
+      .sort((a, b) => b.localeCompare(a))
+      .slice(0, 50);
+    const requests = files.map(f => {
+      try {
+        const raw = JSON.parse(fs.readFileSync(path.join(dayDir, f), 'utf8'));
+        return {
+          tool: raw.tool,
+          ts: raw.ts,
+          durationMs: raw.durationMs,
+          error: raw.error || null,
+          id: raw.id,
+        };
+      } catch { return null; }
+    }).filter(Boolean);
+    res.json(requests);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);

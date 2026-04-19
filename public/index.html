@@ -63,6 +63,10 @@
           <span class="nav-icon">&#128306;</span>
           <span class="nav-label">APA API</span>
         </button>
+        <button class="nav-item" data-panel="logs" title="Tool Logs">
+          <span class="nav-icon">&#128202;</span>
+          <span class="nav-label">Logs</span>
+        </button>
       </nav>
       <div class="sidebar-footer">
         <button class="btn-theme-toggle" id="btn-theme-toggle" title="Toggle light/dark theme">&#9728;</button>
@@ -736,21 +740,35 @@
       <section class="panel" id="panel-batch">
         <div class="panel-header">
           <h1>Batch Scraper</h1>
-          <p class="subtitle">Scrape multiple URLs at once</p>
+          <p class="subtitle">Scrape multiple URLs simultaneously</p>
         </div>
         <div class="form-card">
           <div class="form-section">
-            <h2 class="section-title"><span class="section-icon">&#128295;</span> URLs</h2>
+            <h2 class="section-title"><span class="section-icon">&#128295;</span> Target URLs</h2>
             <div class="field">
-              <label for="batch-urls">Enter URLs (one per line)</label>
+              <label for="batch-urls">URLs to scrape <span class="hint">(one per line)</span></label>
               <textarea id="batch-urls" class="code-editor" style="min-height:150px" placeholder="https://example.com&#10;https://another.com&#10;https://third.com"></textarea>
             </div>
+          </div>
+          <div class="form-section">
+            <h2 class="section-title"><span class="section-icon">&#9881;</span> Options</h2>
             <div class="field-row">
               <div class="field">
                 <label for="batch-depth">Scrape Depth</label>
-                <input type="number" id="batch-depth" value="1" min="1" max="3" />
+                <input type="number" id="batch-depth" value="1" min="1" max="5" />
+              </div>
+              <div class="field">
+                <label for="batch-max-pages">Max Pages / URL</label>
+                <input type="number" id="batch-max-pages" value="10" min="1" max="500" />
+              </div>
+              <div class="field">
+                <label for="batch-workers">Workers</label>
+                <input type="number" id="batch-workers" value="2" min="1" max="10" title="Concurrent browser tabs per URL" />
               </div>
             </div>
+          </div>
+          <div class="form-section">
+            <h2 class="section-title"><span class="section-icon">&#128247;</span> Capture</h2>
             <div class="checkboxes">
               <label class="checkbox-label">
                 <input type="checkbox" id="batch-graphql" checked />
@@ -759,6 +777,26 @@
               <label class="checkbox-label">
                 <input type="checkbox" id="batch-rest" checked />
                 <span>Capture REST</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-assets" />
+                <span>Capture Assets</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-images" />
+                <span>Download Images</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-auto-scroll" />
+                <span>Auto-scroll</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-screenshots" />
+                <span>Page Screenshots</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="batch-all-requests" />
+                <span>Capture All Requests (HAR)</span>
               </label>
             </div>
           </div>
@@ -781,20 +819,21 @@
       <section class="panel" id="panel-diff">
         <div class="panel-header">
           <h1>Diff Scrapes</h1>
-          <p class="subtitle">Compare two scrape results</p>
+          <p class="subtitle">Compare two scrape results to see what changed — new pages, removed pages, API changes</p>
         </div>
         <div class="form-card">
           <div class="form-section">
-            <h2 class="section-title"><span class="section-icon">&#9870;</span> Select Results to Compare</h2>
+            <h2 class="section-title"><span class="section-icon">&#9870;</span> Select Runs to Compare</h2>
+            <p class="field-hint">Pick any two saved runs. You can also click <strong>Compare</strong> on two cards in the Runs panel to auto-populate these.</p>
             <div class="field-row">
               <div class="field">
-                <label for="diff-a">Result A</label>
+                <label for="diff-a">Run A <span class="hint">(older / baseline)</span></label>
                 <select id="diff-a">
                   <option value="">-- Select a run --</option>
                 </select>
               </div>
               <div class="field">
-                <label for="diff-b">Result B</label>
+                <label for="diff-b">Run B <span class="hint">(newer / comparison)</span></label>
                 <select id="diff-b">
                   <option value="">-- Select a run --</option>
                 </select>
@@ -803,7 +842,13 @@
           </div>
           <div class="form-actions">
             <button class="btn-primary" id="btn-run-diff">&#9870; Compare</button>
+            <button class="btn-secondary" id="btn-refresh-diff">&#8635; Reload Runs</button>
           </div>
+        </div>
+        <div class="diff-empty" id="diff-empty">
+          <div class="empty-state-icon">&#9870;</div>
+          <p class="empty-state-msg">Select two runs above and click Compare to see what changed.</p>
+          <p class="empty-state-hint">Go to <strong>Runs</strong> and click the Compare button on any two scrape cards to auto-fill and run the diff.</p>
         </div>
         <div class="diff-results" id="diff-results" style="display:none"></div>
       </section>
@@ -817,22 +862,69 @@
         <div class="form-card">
           <div class="form-section">
             <h2 class="section-title"><span class="section-icon">&#128336;</span> New Schedule</h2>
-            <div class="field-row">
-              <div class="field">
-                <label for="sched-url">URL to scrape</label>
-                <input type="url" id="sched-url" placeholder="https://example.com" />
+            <div class="field">
+              <label for="sched-url">URL to scrape</label>
+              <input type="url" id="sched-url" placeholder="https://example.com" />
+            </div>
+            <div class="field">
+              <label for="sched-cron">Cron Expression
+                <span class="hint">e.g. "*/30 * * * *" = every 30 min</span>
+              </label>
+              <div class="cron-input-row">
+                <input type="text" id="sched-cron" placeholder="0 * * * *" class="cron-input" />
+                <button class="btn-secondary btn-sm" id="btn-cron-help" title="Cron syntax reference">? Help</button>
               </div>
-              <div class="field">
-                <label for="sched-cron">Cron Expression
-                  <span class="hint">e.g. "*/30 * * * *" = every 30 min</span>
-                </label>
-                <input type="text" id="sched-cron" placeholder="0 * * * *" />
+            </div>
+            <div class="field">
+              <label>Quick Presets</label>
+              <div class="cron-presets">
+                <button class="btn-xs cron-preset" data-cron="*/5 * * * *" title="Every 5 minutes">5 min</button>
+                <button class="btn-xs cron-preset" data-cron="*/15 * * * *" title="Every 15 minutes">15 min</button>
+                <button class="btn-xs cron-preset" data-cron="*/30 * * * *" title="Every 30 minutes">30 min</button>
+                <button class="btn-xs cron-preset" data-cron="0 * * * *" title="Every hour">Hourly</button>
+                <button class="btn-xs cron-preset" data-cron="0 */6 * * *" title="Every 6 hours">Every 6h</button>
+                <button class="btn-xs cron-preset" data-cron="0 0 * * *" title="Every day at midnight">Daily</button>
+                <button class="btn-xs cron-preset" data-cron="0 9 * * *" title="Every day at 9am">Daily 9am</button>
+                <button class="btn-xs cron-preset" data-cron="0 9 * * 1" title="Every Monday at 9am">Mon 9am</button>
+                <button class="btn-xs cron-preset" data-cron="0 0 * * 0" title="Every Sunday at midnight">Weekly</button>
+                <button class="btn-xs cron-preset" data-cron="0 0 1 * *" title="1st of every month">Monthly</button>
               </div>
+            </div>
+            <div class="field">
+              <label>Max Pages <span class="hint">(0 = unlimited)</span></label>
+              <input type="number" id="sched-max-pages" value="100" min="0" max="10000" style="width:120px" />
             </div>
           </div>
           <div class="form-actions">
             <button class="btn-primary" id="btn-create-schedule">&#43; Create Schedule</button>
             <button class="btn-secondary" id="btn-refresh-schedules">&#8635; Refresh</button>
+          </div>
+        </div>
+        <!-- Cron help card -->
+        <div class="cron-help-card" id="cron-help-card" style="display:none">
+          <div class="cron-help-header">
+            <span>Cron Expression Reference</span>
+            <button class="btn-xs btn-secondary" id="btn-cron-help-close">&#10005; Close</button>
+          </div>
+          <div class="cron-help-body">
+            <div class="cron-help-format">
+              <code>MIN HOUR DAY-OF-MONTH MONTH DAY-OF-WEEK</code>
+            </div>
+            <table class="cron-help-table">
+              <tr><th>Field</th><th>Range</th><th>Special chars</th></tr>
+              <tr><td>Minute</td><td>0–59</td><td>* , - /</td></tr>
+              <tr><td>Hour</td><td>0–23</td><td>* , - /</td></tr>
+              <tr><td>Day of month</td><td>1–31</td><td>* , - / ?</td></tr>
+              <tr><td>Month</td><td>1–12</td><td>* , - /</td></tr>
+              <tr><td>Day of week</td><td>0–6 (Sun=0)</td><td>* , - /</td></tr>
+            </table>
+            <div class="cron-help-examples">
+              <div class="cron-ex"><code>* * * * *</code> <span>Every minute</span></div>
+              <div class="cron-ex"><code>0 * * * *</code> <span>Every hour</span></div>
+              <div class="cron-ex"><code>0 9 * * 1-5</code> <span>Weekdays at 9am</span></div>
+              <div class="cron-ex"><code>*/10 * * * *</code> <span>Every 10 minutes</span></div>
+              <div class="cron-ex"><code>0 0,12 * * *</code> <span>Midnight and noon daily</span></div>
+            </div>
           </div>
         </div>
         <div class="schedule-list" id="schedule-list">
@@ -847,7 +939,17 @@
           <p class="subtitle">Every scrape saved locally — click a card to load it into all tabs</p>
           <div class="panel-actions">
             <button class="btn-secondary" id="btn-refresh-runs">&#8635; Refresh</button>
+            <button class="btn-danger btn-sm" id="btn-runs-clear-all" style="display:none">&#128465; Clear All</button>
           </div>
+        </div>
+        <div class="runs-filter-bar" id="runs-filter-bar">
+          <input type="text" id="runs-search" class="runs-search" placeholder="&#128269; Filter by URL, domain, or status…" autocomplete="off" />
+          <select id="runs-filter-status" class="runs-status-filter">
+            <option value="">All statuses</option>
+            <option value="complete">Complete</option>
+            <option value="running">Running</option>
+            <option value="stopped">Stopped</option>
+          </select>
         </div>
         <div id="runs-active-banner" class="runs-active-banner" style="display:none">
           <span id="runs-active-label"></span>
@@ -917,9 +1019,9 @@
                 </div>
               </div>
               <div class="ai-status-card" id="ai-status-card">
-                <div class="ai-status-line"><strong>Current context:</strong> <span id="ai-current-context">No run loaded yet</span></div>
-                <div class="ai-status-line"><strong>Fast model:</strong> <span id="ai-fast-model">llama3.2:1b</span></div>
-                <div class="ai-status-line"><strong>Deep model:</strong> <span id="ai-deep-model">llama3.2:3b</span></div>
+                <div class="ai-status-line"><strong>Context:</strong> <span id="ai-current-context">No run loaded yet</span></div>
+                <div class="ai-status-line"><strong>Engine:</strong> <span class="ai-engine-badge">Extractive analysis</span></div>
+                <div class="ai-status-line ai-status-hint">Keyword matching · entity extraction · structural inference</div>
               </div>
             </div>
           </div>
@@ -1004,6 +1106,43 @@
             <div id="apa-saved-list" class="apa-saved-list">
               <span class="empty-hint">No saved queries yet.</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== LOGS PANEL ===== -->
+      <section class="panel" id="panel-logs">
+        <div class="panel-header">
+          <h1>Tool Usage Logs</h1>
+          <p class="subtitle">Live MCP tool call statistics — updated every time an MCP tool is invoked</p>
+          <div class="panel-actions">
+            <button class="btn-secondary" id="btn-refresh-logs">&#8635; Refresh</button>
+          </div>
+        </div>
+        <div id="logs-summary-bar" class="logs-summary-bar" style="display:none">
+          <div class="logs-stat-pill">
+            <span class="logs-stat-val" id="logs-total-calls">0</span>
+            <span class="logs-stat-lbl">total calls</span>
+          </div>
+          <div class="logs-stat-pill">
+            <span class="logs-stat-val" id="logs-active-tools">0</span>
+            <span class="logs-stat-lbl">tools used</span>
+          </div>
+          <div class="logs-stat-pill logs-stat-ts">
+            Last updated: <span id="logs-last-updated">—</span>
+          </div>
+        </div>
+        <div id="logs-content" class="logs-content">
+          <div class="logs-empty" id="logs-empty">
+            <div class="empty-state-icon">&#128202;</div>
+            <p class="empty-state-msg">No MCP tool calls logged yet.</p>
+            <p class="empty-state-hint">Tool usage is recorded automatically whenever an MCP tool is called. Use the MCP server from Claude or another client to see data here.</p>
+          </div>
+        </div>
+        <div class="form-card" id="logs-recent-card" style="display:none">
+          <div class="form-section">
+            <h2 class="section-title"><span class="section-icon">&#128336;</span> Recent Requests (Today)</h2>
+            <div id="logs-recent-list" class="logs-recent-list"></div>
           </div>
         </div>
       </section>
