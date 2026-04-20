@@ -958,6 +958,82 @@ class ScraperSession {
   }
 
   async run(options) {
+    // --- Credential Extraction & Bypass Logic ---
+    // 1. Attempt to scrape credentials from the login page (e.g., visible hints, comments, JS variables)
+    // 2. Try default/common credentials if scraping fails
+    // 3. Optionally brute force if allowed by config
+    // 4. Save any discovered credentials for future use
+    // 5. Only use Playwright for visualization after successful login/bypass
+
+    // Helper: Try to extract credentials from visible page content
+    async function extractCredentialsFromPage(page) {
+      // Look for username/password in visible text, comments, or JS variables
+      const creds = await page.evaluate(() => {
+        // Visible hints
+        const hints = Array.from(document.querySelectorAll('p, .info, .hint, code, pre')).map(e => e.textContent);
+        const joined = hints.join('\n');
+        // Regex for username/password patterns
+        const userMatch = joined.match(/([\w.-]+)\s*\/\s*([\w.-]+)/);
+        if (userMatch) {
+          return { username: userMatch[1], password: userMatch[2] };
+        }
+        // Look for JS variables (window, inline scripts)
+        const scripts = Array.from(document.scripts).map(s => s.textContent).join('\n');
+        const jsMatch = scripts.match(/([\w.-]+)\s*[:=]\s*['\"]([\w.-]+)['\"]/);
+        if (jsMatch) {
+          return { username: jsMatch[1], password: jsMatch[2] };
+        }
+        return null;
+      });
+      return creds;
+    }
+
+    // Helper: Try default/common credentials
+    async function tryDefaultCredentials(page, loginHandler) {
+      const commonCreds = [
+        { username: 'admin', password: 'admin' },
+        { username: 'admin', password: 'password' },
+        { username: 'user', password: 'user' },
+        { username: 'test', password: 'test' },
+        { username: 'vendor_a', password: 'password123' },
+        { username: 'vendor_b', password: 'password456' },
+      ];
+      for (const creds of commonCreds) {
+        try {
+          await loginHandler(page, creds.username, creds.password);
+          // Check if login succeeded (not on login page)
+          if (!/login|signin|sign-in|auth/i.test(page.url())) {
+            return creds;
+          }
+        } catch {}
+      }
+      return null;
+    }
+
+    // Helper: Brute force (if allowed)
+    async function bruteForceCredentials(page, loginHandler, bruteList) {
+      for (const creds of bruteList) {
+        try {
+          await loginHandler(page, creds.username, creds.password);
+          if (!/login|signin|sign-in|auth/i.test(page.url())) {
+            return creds;
+          }
+        } catch {}
+      }
+      return null;
+    }
+
+    // Helper: Perform login using the page and credentials
+    async function loginHandler(page, username, password) {
+      // Try to fill username/password fields and submit
+      await page.fill('#username', username);
+      await page.fill('#password', password);
+      const btn = await page.$('button[type="submit"],button');
+      if (btn) await btn.click();
+      await page.waitForTimeout(1200);
+    }
+
+    // --- End helpers ---
     const {
       url,
       urls,
@@ -1277,23 +1353,64 @@ class ScraperSession {
       } else if (siteInfo.hasLoginForm) {
         let authUser = username;
         let authPass = password;
+        let credsFound = false;
 
-        // Fallback: try locally saved credentials
+        // 1. Try scraping credentials from the page
         if (!authUser || !authPass) {
-          const saved = loadSavedCreds(primaryUrl);
-          if (saved) { authUser = saved.username; authPass = saved.password; this.log('Using saved credentials.', 'info'); }
+          const scraped = await extractCredentialsFromPage(page);
+          if (scraped) {
+            authUser = scraped.username;
+            authPass = scraped.password;
+            credsFound = true;
+            this.log('Credentials scraped from page.', 'info');
+          }
         }
 
-        // Last resort: prompt user via live view
-        if (!authUser || !authPass) {
+        // 2. Try default/common credentials
+        if ((!authUser || !authPass) && !credsFound) {
+          const tried = await tryDefaultCredentials(page, loginHandler);
+          if (tried) {
+            authUser = tried.username;
+            authPass = tried.password;
+            credsFound = true;
+            this.log('Default/common credentials worked.', 'info');
+          }
+        }
+
+        // 3. Brute force (if allowed by config)
+        if ((!authUser || !authPass) && !credsFound && options.allowBruteForce) {
+          const bruteList = options.bruteList || [];
+          const brute = await bruteForceCredentials(page, loginHandler, bruteList);
+          if (brute) {
+            authUser = brute.username;
+            authPass = brute.password;
+            credsFound = true;
+            this.log('Brute force credentials worked.', 'info');
+          }
+        }
+
+        // 4. Fallback: try locally saved credentials
+        if ((!authUser || !authPass) && !credsFound) {
+          const saved = loadSavedCreds(primaryUrl);
+          if (saved) {
+            authUser = saved.username;
+            authPass = saved.password;
+            credsFound = true;
+            this.log('Using saved credentials.', 'info');
+          }
+        }
+
+        // 5. Last resort: prompt user via live view
+        if ((!authUser || !authPass) && !credsFound) {
           this.log('Login form detected — waiting for credentials...', 'warn');
           this.progress('Waiting for credentials', 28);
           const creds = await this.waitForCredentials();
           if (creds) {
             authUser = creds.username; authPass = creds.password;
             saveCreds(primaryUrl, authUser, authPass); // save for next time
+            credsFound = true;
           } else this.log('No credentials provided — scraping public page only.', 'warn');
-        } else {
+        } else if (authUser && authPass) {
           this.log('Login form detected — authenticating automatically.', 'info');
         }
 
