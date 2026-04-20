@@ -44,6 +44,52 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 
+// ── In-memory rate limiter ─────────────────────────────────────────────────
+// Protects against runaway AI agents or accidental loops hammering the API.
+// Limits are generous — this is a local tool, not a public service.
+const _rlWindows = new Map(); // key -> { count, windowStart }
+function _checkRateLimit(key, maxPerMinute) {
+  const now = Date.now();
+  const w = _rlWindows.get(key) || { count: 0, windowStart: now };
+  if (now - w.windowStart > 60000) { w.count = 0; w.windowStart = now; }
+  w.count++;
+  _rlWindows.set(key, w);
+  return w.count > maxPerMinute;
+}
+setInterval(() => {
+  const cutoff = Date.now() - 60000;
+  for (const [k, w] of _rlWindows.entries()) { if (w.windowStart < cutoff) _rlWindows.delete(k); }
+}, 5 * 60 * 1000).unref?.();
+
+// Limits: scrape endpoints 30/min, generate/analysis endpoints 60/min, everything else 120/min
+app.use((req, res, next) => {
+  const ip = req.ip || 'local';
+  let limit = 120;
+  if (/^\/api\/(scrape|fill-form|screenshot|oidc-test|tls-fingerprint)/.test(req.path)) limit = 30;
+  else if (/^\/api\/(generate|schema|diff|schedules|monitor)/.test(req.path)) limit = 60;
+  if (_checkRateLimit(`${ip}:${req.method}:${req.path.split('/').slice(0, 4).join('/')}`, limit)) {
+    return res.status(429).json({ error: 'Rate limit exceeded — slow down requests', retryAfterSeconds: 60 });
+  }
+  next();
+});
+
+// ── Input validation helper ────────────────────────────────────────────────
+function _require(body, ...fields) {
+  for (const f of fields) {
+    const v = body?.[f];
+    if (v === undefined || v === null || v === '') return `'${f}' is required`;
+    if (typeof v === 'string' && !v.trim()) return `'${f}' must be a non-empty string`;
+  }
+  return null;
+}
+function _requireType(body, field, type) {
+  const v = body?.[field];
+  if (type === 'array' && !Array.isArray(v)) return `'${field}' must be an array`;
+  if (type === 'string' && typeof v !== 'string') return `'${field}' must be a string`;
+  if (type === 'number' && typeof v !== 'number') return `'${field}' must be a number`;
+  return null;
+}
+
 // Active scraping sessions
 const sessions = new Map();
 
