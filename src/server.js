@@ -73,6 +73,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Optional API key gate ──────────────────────────────────────────────────
+// Set API_KEY in .env to require x-api-key or Authorization: Bearer <key> on all /api/ routes.
+if (process.env.API_KEY) {
+  app.use('/api/', (req, res, next) => {
+    const provided = req.headers['x-api-key'] ||
+      (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+    if (!provided || provided !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized — provide x-api-key or Authorization: Bearer <key>' });
+    }
+    next();
+  });
+}
+
 // ── Input validation helper ────────────────────────────────────────────────
 function _require(body, ...fields) {
   for (const f of fields) {

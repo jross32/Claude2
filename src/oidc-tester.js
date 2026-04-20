@@ -799,7 +799,59 @@ async function testHeaderInjection({ baseUrl, injectUser = 'admin', secureEndpoi
 
 // ─── TEST 9: TLS / JA3 FINGERPRINT ANALYSIS ──────────────────────────────────
 
-const tls = require('tls');
+const tls    = require('tls');
+
+// ── Cipher name → IANA numeric ID lookup ──────────────────────────────────────
+const _CIPHER_IDS = {
+  'TLS_AES_128_GCM_SHA256':             4865,
+  'TLS_AES_256_GCM_SHA384':             4866,
+  'TLS_CHACHA20_POLY1305_SHA256':       4867,
+  'ECDHE-ECDSA-AES128-GCM-SHA256':     49195,
+  'ECDHE-RSA-AES128-GCM-SHA256':       49199,
+  'ECDHE-ECDSA-AES256-GCM-SHA384':     49196,
+  'ECDHE-RSA-AES256-GCM-SHA384':       49200,
+  'ECDHE-ECDSA-CHACHA20-POLY1305':     52393,
+  'ECDHE-RSA-CHACHA20-POLY1305':       52392,
+  'ECDHE-RSA-AES128-SHA':              49171,
+  'ECDHE-RSA-AES256-SHA':              49172,
+  'ECDHE-ECDSA-AES256-CBC-SHA':        49162,
+  'ECDHE-ECDSA-AES128-CBC-SHA':        49161,
+  'AES128-GCM-SHA256':                    156,
+  'AES256-GCM-SHA384':                    157,
+  'AES128-SHA':                            47,
+  'AES256-SHA':                            53,
+};
+// TLS version → ClientHello numeric value (decimal)
+const _TLS_VER = { 'TLSv1.0': 769, 'TLSv1.1': 770, 'TLSv1.2': 771, 'TLSv1.3': 772 };
+
+/**
+ * Compute a real JA3 hash for a TLS profile.
+ *
+ * JA3 formula (https://github.com/salesforce/ja3):
+ *   MD5( TLSVersion,Ciphers,Extensions,EllipticCurves,PointFormats )
+ * where each field is a hyphen-separated list of decimal IDs.
+ *
+ * Extension type IDs used here match a real Chrome 115 ClientHello
+ * (GREASE values excluded, order is what Chromium actually sends).
+ */
+function _computeJA3(profile) {
+  const ver         = _TLS_VER[profile.minTls] || 771;
+  const cipherIds   = profile.cipherOrder.map(c => _CIPHER_IDS[c]).filter(Boolean);
+  const extIds      = profile.ja3Extensions  || [];
+  const curveIds    = profile.ja3Curves      || [];
+  const pointFmtIds = profile.ja3PointFmts   || [0];
+
+  const ja3String = [
+    ver,
+    cipherIds.join('-'),
+    extIds.join('-'),
+    curveIds.join('-'),
+    pointFmtIds.join('-'),
+  ].join(',');
+
+  const ja3Hash = crypto.createHash('md5').update(ja3String).digest('hex');
+  return { ja3String, ja3Hash };
+}
 
 /**
  * Known TLS cipher preference profiles for major clients.
@@ -826,9 +878,12 @@ const TLS_PROFILES = {
       'AES128-SHA',
       'AES256-SHA',
     ],
-    ecdhCurves:   ['X25519', 'prime256v1', 'secp384r1'],
-    // Approximate JA3 string (TLS version + cipher IDs + extensions + curves + point formats)
-    ja3Approx:    '771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53',
+    ecdhCurves:      ['X25519', 'prime256v1', 'secp384r1'],
+    // Chrome 115 ClientHello extension types (decimal, GREASE excluded, real order)
+    ja3Extensions:   [0, 23, 65281, 10, 11, 35, 16, 5, 13, 18, 51, 45, 43, 27, 17513, 21],
+    // Supported groups / elliptic curves (decimal IANA IDs)
+    ja3Curves:       [29, 23, 24],   // x25519=29, secp256r1=23, secp384r1=24
+    ja3PointFmts:    [0],            // uncompressed
   },
   'firefox-117': {
     label:        'Firefox 117',
@@ -850,8 +905,11 @@ const TLS_PROFILES = {
       'AES128-GCM-SHA256',
       'AES256-GCM-SHA384',
     ],
-    ecdhCurves:   ['X25519', 'prime256v1', 'secp384r1', 'secp521r1'],
-    ja3Approx:    '771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157',
+    ecdhCurves:      ['X25519', 'prime256v1', 'secp384r1', 'secp521r1'],
+    // Firefox 117 extension types (GREASE excluded)
+    ja3Extensions:   [0, 23, 65281, 10, 11, 35, 16, 5, 13, 51, 45, 43, 21],
+    ja3Curves:       [29, 23, 24, 25],  // x25519, secp256r1, secp384r1, secp521r1
+    ja3PointFmts:    [0],
   },
 };
 
@@ -948,7 +1006,8 @@ const browserAgent = new https.Agent({
       supportedByNode:      supportedByNode.length,
       missingFromNode,
       similarityPct,
-      ja3Approx:            profile.ja3Approx,
+      ja3String:            _computeJA3(profile).ja3String,
+      ja3Hash:              _computeJA3(profile).ja3Hash,
     },
     negotiated: negotiated || null,
     configSnippet,
