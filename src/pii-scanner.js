@@ -9,19 +9,36 @@ const PII_PATTERNS = [
   { type: 'API Key',          risk: 'CRITICAL', re: /(api[_\-]?key|apikey)["\s:=]+["']?([a-zA-Z0-9_\-]{32,})["']?/gi },
   { type: 'Bearer Token',     risk: 'CRITICAL', re: /bearer\s+([a-zA-Z0-9\-_=]+\.[a-zA-Z0-9\-_=]+\.?[a-zA-Z0-9\-_.+/=]*)/gi },
   { type: 'AWS Access Key',   risk: 'CRITICAL', re: /AKIA[0-9A-Z]{16}/g },
+  { type: 'AWS Secret Key',   risk: 'CRITICAL', re: /aws[_\-]?secret[_\-]?(?:access[_\-]?)?key["\s:=]+["']?([a-zA-Z0-9/+]{40})["']?/gi },
   { type: 'GitHub Token',     risk: 'CRITICAL', re: /ghp_[a-zA-Z0-9]{36}/g },
+  { type: 'GitHub Fine-Grained Token', risk: 'CRITICAL', re: /github_pat_[a-zA-Z0-9_]{82}/g },
   { type: 'Stripe Key',       risk: 'CRITICAL', re: /sk_live_[0-9a-zA-Z]{24}/g },
+  { type: 'Stripe Restricted Key', risk: 'CRITICAL', re: /rk_live_[0-9a-zA-Z]{24}/g },
+  { type: 'Slack Token',      risk: 'CRITICAL', re: /xox[boas]-[0-9A-Za-z\-]{10,}/g },
+  { type: 'Slack Webhook',    risk: 'HIGH',     re: /hooks\.slack\.com\/services\/[A-Za-z0-9\/]+/g },
   { type: 'Firebase Key',     risk: 'HIGH',     re: /AIza[0-9A-Za-z\-_]{35}/g },
+  { type: 'Twilio Auth',      risk: 'CRITICAL', re: /SK[0-9a-fA-F]{32}/g },
+  { type: 'SendGrid Key',     risk: 'CRITICAL', re: /SG\.[a-zA-Z0-9_\-]{22}\.[a-zA-Z0-9_\-]{43}/g },
+  { type: 'Mailchimp Key',    risk: 'HIGH',     re: /[0-9a-f]{32}-us\d{1,2}/g },
+  { type: 'Heroku Key',       risk: 'HIGH',     re: /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g },
+  { type: 'JWT Token',        risk: 'HIGH',     re: /eyJ[a-zA-Z0-9_\-]+\.eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+/g },
   { type: 'DB Connection',    risk: 'CRITICAL', re: /(postgres|mysql|mongodb|redis):\/\/[^\s"'<>]{5,}/gi },
-  { type: 'Private Key',      risk: 'CRITICAL', re: /-----BEGIN (RSA |EC )?PRIVATE KEY-----/g },
+  { type: 'Private Key',      risk: 'CRITICAL', re: /-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----/g },
+  { type: 'PGP Private Key',  risk: 'CRITICAL', re: /-----BEGIN PGP PRIVATE KEY BLOCK-----/g },
   // ── PII ───────────────────────────────────────────────────────────────────
   { type: 'Email',            risk: 'LOW',      re: /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g },
-  { type: 'Phone (US)',       risk: 'LOW',      re: /(\+1[\s\-.]?)?\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}/g },
+  { type: 'Phone (US)',       risk: 'LOW',      re: /(?<![A-Za-z0-9])(\+1[\s\-.]?)?\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}(?![A-Za-z0-9])/g },
   { type: 'SSN',              risk: 'CRITICAL', re: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g },
   { type: 'Credit Card',      risk: 'CRITICAL', re: /\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b/g },
+  { type: 'Passport Number',  risk: 'HIGH',     re: /\b[A-Z]{1,2}[0-9]{6,9}\b/g },
+  // ── Crypto wallets ───────────────────────────────────────────────────────
+  { type: 'Bitcoin Address',  risk: 'MEDIUM',   re: /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/g },
+  { type: 'Bitcoin Bech32',   risk: 'MEDIUM',   re: /\bbc1[a-z0-9]{39,59}\b/g },
+  { type: 'Ethereum Address', risk: 'MEDIUM',   re: /\b0x[a-fA-F0-9]{40}\b/g },
   // ── Internal infrastructure ───────────────────────────────────────────────
   { type: 'Private IP',       risk: 'MEDIUM',   re: /\b(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/g },
   { type: 'Internal Hostname',risk: 'MEDIUM',   re: /\b([a-z][a-z0-9\-]{2,}\.(?:internal|local|corp|lan|intranet))\b/gi },
+  { type: 'Cloud Metadata',   risk: 'HIGH',     re: /169\.254\.169\.254/g },
 ];
 
 const RISK_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };

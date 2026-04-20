@@ -821,16 +821,38 @@ async function extractPageData(page, url, opts = {}) {
   // ── 7. Entity extraction ───────────────────────────────────────────────────
   try {
     data.entities = extractEntities(data.fullText || '');
-    // Also scan all link hrefs, image srcs, script srcs for extra emails/phones
+    // Also scan all link hrefs and text blocks for extra entities
     const allText = [
       ...(data.links || []).map(l => l.href),
       ...(data.textBlocks || []).map(t => t.text),
     ].join(' ');
     const extraEntities = extractEntities(allText);
-    data.entities.emails = [...new Set([...data.entities.emails, ...extraEntities.emails])];
-    data.entities.phones = [...new Set([...data.entities.phones, ...extraEntities.phones])];
+    // Merge all flat array fields
+    for (const key of ['emails', 'phones', 'urls', 'addresses', 'coordinates', 'ipAddresses']) {
+      if (Array.isArray(extraEntities[key]) && extraEntities[key].length) {
+        data.entities[key] = [...new Set([...(data.entities[key] || []), ...extraEntities[key]])];
+      }
+    }
+    // Merge crypto sub-object
+    if (extraEntities.crypto) {
+      data.entities.crypto = data.entities.crypto || { bitcoin: [], ethereum: [] };
+      for (const coin of ['bitcoin', 'ethereum']) {
+        if (Array.isArray(extraEntities.crypto[coin]) && extraEntities.crypto[coin].length) {
+          data.entities.crypto[coin] = [...new Set([...data.entities.crypto[coin], ...extraEntities.crypto[coin]])];
+        }
+      }
+    }
+    // Merge socials sub-object
+    if (extraEntities.socials) {
+      data.entities.socials = data.entities.socials || {};
+      for (const net of Object.keys(extraEntities.socials)) {
+        if (Array.isArray(extraEntities.socials[net]) && extraEntities.socials[net].length) {
+          data.entities.socials[net] = [...new Set([...(data.entities.socials[net] || []), ...extraEntities.socials[net]])];
+        }
+      }
+    }
   } catch {
-    data.entities = { emails: [], phones: [], urls: [], socials: {}, addresses: [] };
+    data.entities = { emails: [], phones: [], urls: [], socials: {}, addresses: [], coordinates: [], ipAddresses: [], crypto: { bitcoin: [], ethereum: [] } };
   }
 
   return data;

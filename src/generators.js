@@ -465,7 +465,19 @@ function generateSitemap(pages) {
     .filter((p) => p && p.meta && p.meta.url)
     .map((p) => {
       const loc = p.meta.url.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `  <url><loc>${loc}</loc></url>`;
+      // Use scrape timestamp or meta date as lastmod, fallback to today
+      const rawDate = p.meta.scrapedAt || p.meta.timestamp || p.meta.publishedDate || null;
+      let lastmod = '';
+      if (rawDate) {
+        try {
+          const d = new Date(rawDate);
+          if (!isNaN(d.getTime())) lastmod = `\n    <lastmod>${d.toISOString().slice(0, 10)}</lastmod>`;
+        } catch {}
+      }
+      // Priority: depth 0 = 1.0, depth 1 = 0.8, deeper = 0.6
+      const depth = typeof p.depth === 'number' ? p.depth : (p.meta.depth ?? 1);
+      const priority = depth === 0 ? '1.0' : depth === 1 ? '0.8' : '0.6';
+      return `  <url>\n    <loc>${loc}</loc>${lastmod}\n    <priority>${priority}</priority>\n  </url>`;
     })
     .join('\n');
 

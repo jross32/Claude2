@@ -451,9 +451,21 @@ app.get('/api/detect', async (req, res) => {
     const parsed = new URL(url);
     const origin = parsed.origin;
 
+    let responseHeaders = {};
+    let statusCode = 0;
+    let finalUrl = url;
+
     const body = await new Promise((resolve, reject) => {
       const mod = parsed.protocol === 'https:' ? https : http;
       const req2 = mod.get(url, { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+        statusCode = r.statusCode;
+        responseHeaders = r.headers;
+        // Follow one redirect
+        if ((r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 307 || r.statusCode === 308) && r.headers.location) {
+          finalUrl = r.headers.location.startsWith('http') ? r.headers.location : `${origin}${r.headers.location}`;
+          r.destroy();
+          return resolve('');
+        }
         let data = '';
         r.on('data', (chunk) => { data += chunk; if (data.length > 80000) r.destroy(); });
         r.on('end', () => resolve(data));
@@ -476,7 +488,78 @@ app.get('/api/detect', async (req, res) => {
     const descMatch = body.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{0,300})["']/i);
     const description = descMatch ? descMatch[1].trim() : '';
 
-    res.json({ title, favicon, url, description });
+    // ── CMS / platform detection ───────────────────────────────────────────
+    const cms = [];
+    if (/wp-content|wp-includes|wordpress/i.test(body)) cms.push('WordPress');
+    if (/shopify\.com|cdn\.shopify|Shopify\.theme/i.test(body)) cms.push('Shopify');
+    if (/drupal\.js|drupal\/core|Drupal\.settings/i.test(body)) cms.push('Drupal');
+    if (/joomla|\/components\/com_/i.test(body)) cms.push('Joomla');
+    if (/squarespace\.com|static\.squarespace/i.test(body)) cms.push('Squarespace');
+    if (/wix\.com|wixsite\.com|_wix_/i.test(body)) cms.push('Wix');
+    if (/webflow\.io|webflow\.com/i.test(body)) cms.push('Webflow');
+    if (/ghost\.io|ghost-sdk/i.test(body)) cms.push('Ghost');
+    if (/hubspot\.com|hs-scripts|_hsp_/i.test(body)) cms.push('HubSpot');
+    if (/magento|Mage\.Cookies/i.test(body)) cms.push('Magento');
+    if (/bigcommerce\.com|stencil\.bigcommerce/i.test(body)) cms.push('BigCommerce');
+    if (responseHeaders['x-powered-by'] && /php/i.test(responseHeaders['x-powered-by'])) cms.push('PHP');
+
+    // ── JS framework detection ─────────────────────────────────────────────
+    const frameworks = [];
+    if (/__NEXT_DATA__|_next\/static|next\.config/i.test(body)) frameworks.push('Next.js');
+    if (/nuxt|__nuxt__|_nuxt\//i.test(body)) frameworks.push('Nuxt.js');
+    if (/ng-version|angular\.min\.js|ngApp/i.test(body)) frameworks.push('Angular');
+    if (/data-reactroot|__react|react\.development|react\.production/i.test(body)) frameworks.push('React');
+    if (/__vue__|vue\.min\.js|v-on:|v-bind:/i.test(body)) frameworks.push('Vue.js');
+    if (/gatsby-image|gatsby-ssr/i.test(body)) frameworks.push('Gatsby');
+    if (/svelte|__svelte/i.test(body)) frameworks.push('Svelte');
+    if (/__REMIX__|remix\.run/i.test(body)) frameworks.push('Remix');
+    if (/astro-island|astro:script/i.test(body)) frameworks.push('Astro');
+
+    // ── Rendering mode ─────────────────────────────────────────────────────
+    const isSpa = frameworks.some(f => ['React', 'Vue.js', 'Angular', 'Svelte'].includes(f))
+      && !frameworks.some(f => ['Next.js', 'Nuxt.js', 'Gatsby', 'Remix', 'Astro'].includes(f));
+    const renderingMode = isSpa ? 'SPA (client-side)' : frameworks.length ? 'SSR/SSG' : 'Unknown';
+
+    // ── Login / auth detection ─────────────────────────────────────────────
+    const hasLoginForm = /<form[^>]*>[\s\S]{0,2000}?(?:type=["']password["']|name=["']password["'])/i.test(body);
+    const hasOAuth = /google.*oauth|oauth.*google|sign in with google|continue with google|facebook login|sign in with apple|login with github/i.test(body);
+    const requiresAuth = hasLoginForm || hasOAuth;
+
+    // ── Anti-bot / CAPTCHA detection ──────────────────────────────────────
+    const antiBot = [];
+    if (/cloudflare|cf-challenge|cf-turnstile|cf-chl-/i.test(body) || (responseHeaders['server'] || '').toLowerCase().includes('cloudflare')) antiBot.push('Cloudflare');
+    if (/g-recaptcha|grecaptcha|recaptcha\.net/i.test(body)) antiBot.push('reCAPTCHA');
+    if (/h-captcha|hcaptcha\.com/i.test(body)) antiBot.push('hCaptcha');
+    if (/datadome|dd\.js/i.test(body)) antiBot.push('DataDome');
+    if (/px\.js|perimeterx\.net/i.test(body)) antiBot.push('PerimeterX');
+    if (/imperva|incapsula/i.test(body)) antiBot.push('Imperva');
+
+    // ── Language / locale detection ────────────────────────────────────────
+    const langMatch = body.match(/<html[^>]+lang=["']([a-zA-Z\-]{2,10})["']/i);
+    const language = langMatch ? langMatch[1] : (responseHeaders['content-language'] || null);
+
+    // ── Security headers ───────────────────────────────────────────────────
+    const securityHeaders = {
+      hsts: !!responseHeaders['strict-transport-security'],
+      csp: !!responseHeaders['content-security-policy'],
+      xFrame: !!responseHeaders['x-frame-options'],
+      xContentType: !!responseHeaders['x-content-type-options'],
+    };
+
+    res.json({
+      title, favicon, url, finalUrl, description,
+      statusCode,
+      cms: cms.length ? cms : null,
+      frameworks: frameworks.length ? frameworks : null,
+      renderingMode,
+      requiresAuth,
+      hasLoginForm,
+      hasOAuth,
+      antiBot: antiBot.length ? antiBot : null,
+      language,
+      server: responseHeaders['server'] || null,
+      securityHeaders,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -553,6 +636,8 @@ app.post('/api/scrape', async (req, res) => {
     proxy,
     uiVisible,
     initiatedBy,
+    totpSecret,
+    ssoProvider,
   } = req.body;
 
   if (!url && (!urls || urls.length === 0)) {
@@ -638,6 +723,8 @@ app.post('/api/scrape', async (req, res) => {
       proxy: proxy || null,
       uiVisible: scraper.uiVisible,
       initiatedBy: scraper.initiatedBy,
+      totpSecret: totpSecret || null,
+      ssoProvider: ssoProvider || null,
     })
     .then((result) => {
       clearTimeout(cleanupTimer);
