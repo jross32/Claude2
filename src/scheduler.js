@@ -25,6 +25,7 @@ function saveToDisk() {
     ensureDataDir();
     const serializable = [...jobs.values()].map(j => ({
       id:            j.id,
+      label:         j.label || null,
       cronExpr:      j.cronExpr,
       scrapeOptions: j.scrapeOptions,
       createdAt:     j.createdAt,
@@ -60,7 +61,7 @@ function getNextRunAt(task) {
 
 // ── Core API ──────────────────────────────────────────────────────────────────
 
-function createSchedule(id, cronExpr, scrapeOptions, onComplete) {
+function createSchedule(id, cronExpr, scrapeOptions, onComplete, label) {
   if (!cron.validate(cronExpr)) {
     throw new Error(`Invalid cron expression: ${cronExpr}`);
   }
@@ -106,6 +107,7 @@ function createSchedule(id, cronExpr, scrapeOptions, onComplete) {
 
   jobs.set(id, {
     id,
+    label:     label || null,
     task,
     cronExpr,
     scrapeOptions,
@@ -133,6 +135,7 @@ function deleteSchedule(id) {
 function listSchedules() {
   return [...jobs.values()].map((j) => ({
     id:            j.id,
+    label:         j.label || null,
     cronExpr:      j.cronExpr,
     scrapeOptions: j.scrapeOptions,
     createdAt:     j.createdAt,
@@ -187,6 +190,7 @@ function restoreSchedules() {
 
       jobs.set(entry.id, {
         id:            entry.id,
+        label:         entry.label || null,
         task,
         cronExpr:      entry.cronExpr,
         scrapeOptions: entry.scrapeOptions,

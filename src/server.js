@@ -889,7 +889,7 @@ app.get('/api/schedules', (req, res) => {
 });
 
 app.post('/api/schedules', (req, res) => {
-  const { cronExpr, scrapeOptions } = req.body || {};
+  const { cronExpr, scrapeOptions, label } = req.body || {};
   if (!cronExpr || typeof cronExpr !== 'string') return res.status(400).json({ error: `'cronExpr' must be a non-empty string` });
   if (!scrapeOptions || typeof scrapeOptions !== 'object') return res.status(400).json({ error: `'scrapeOptions' must be an object` });
   if (!scrapeOptions.url || typeof scrapeOptions.url !== 'string') return res.status(400).json({ error: `'scrapeOptions.url' is required` });
@@ -897,7 +897,7 @@ app.post('/api/schedules', (req, res) => {
     const id = uuidv4();
     createSchedule(id, cronExpr, scrapeOptions, (result, err) => {
       if (err) console.error(`Schedule ${id} error:`, err.message);
-    });
+    }, label || null);
     res.json({ id, message: 'Schedule created' });
   } catch (err) {
     res.status(400).json({ error: err.message });
