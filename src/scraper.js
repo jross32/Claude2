@@ -3,6 +3,8 @@ try {
   const StealthPlugin = require('puppeteer-extra-plugin-stealth');
   chromium.use(StealthPlugin());
 } catch {}
+const torManager = require('./tor-manager');
+const redisCache = require('./redis-cache');
 
 // ── User-agent pool (realistic Chrome on Windows strings) ─────────────────
 const _UA_POOL = [
@@ -997,10 +999,14 @@ class ScraperSession {
       initiatedBy,
       totpSecret,
       ssoProvider,
+      useTor,
+      redisDedupe,
     } = options;
 
     this._captureScreenshots = captureScreenshots || false;
     this._politeDelay = parseInt(politeDelay, 10) || 0;
+    this._useTor = !!useTor;
+    this._redisDedupe = !!redisDedupe;
     this._options = options;
 
     const targetUrls = urls && urls.length > 0 ? urls : (url ? [url] : []);
@@ -1119,6 +1125,15 @@ class ScraperSession {
       launchOpts.proxy = { server: proxy.server };
       if (proxy.username) launchOpts.proxy.username = proxy.username;
       if (proxy.password) launchOpts.proxy.password = proxy.password;
+    }
+    // Tor SOCKS5 — lowest precedence (env proxy and per-scrape proxy override it)
+    if (this._useTor && !launchOpts.proxy) {
+      if (await torManager.isAvailable()) {
+        launchOpts.proxy = torManager.getProxyConfig();
+        this.log(`Tor SOCKS5 proxy active (${torManager.address}) — traffic routed through Tor`, 'info');
+      } else {
+        this.log(`useTor requested but Tor SOCKS5 is not reachable at ${torManager.address} — continuing without proxy`, 'warn');
+      }
     }
     this.browser = await chromium.launch(launchOpts);
 
@@ -1659,6 +1674,14 @@ class ScraperSession {
       const url = queue.shift();
       const norm = normalize(url);
       if (visited.has(norm)) continue;
+      // Cross-session URL dedup — skip pages already scraped in a previous session
+      if (this._redisDedupe && redisCache.connected) {
+        if (await redisCache.isVisitedCrossSession(new URL(url).hostname, norm)) {
+          visited.add(norm); // populate in-memory cache so we don't re-check Redis
+          this.log(`[redis] Skipping previously scraped: ${norm}`, 'info');
+          continue;
+        }
+      }
       visited.add(norm);
 
       const pathname = (() => { try { return new URL(url).pathname || '/'; } catch { return url; } })();
@@ -1720,6 +1743,10 @@ class ScraperSession {
 
         results.push(pageData);
         this._incrementPartialPageCount();
+        // Persist URL in Redis for cross-session dedup (fire-and-forget)
+        if (this._redisDedupe) redisCache.markVisitedCrossSession(new URL(url).hostname, norm).catch(() => {});
+        // Tor circuit rotation — request a new exit IP every N pages
+        if (this._useTor) torManager.tickPage().catch(() => {});
         this.log(`[${results.length}] (depth ${pageData._crawl.depth}) ${pathname}`);
 
         // Collect new internal links
@@ -1791,7 +1818,10 @@ class ScraperSession {
           this.log(`  +${newInteract.length} links via interaction (tabs/pagination/load-more)`, 'info');
         }
 
-        if (this._politeDelay > 0) await new Promise(r => setTimeout(r, this._politeDelay));
+        if (this._politeDelay > 0) {
+          const _rateDomain = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+          await redisCache.enforceDomainRate(_rateDomain, this._politeDelay);
+        }
       } catch (err) {
         if (this._isPageClosed(err)) {
           this.log(`Page closed unexpectedly at ${pathname} — stopping crawl.`, 'error');
@@ -2707,6 +2737,10 @@ class ScraperSession {
         };
         results.push(pageData);
         this._incrementPartialPageCount();
+        // Persist URL in Redis for cross-session dedup (fire-and-forget)
+        if (this._redisDedupe) redisCache.markVisitedCrossSession(new URL(url).hostname, norm).catch(() => {});
+        // Tor circuit rotation — tickPage() auto-fires NEWNYM every TOR_ROTATE_EVERY pages
+        if (this._useTor) torManager.tickPage().catch(() => {});
         this.log(`[W${workerId}] [${results.length}] ${pathname}`);
         {
           const done = results.length;
@@ -2797,7 +2831,10 @@ class ScraperSession {
           this.log(`[W${workerId}] +${newInteract.length} via interaction (tabs/pagination/load-more)`, 'info');
         }
 
-        if (this._politeDelay > 0) await new Promise(r => setTimeout(r, this._politeDelay));
+        if (this._politeDelay > 0) {
+          const _rateDomain = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+          await redisCache.enforceDomainRate(_rateDomain, this._politeDelay);
+        }
       } catch (err) {
         shared.active--;
         if (this._isPageClosed(err)) {

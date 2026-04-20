@@ -1,0 +1,449 @@
+{
+  "timestamp": "2026-04-20T20:36:39.806Z",
+  "git_commit": "4aa5889",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "MCP server exports 47 tools",
+      "status": "fail",
+      "duration_ms": 2,
+      "error": "Expected 47 tools, got 55",
+      "input": {},
+      "output": {},
+      "stack_trace": "Error: Expected 47 tools, got 55\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\mcp-server.test.js:51:36\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\mcp-server.test.js:49:16)\n    at Object.<anonymous> (C:\\Users\\justi\\Claude2\\tests\\unit\\mcp-server.test.js:698:1)\n    at Module._compile (node:internal/modules/cjs/loader:1812:14)\n    at Object..js (node:internal/modules/cjs/loader:1943:10)\n    at Module.load (node:internal/modules/cjs/loader:1533:32)\n    at Module._load (node:internal/modules/cjs/loader:1335:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)",
+      "screenshot": null
+    },
+    {
+      "name": "MCP tool names are unique",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "uniqueCount": 55
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "New MCP tools are present",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "added": 28
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "All MCP tools include title and annotations",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "annotatedTools": 55
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "research_url schema exposes auto/fast/deep modes",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "modeEnum": [
+          "auto",
+          "fast",
+          "deep"
+        ],
+        "includeEvidenceType": "boolean"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Read-only MCP tools expose readOnlyHint",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "readOnlyTool": "search_scrape_text"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "map_site_for_goal schema exposes scope and exhaustive controls",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "scopeLevelType": "number",
+        "exhaustiveType": "boolean"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Fixed resources and resource templates are exported",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "fixed": 2,
+        "templates": 10,
+        "prompts": 8
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "truncateText limits long strings",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "result": "abcdefghij…"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "searchSavedPages returns snippets and match counts",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "matches": 4,
+        "snippets": 4
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "research question router classifies extractive and deep prompts",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "extractive": "extractive",
+        "deep": "reasoning-heavy",
+        "forcedFast": "fast-ai"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "buildGoalModel expands deals and price-sensitive goals",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "dealTargets": [
+          "coupons",
+          "cash_back",
+          "rebates",
+          "weekly_ads"
+        ],
+        "priceLimit": 100
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "scoreGoalText matches retail deal sections",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "score": 30,
+        "matchedTargets": [
+          "coupons",
+          "cash_back",
+          "rebates",
+          "weekly_ads"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "buildResearchEvidence respects fast profile budget and ranks matches first",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "rankedUrl": "https://example.com/releases",
+        "totalChars": 261
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "buildSaveOverview summarizes counts, sections, and highlights",
+      "status": "pass",
+      "duration_ms": 16,
+      "error": null,
+      "input": {},
+      "output": {
+        "sections": 1,
+        "highlights": 4
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "buildApiSurface groups endpoints and operations",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "graphqlEndpoints": 1,
+        "restEndpoints": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "collectStoreContext detects visible/API mismatches",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "mismatchTypes": [
+          "store_number_mismatch",
+          "postal_code_mismatch",
+          "hours_mismatch"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extractDealsFromSave finds deal snippets from pages and APIs",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 5,
+        "first": "Pepsi or Mountain Dew 3 for $14."
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "buildOrientationFromSave maps multi-section deal flows",
+      "status": "pass",
+      "duration_ms": 61,
+      "error": null,
+      "input": {},
+      "output": {
+        "found": [
+          "coupons",
+          "cash_back",
+          "rebates",
+          "weekly_ads"
+        ],
+        "recommendedScrapes": 7,
+        "interactionHistory": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "buildOrientationFromSave infers missing sibling sections when adjacent deal pages are present",
+      "status": "pass",
+      "duration_ms": 6,
+      "error": null,
+      "input": {},
+      "output": {
+        "found": [
+          "coupons",
+          "cash_back",
+          "rebates",
+          "weekly_ads"
+        ],
+        "inferredKinds": [
+          "Rebate"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "scope selection and stop logic behave as expected",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "allowedLevel1": 1,
+        "shouldStop": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "findSiteIssues flags security and context problems",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 11,
+        "bySeverity": {
+          "medium": 5,
+          "low": 4,
+          "high": 2
+        }
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "analyzeResearchQuestion skips AI backend for extractive auto mode",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "routeUsed": "extractive",
+        "analysisMethod": "keyword-extraction"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "analyzeResearchQuestion falls back cleanly when AI backend returns null",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "routeUsed": "deep-ai",
+        "evidenceCount": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "normalizeCompletedScrapeResult converts saved scrapes into result shape",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "totalPages": 1,
+        "title": "Docs Home"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "toResearchPage reads saved-page meta fields",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "url": "https://example.com/about",
+        "title": "About Example"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "createToolSuccess includes structuredContent",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "structured": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "createToolFailure includes standardized error shape",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "code": "not_found",
+        "retryable": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Prompt builder references narrow MCP reads",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "preview": "Use get_scrape_status on abc123 first, then prefer scrape://save/abc123/summary,"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "New workflow prompts reference the new narrow tools/resources",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "leakage": "Start with scrape://save/save-9/overview and scrape://save/s",
+        "deals": "Start with scrape://save/save-9/overview and scrape://save/s",
+        "api": "Start with scrape://save/save-9/api-surface and scrape://sav",
+        "goal": "Start with scrape://save/save-9/orientation, then inspect sc"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Resource URI parser understands templated scrape URIs",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "summaryKind": "savePage",
+        "activeKind": "activeSession",
+        "overviewKind": "saveOverview",
+        "dealsKind": "saveDeals",
+        "orientationKind": "saveOrientation"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 31,
+    "passed": 30,
+    "failed": 1,
+    "skipped": 0,
+    "duration_ms": 150,
+    "avg_duration_ms": 5
+  }
+}

@@ -46,9 +46,9 @@ const NEW_TOOL_NAMES = [
 async function main() {
   const runner = new TestRunner('unit');
 
-  await runner.run('MCP server exports 47 tools', ({ setOutput }) => {
+  await runner.run('MCP server exports 55 tools', ({ setOutput }) => {
     if (!Array.isArray(TOOLS)) throw new Error('TOOLS export missing');
-    if (TOOLS.length !== 47) throw new Error(`Expected 47 tools, got ${TOOLS.length}`);
+    if (TOOLS.length !== 55) throw new Error(`Expected 55 tools, got ${TOOLS.length}`);
     setOutput({ count: TOOLS.length });
   });
 
@@ -179,7 +179,7 @@ async function main() {
 
     if (extractive.routeUsed !== 'extractive') throw new Error(`Expected extractive route, got ${extractive.routeUsed}`);
     if (deep.routeUsed !== 'reasoning-heavy') throw new Error(`Expected reasoning-heavy route, got ${deep.routeUsed}`);
-    if (forcedFast.routeUsed !== 'fast-ollama') throw new Error(`Expected fast override, got ${forcedFast.routeUsed}`);
+    if (forcedFast.routeUsed !== 'fast-ai') throw new Error(`Expected fast override, got ${forcedFast.routeUsed}`);
 
     setOutput({ extractive: extractive.routeUsed, deep: deep.routeUsed, forcedFast: forcedFast.routeUsed });
   });
@@ -546,7 +546,7 @@ async function main() {
     setOutput({ count: issues.count, bySeverity: issues.bySeverity });
   });
 
-  await runner.run('analyzeResearchQuestion skips Ollama for extractive auto mode', async ({ setOutput }) => {
+  await runner.run('analyzeResearchQuestion skips AI backend for extractive auto mode', async ({ setOutput }) => {
     let called = false;
     const result = await __private__.analyzeResearchQuestion([
       {
@@ -558,18 +558,18 @@ async function main() {
       },
     ], 'When does Black Bolt release?', {
       mode: 'auto',
-      analyzeWithOllamaImpl: async () => {
+      analyzeWithAIImpl: async () => {
         called = true;
         return null;
       },
     });
 
-    if (called) throw new Error('Expected extractive auto mode to skip Ollama');
+    if (called) throw new Error('Expected extractive auto mode to skip AI backend');
     if (result.routeUsed !== 'extractive') throw new Error(`Unexpected routeUsed: ${result.routeUsed}`);
     setOutput({ routeUsed: result.routeUsed, analysisMethod: result.analysisMethod });
   });
 
-  await runner.run('analyzeResearchQuestion falls back cleanly when Ollama returns null', async ({ setOutput }) => {
+  await runner.run('analyzeResearchQuestion falls back cleanly when AI backend returns null', async ({ setOutput }) => {
     const result = await __private__.analyzeResearchQuestion([
       {
         url: 'https://example.com/releases',
@@ -581,10 +581,10 @@ async function main() {
     ], 'Summarize the release page and explain the key themes.', {
       mode: 'deep',
       includeEvidence: true,
-      analyzeWithOllamaImpl: async () => null,
+      analyzeWithAIImpl: async () => null,
     });
 
-    if (result.routeUsed !== 'deep-ollama') throw new Error(`Expected deep override route, got ${result.routeUsed}`);
+    if (result.routeUsed !== 'deep-ai') throw new Error(`Expected deep override route, got ${result.routeUsed}`);
     if (result.analysisMethod !== 'keyword-extraction') throw new Error(`Expected keyword fallback, got ${result.analysisMethod}`);
     if (!Array.isArray(result.evidence) || !result.evidence.length) throw new Error('Expected evidence in response');
     setOutput({ routeUsed: result.routeUsed, evidenceCount: result.evidence.length });

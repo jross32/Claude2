@@ -638,6 +638,8 @@ app.post('/api/scrape', async (req, res) => {
     initiatedBy,
     totpSecret,
     ssoProvider,
+    useTor,
+    redisDedupe,
   } = req.body;
 
   if (!url && (!urls || urls.length === 0)) {
@@ -725,6 +727,8 @@ app.post('/api/scrape', async (req, res) => {
       initiatedBy: scraper.initiatedBy,
       totpSecret: totpSecret || null,
       ssoProvider: ssoProvider || null,
+      useTor: parseBooleanFlag(useTor, false),
+      redisDedupe: parseBooleanFlag(redisDedupe, false),
     })
     .then((result) => {
       clearTimeout(cleanupTimer);
@@ -1190,10 +1194,16 @@ app.post('/api/fill-form', async (req, res) => {
         }
         const fillValue = String(field.value ?? '');
         try {
-          await page.locator(field.selector).first().fill(fillValue, { timeout: 8000 });
+          // Primary: direct page.fill() — fast, reliable, triggers all input events
+          await page.fill(field.selector, fillValue, { timeout: 8000 });
         } catch (fillErr) {
-          // Fallback: type character-by-character (handles some custom inputs)
-          try { await page.locator(field.selector).first().type(fillValue, { timeout: 8000 }); } catch {}
+          try {
+            // Fallback 1: locator (shadow DOM, nth-match)
+            await page.locator(field.selector).first().fill(fillValue, { timeout: 8000 });
+          } catch {
+            // Fallback 2: type character-by-character (custom inputs, contenteditable)
+            try { await page.locator(field.selector).first().type(fillValue, { timeout: 8000 }); } catch {}
+          }
         }
       }
 

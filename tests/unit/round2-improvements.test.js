@@ -26,45 +26,45 @@ async function main() {
     setOutput({ mcpLen: mcpSource.length, serverLen: serverSource.length });
   });
 
-  // ── r2-fix-1a: Anthropic constants ────────────────────────────────────────
-  runner.run('r2-fix-1a: ANTHROPIC_API_KEY/MODEL constants present; OLLAMA_URL removed', ({ setOutput }) => {
-    const hasKey   = mcpSource.includes('ANTHROPIC_API_KEY');
-    const hasModel = mcpSource.includes('ANTHROPIC_MODEL');
+  // ── r2-fix-1a: Generic AI backend constants ──────────────────────────────────
+  runner.run('r2-fix-1a: AI_ANALYSIS_URL/MODEL constants present; no vendor-lock constants', ({ setOutput }) => {
+    const hasUrl   = mcpSource.includes('AI_ANALYSIS_URL');
+    const hasModel = mcpSource.includes('AI_ANALYSIS_MODEL');
     const noOllama = !mcpSource.includes('OLLAMA_URL');
-    const noOldFn  = !mcpSource.includes('analyzeWithOllama');
-    const hasNewFn = mcpSource.includes('analyzeWithAnthropic');
-    setOutput({ hasKey, hasModel, noOllama, noOldFn, hasNewFn });
-    if (!hasKey)   throw new Error('ANTHROPIC_API_KEY constant missing');
-    if (!hasModel) throw new Error('ANTHROPIC_MODEL constant missing');
-    if (!noOllama) throw new Error('OLLAMA_URL should be removed');
-    if (!noOldFn)  throw new Error('analyzeWithOllama should be removed');
-    if (!hasNewFn) throw new Error('analyzeWithAnthropic function missing');
+    const noAnthropicKey = !mcpSource.includes('ANTHROPIC_API_KEY');
+    const hasNewFn = mcpSource.includes('analyzeWithAI');
+    setOutput({ hasUrl, hasModel, noOllama, noAnthropicKey, hasNewFn });
+    if (!hasUrl)          throw new Error('AI_ANALYSIS_URL constant missing');
+    if (!hasModel)        throw new Error('AI_ANALYSIS_MODEL constant missing');
+    if (!noOllama)        throw new Error('OLLAMA_URL should not be present');
+    if (!noAnthropicKey)  throw new Error('ANTHROPIC_API_KEY should not be present (use AI_ANALYSIS_URL instead)');
+    if (!hasNewFn)        throw new Error('analyzeWithAI function missing');
   });
 
-  // ── r2-fix-1b: analyzeWithAnthropic hits Anthropic API ────────────────────
-  runner.run('r2-fix-1b: analyzeWithAnthropic calls api.anthropic.com with correct headers', ({ setOutput }) => {
-    const hasEndpoint = mcpSource.includes('api.anthropic.com');
-    const hasVersion  = mcpSource.includes('anthropic-version');
-    const hasApiKey   = mcpSource.includes('x-api-key');
-    setOutput({ hasEndpoint, hasVersion, hasApiKey });
-    if (!hasEndpoint) throw new Error('Missing api.anthropic.com endpoint');
-    if (!hasVersion)  throw new Error('Missing anthropic-version header');
-    if (!hasApiKey)   throw new Error('Missing x-api-key header');
+  // ── r2-fix-1b: analyzeWithAI uses OpenAI-compatible endpoint ───────────────────
+  runner.run('r2-fix-1b: analyzeWithAI uses OpenAI-compatible /v1/chat/completions', ({ setOutput }) => {
+    const hasEndpoint = mcpSource.includes('/v1/chat/completions');
+    const hasMessages = mcpSource.includes('messages');
+    const hasBearer   = mcpSource.includes('Bearer ${apiKey}') || mcpSource.includes("Bearer ${apiKey}") || mcpSource.includes('Bearer ');
+    setOutput({ hasEndpoint, hasMessages, hasBearer });
+    if (!hasEndpoint) throw new Error('Missing /v1/chat/completions endpoint — must be OpenAI-compatible');
+    if (!hasMessages) throw new Error('Missing messages array in AI request body');
+    if (!hasBearer)   throw new Error('Missing Bearer auth header for AI backend');
   });
 
-  // ── r2-fix-1c: strategy uses useAnthropic ─────────────────────────────────
-  runner.run('r2-fix-1c: determineResearchStrategy uses useAnthropic and new route names', ({ setOutput }) => {
-    const noOldFlag  = !mcpSource.includes('useOllama');
-    const hasNewFlag = mcpSource.includes('useAnthropic');
-    const noOldRoute = !mcpSource.includes('fast-ollama') && !mcpSource.includes('deep-ollama');
-    const hasNewRoute= mcpSource.includes('fast-anthropic') && mcpSource.includes('deep-anthropic');
-    const hasImpl    = mcpSource.includes('analyzeWithAnthropicImpl');
-    setOutput({ noOldFlag, hasNewFlag, noOldRoute, hasNewRoute, hasImpl });
-    if (!noOldFlag)  throw new Error('useOllama still present');
-    if (!hasNewFlag) throw new Error('useAnthropic not found');
-    if (!noOldRoute) throw new Error('Old route names still present');
-    if (!hasNewRoute)throw new Error('New route names missing');
-    if (!hasImpl)    throw new Error('analyzeWithAnthropicImpl not found in analyzeResearchQuestion');
+  // ── r2-fix-1c: strategy uses useAI and generic route names ──────────────
+  runner.run('r2-fix-1c: determineResearchStrategy uses useAI flag and fast-ai/deep-ai routes', ({ setOutput }) => {
+    const noOldOllama    = !mcpSource.includes('fast-ollama') && !mcpSource.includes('deep-ollama');
+    const noOldAnthropic = !mcpSource.includes('fast-anthropic') && !mcpSource.includes('deep-anthropic');
+    const hasNewRoute    = mcpSource.includes('fast-ai') && mcpSource.includes('deep-ai');
+    const hasUseAI       = mcpSource.includes('useAI');
+    const hasImpl        = mcpSource.includes('analyzeWithAIImpl');
+    setOutput({ noOldOllama, noOldAnthropic, hasNewRoute, hasUseAI, hasImpl });
+    if (!noOldOllama)    throw new Error('Old Ollama route names still present');
+    if (!noOldAnthropic) throw new Error('Old Anthropic route names still present');
+    if (!hasNewRoute)    throw new Error('fast-ai / deep-ai route names missing');
+    if (!hasUseAI)       throw new Error('useAI flag not found in determineResearchStrategy');
+    if (!hasImpl)        throw new Error('analyzeWithAIImpl injection hook missing');
   });
 
   // ── r2-fix-2: JSON-LD in summarisePage ────────────────────────────────────
