@@ -26,6 +26,51 @@ function jaccardSimilarity(textA, textB) {
   return union === 0 ? 1 : Math.round((intersection / union) * 100) / 100;
 }
 
+/**
+ * Word-level diff between two strings.
+ * Returns { added, removed, addedCount, removedCount, changeRatio }.
+ * Uses a simple LCS-based approach on word tokens.
+ */
+function wordDiff(textA, textB, maxWords = 2000) {
+  const wordsA = (textA || '').split(/\s+/).filter(Boolean).slice(0, maxWords);
+  const wordsB = (textB || '').split(/\s+/).filter(Boolean).slice(0, maxWords);
+
+  const setA = new Set(wordsA);
+  const setB = new Set(wordsB);
+
+  // Words that appear in B but not A (added) — ordered, deduped
+  const addedSet = new Set(wordsB.filter(w => !setA.has(w)));
+  const removedSet = new Set(wordsA.filter(w => !setB.has(w)));
+
+  // Find contiguous runs (phrases) of added/removed words
+  function findRuns(arr, targetSet) {
+    const runs = [];
+    let run = [];
+    for (const w of arr) {
+      if (targetSet.has(w)) {
+        run.push(w);
+      } else {
+        if (run.length) { runs.push(run.join(' ')); run = []; }
+      }
+    }
+    if (run.length) runs.push(run.join(' '));
+    return runs.slice(0, 100);
+  }
+
+  const addedPhrases  = findRuns(wordsB, addedSet);
+  const removedPhrases = findRuns(wordsA, removedSet);
+  const total = Math.max(wordsA.length, wordsB.length, 1);
+
+  return {
+    addedPhrases,
+    removedPhrases,
+    addedWords:   addedSet.size,
+    removedWords: removedSet.size,
+    changeRatio:  Math.round(((addedSet.size + removedSet.size) / total) * 100) / 100,
+    summary: `+${addedSet.size} words, -${removedSet.size} words (${Math.round(((addedSet.size + removedSet.size) / total) * 100)}% change)`,
+  };
+}
+
 // ── Main diff function ────────────────────────────────────────────────────────
 
 function diffScrapes(scrapeA, scrapeB) {
@@ -88,6 +133,9 @@ function diffScrapes(scrapeA, scrapeB) {
     const fullTextB = firstB.fullText || '';
     const similarity = jaccardSimilarity(fullTextA, fullTextB);
 
+    // Word-level diff for the primary page
+    const textDiff = wordDiff(fullTextA, fullTextB);
+
     const pricesA = extractPrices(fullTextA);
     const pricesB = extractPrices(fullTextB);
     const setPricesA = new Set(pricesA);
@@ -105,10 +153,19 @@ function diffScrapes(scrapeA, scrapeB) {
       if (!matchingB) return;
       const sim = jaccardSimilarity(pageA.fullText || '', matchingB.fullText || '');
       if (sim < 0.95) {
+        const pd = wordDiff(pageA.fullText || '', matchingB.fullText || '');
         changedPages.push({
           url: pageA.meta?.url,
           similarity: sim,
           likelyChanged: sim < 0.8,
+          wordDiff: {
+            addedWords:   pd.addedWords,
+            removedWords: pd.removedWords,
+            changeRatio:  pd.changeRatio,
+            summary:      pd.summary,
+            addedPhrases: pd.addedPhrases.slice(0, 20),
+            removedPhrases: pd.removedPhrases.slice(0, 20),
+          },
         });
       }
     });
@@ -116,6 +173,7 @@ function diffScrapes(scrapeA, scrapeB) {
     result.semantic = {
       similarity,
       similarityLabel: similarity >= 0.95 ? 'nearly identical' : similarity >= 0.7 ? 'similar' : similarity >= 0.4 ? 'moderately changed' : 'significantly changed',
+      textDiff,
       priceChanges,
       changedPages,
     };
@@ -168,4 +226,4 @@ function diffScrapes(scrapeA, scrapeB) {
   return result;
 }
 
-module.exports = { diffScrapes };
+module.exports = { diffScrapes, wordDiff };

@@ -66,6 +66,29 @@ function exportHAR(scrapeResult) {
   (scrapeResult.apiCalls?.graphql || []).forEach((call) => entries.push(buildEntry(call, 'graphql')));
   (scrapeResult.apiCalls?.rest || []).forEach((call) => entries.push(buildEntry(call, 'rest')));
 
+  // Include all other captured network requests (JS, CSS, images, fonts, etc.)
+  // that aren't already represented as graphql/rest entries.
+  const _seenUrls = new Set([
+    ...(scrapeResult.apiCalls?.graphql || []).map(c => c.url),
+    ...(scrapeResult.apiCalls?.rest || []).map(c => c.url),
+  ]);
+  (scrapeResult.allRequests || []).forEach((call) => {
+    if (!call.url || _seenUrls.has(call.url)) return;
+    _seenUrls.add(call.url);
+    entries.push(buildEntry(call, 'request'));
+  });
+  (scrapeResult.assets || []).forEach((asset) => {
+    if (!asset.url || _seenUrls.has(asset.url)) return;
+    _seenUrls.add(asset.url);
+    entries.push(buildEntry({
+      url: asset.url,
+      method: 'GET',
+      timestamp: asset.timestamp || null,
+      headers: {},
+      response: { status: 200, headers: { 'content-type': asset.type || 'application/octet-stream' }, body: null },
+    }, 'asset'));
+  });
+
   return {
     log: {
       version: '1.2',

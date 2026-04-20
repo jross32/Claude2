@@ -1104,6 +1104,50 @@ class ScraperSession {
 
       const page = await context.newPage();
 
+      // ── Stealth: canvas/WebGL/hardware fingerprint noise ─────────────────
+      // Runs before any page script — spoofs headless-detectable APIs
+      await page.addInitScript(() => {
+        // 1. Canvas — subtle per-session pixel noise defeats canvas fingerprinting
+        try {
+          const _origGID = CanvasRenderingContext2D.prototype.getImageData;
+          CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
+            const img = _origGID.call(this, x, y, w, h);
+            for (let i = 0; i < img.data.length; i += 4) {
+              if (Math.random() < 0.05) { img.data[i] ^= 1; }       // R
+              if (Math.random() < 0.05) { img.data[i + 1] ^= 1; }   // G
+            }
+            return img;
+          };
+        } catch {}
+
+        // 2. WebGL — replace headless renderer string with real Intel GPU string
+        const _wglVendor   = 'Google Inc. (Intel)';
+        const _wglRenderer = 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11-27.20.100.8681)';
+        function _patchWebGL(ctor) {
+          try {
+            const _orig = ctor.prototype.getParameter;
+            ctor.prototype.getParameter = function(p) {
+              if (p === 37445) return _wglVendor;    // UNMASKED_VENDOR_WEBGL
+              if (p === 37446) return _wglRenderer;  // UNMASKED_RENDERER_WEBGL
+              return _orig.call(this, p);
+            };
+          } catch {}
+        }
+        _patchWebGL(WebGLRenderingContext);
+        try { _patchWebGL(WebGL2RenderingContext); } catch {}
+
+        // 3. Hardware concurrency — headless default is 2; pick realistic value
+        const _hwConc = [4, 8, 8, 12, 16][Math.floor(Math.random() * 5)];
+        try { Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => _hwConc }); } catch {}
+
+        // 4. Device memory — Chromium headless can expose unusual values
+        const _devMem = [4, 8, 8, 16][Math.floor(Math.random() * 4)];
+        try { Object.defineProperty(navigator, 'deviceMemory', { get: () => _devMem }); } catch {}
+
+        // 5. Hide the automation driver property (belt-and-suspenders alongside stealth plugin)
+        try { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); } catch {}
+      });
+
       // Native dialog dismissal only (alert/confirm/prompt boxes)
       page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch {} });
 
@@ -1947,7 +1991,7 @@ class ScraperSession {
       // URL didn't change (link may have scrolled or done something else) — fall through to goto
     }
 
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
@@ -2000,6 +2044,9 @@ class ScraperSession {
         if (attempt === 0) {
           this.log(`Load failed for ${url} — retrying in 1s... (${err.message})`, 'warn');
           await page.waitForTimeout(1000).catch(() => {});
+        } else if (attempt === 1) {
+          this.log(`Load failed for ${url} — retrying in 3s... attempt 2/3 (${err.message})`, 'warn');
+          await page.waitForTimeout(3000).catch(() => {});
         } else {
           // Last resort: try SPA client-side navigation (handles pages like /divisions
           // that 504 or timeout when loaded directly but work via in-app link clicks)

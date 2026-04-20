@@ -545,6 +545,11 @@ app.post('/api/scrape', async (req, res) => {
   if (!url && (!urls || urls.length === 0)) {
     return res.status(400).json({ error: 'URL is required' });
   }
+  if (url && typeof url !== 'string') return res.status(400).json({ error: `'url' must be a string` });
+  if (urls && !Array.isArray(urls)) return res.status(400).json({ error: `'urls' must be an array` });
+  if (maxPages !== undefined && maxPages !== null && (!Number.isInteger(Number(maxPages)) || Number(maxPages) < 1)) {
+    return res.status(400).json({ error: `'maxPages' must be a positive integer` });
+  }
 
   // Auto-inject credentials from .env for known sites
   let resolvedUsername = username;
@@ -784,10 +789,10 @@ app.get('/api/schedules', (req, res) => {
 });
 
 app.post('/api/schedules', (req, res) => {
-  const { cronExpr, scrapeOptions } = req.body;
-  if (!cronExpr || !scrapeOptions) {
-    return res.status(400).json({ error: 'cronExpr and scrapeOptions are required' });
-  }
+  const { cronExpr, scrapeOptions } = req.body || {};
+  if (!cronExpr || typeof cronExpr !== 'string') return res.status(400).json({ error: `'cronExpr' must be a non-empty string` });
+  if (!scrapeOptions || typeof scrapeOptions !== 'object') return res.status(400).json({ error: `'scrapeOptions' must be an object` });
+  if (!scrapeOptions.url || typeof scrapeOptions.url !== 'string') return res.status(400).json({ error: `'scrapeOptions.url' is required` });
   try {
     const id = uuidv4();
     createSchedule(id, cronExpr, scrapeOptions, (result, err) => {
@@ -843,8 +848,8 @@ app.post('/api/generate/markdown', (req, res) => {
 });
 
 app.post('/api/generate/sitemap', (req, res) => {
-  const { pages } = req.body;
-  if (!pages) return res.status(400).json({ error: 'pages is required' });
+  const { pages } = req.body || {};
+  if (!Array.isArray(pages) || pages.length === 0) return res.status(400).json({ error: `'pages' must be a non-empty array` });
   try {
     const xml = generateSitemap(pages);
     res.set('Content-Type', 'application/xml');
@@ -1033,51 +1038,113 @@ app.post('/api/screenshot', async (req, res) => {
 });
 
 // ---- Fill form ----
+// Supports both single-step and multi-step (wizard) forms.
+//
+// Single-step (legacy, backwards-compatible):
+//   { url, fields: [{selector, value}], submitSelector?, waitMs? }
+//
+// Multi-step wizard:
+//   { url, steps: [
+//       { fields: [{selector, value}], submitSelector?, waitForSelector?, waitMs? },
+//       { fields: [...], submitSelector?, waitForSelector?, waitMs? },
+//     ]
+//   }
+//   Each step fills its fields, optionally clicks a submit/next button,
+//   then waits for a selector or a fixed delay before the next step.
+//
 app.post('/api/fill-form', async (req, res) => {
-  const { url, fields, submitSelector, waitMs = 2000 } = req.body || {};
-  if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
-  if (!Array.isArray(fields) || fields.length === 0) return res.status(400).json({ error: 'fields must be a non-empty array' });
+  const body = req.body || {};
+  if (!body.url || typeof body.url !== 'string') return res.status(400).json({ error: 'url is required' });
+
+  // Normalise: single-step → steps array
+  let steps;
+  if (Array.isArray(body.steps) && body.steps.length > 0) {
+    steps = body.steps;
+  } else if (Array.isArray(body.fields) && body.fields.length > 0) {
+    steps = [{ fields: body.fields, submitSelector: body.submitSelector, waitMs: body.waitMs ?? 2000 }];
+  } else {
+    return res.status(400).json({ error: 'Provide either steps[] (multi-step) or fields[] (single-step)' });
+  }
 
   const { chromium } = require('playwright-extra');
   const { extractPageData } = require('./extractor');
   let browser;
+  const stepResults = [];
+
   try {
     browser = await chromium.launch({ headless: true });
     const ctx = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' });
     const page = await ctx.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(body.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-    for (const field of fields) {
-      await page.fill(field.selector, field.value);
+    for (let si = 0; si < steps.length; si++) {
+      const step = steps[si];
+      if (!Array.isArray(step.fields) || step.fields.length === 0) {
+        return res.status(400).json({ error: `steps[${si}].fields must be a non-empty array` });
+      }
+
+      // Fill all fields in this step
+      for (const field of step.fields) {
+        if (!field.selector || typeof field.selector !== 'string') {
+          return res.status(400).json({ error: `steps[${si}]: each field needs a 'selector' string` });
+        }
+        const fillValue = String(field.value ?? '');
+        try {
+          await page.locator(field.selector).first().fill(fillValue, { timeout: 8000 });
+        } catch (fillErr) {
+          // Fallback: type character-by-character (handles some custom inputs)
+          try { await page.locator(field.selector).first().type(fillValue, { timeout: 8000 }); } catch {}
+        }
+      }
+
+      // Submit / advance to next step
+      if (step.submitSelector) {
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {}),
+          page.click(step.submitSelector),
+        ]);
+      } else if (si < steps.length - 1 || !step.skipEnter) {
+        // Press Enter on the last filled field to advance
+        const lastSelector = step.fields[step.fields.length - 1].selector;
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {}),
+          page.locator(lastSelector).first().press('Enter'),
+        ]);
+      }
+
+      // Wait for a specific element to appear (signals step completion)
+      if (step.waitForSelector) {
+        await page.waitForSelector(step.waitForSelector, { timeout: 15000 }).catch(() => {});
+      }
+
+      const stepWaitMs = typeof step.waitMs === 'number' ? step.waitMs : 1500;
+      if (stepWaitMs > 0) await page.waitForTimeout(stepWaitMs);
+
+      const stepUrl = page.url();
+      const stepData = await extractPageData(page, stepUrl, { lightMode: true });
+      stepResults.push({
+        step: si + 1,
+        url: stepUrl,
+        pageTitle: stepData.meta?.title || '',
+        forms: (stepData.forms || []).slice(0, 5),
+        fullText: (stepData.fullText || '').slice(0, 3000),
+      });
     }
-
-    if (submitSelector) {
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {}),
-        page.click(submitSelector),
-      ]);
-    } else {
-      const lastSelector = fields[fields.length - 1].selector;
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {}),
-        page.locator(lastSelector).press('Enter'),
-      ]);
-    }
-
-    if (waitMs > 0) await page.waitForTimeout(waitMs);
 
     const resultUrl = page.url();
-    const pageData = await extractPageData(page, resultUrl, { lightMode: true });
+    const finalData = await extractPageData(page, resultUrl, { lightMode: true });
     await browser.close();
     browser = null;
 
     res.json({
-      url,
+      url: body.url,
       resultUrl,
-      pageTitle:  pageData.meta?.title || '',
-      fullText:   (pageData.fullText || '').slice(0, 8000),
-      links:      (pageData.links || []).slice(0, 50).map(l => ({ href: l.href, text: l.text })),
-      forms:      (pageData.forms || []).slice(0, 10),
+      stepsCompleted: steps.length,
+      stepResults,
+      pageTitle:  finalData.meta?.title || '',
+      fullText:   (finalData.fullText || '').slice(0, 8000),
+      links:      (finalData.links || []).slice(0, 50).map(l => ({ href: l.href, text: l.text })),
+      forms:      (finalData.forms || []).slice(0, 10),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
