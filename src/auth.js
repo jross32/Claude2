@@ -377,8 +377,16 @@ async function handleAuth(page, options) {
     await fill(passSel, password);
     log(`Filled password: ${passSel}`);
   } else {
-    log('Could not find password field', 'warn');
+    log('Could not find password field — trying OAuth/SSO fallback...', 'warn');
+    await _handleOAuth(page, context, ssoProvider || null, log);
     return;
+  }
+
+  // ── Solve CAPTCHA on login form (if present) ─────────────────────────────────
+  const loginCaptcha = await _detectCaptcha(page);
+  if (loginCaptcha) {
+    const captchaToken = await _solveCaptchaExternal(loginCaptcha, page.url(), log);
+    if (captchaToken) await _injectCaptchaToken(page, loginCaptcha, captchaToken, log);
   }
 
   // ── Submit ──────────────────────────────────────────────────────────────────
@@ -489,8 +497,12 @@ async function detectVerificationType(page) {
           (el.type === 'number' && el.maxLength <= 8)
         )
       );
+      // CAPTCHA detection is independent of code input presence
+      const hasCaptchaWidget = !!(document.querySelector(
+        '.g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey], iframe[src*="recaptcha"], iframe[src*="hcaptcha"]'
+      ));
+      if (hasCaptchaWidget || /captcha/i.test(body)) return 'captcha';
       if (!hasCodeInput) return 'none';
-      if (/captcha/i.test(body)) return 'captcha';
       if (/authenticator|totp|google auth/i.test(body)) return 'totp';
       if (/sent.*email|email.*code|check your email/i.test(body)) return 'email';
       if (/sms|text message/i.test(body)) return 'sms';
@@ -501,7 +513,19 @@ async function detectVerificationType(page) {
 
 async function handleVerification(page, options) {
   const { verificationType, verificationCode, waitForVerification, totpSecret, log } = options;
-  if (verificationType === 'captcha') { log('CAPTCHA — manual intervention required', 'warn'); return; }
+  if (verificationType === 'captcha') {
+    const captchaInfo = await _detectCaptcha(page);
+    const token = captchaInfo ? await _solveCaptchaExternal(captchaInfo, page.url(), log) : null;
+    if (token) {
+      await _injectCaptchaToken(page, captchaInfo, token, log);
+      await page.keyboard.press('Enter');
+      await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+      log('CAPTCHA solved and submitted', 'success');
+    } else {
+      log('CAPTCHA — manual intervention required (set CAPTCHA_API_KEY env var for auto-solve)', 'warn');
+    }
+    return;
+  }
 
   let code = verificationCode;
   // Auto-generate TOTP if a secret is available — no manual code entry needed
@@ -545,4 +569,4 @@ async function handleVerification(page, options) {
   log('Verification submitted');
 }
 
-module.exports = { handleAuth };
+module.exports = { handleAuth, handleOAuth: _handleOAuth };

@@ -576,20 +576,54 @@ class ScraperSession {
   async _autoScroll(page) {
     await page.evaluate(async () => {
       await new Promise((resolve) => {
-        let totalHeight = 0;
-        const distance = 500;
-        const deadline = Date.now() + 30000; // scroll for up to 30s to reach actual page bottom
-        const timer = setInterval(() => {
-          // Guard: body can be null during SPA re-renders / pushState transitions
-          if (!document.body) { clearInterval(timer); resolve(); return; }
-          window.scrollBy(0, distance);
-          totalHeight += distance;
-          if (totalHeight >= document.body.scrollHeight || Date.now() > deadline) {
-            clearInterval(timer);
+        const SCROLL_DIST     = 400;    // px per tick
+        const TICK_PAUSE_MS   = 150;    // wait after each scroll for lazy-loads to fire
+        const TICK_INTERVAL   = 50;     // ms between ticks
+        const MAX_IDLE_PASSES = 5;      // stop when bottom reached with no new content for N ticks
+        const DEADLINE_MS     = 30000;  // hard cap
+
+        const start = Date.now();
+        let noNewContentStreak = 0;
+
+        // Lightweight content probe — counts recognisable content nodes
+        const countNodes = () =>
+          document.querySelectorAll(
+            'article, section > *, li, tr, [class*="card"], [class*="item"], [class*="row"], [class*="product"], [class*="result"]'
+          ).length || document.body?.childElementCount || 0;
+
+        let prevNodes  = countNodes();
+        let prevHeight = document.body?.scrollHeight || 0;
+
+        const tick = async () => {
+          if (!document.body) { resolve(); return; }
+
+          window.scrollBy(0, SCROLL_DIST);
+          await new Promise(r => setTimeout(r, TICK_PAUSE_MS));
+
+          const nowNodes  = countNodes();
+          const nowHeight = document.body.scrollHeight;
+          const newContent = nowNodes > prevNodes || nowHeight > prevHeight;
+
+          if (newContent) {
+            noNewContentStreak = 0;
+            prevNodes  = nowNodes;
+            prevHeight = nowHeight;
+          } else {
+            noNewContentStreak++;
+          }
+
+          const atBottom = window.scrollY + window.innerHeight >= nowHeight - 50;
+          const timedOut = Date.now() - start >= DEADLINE_MS;
+          const idle     = atBottom && noNewContentStreak >= MAX_IDLE_PASSES;
+
+          if (idle || timedOut) {
             window.scrollTo(0, 0);
             resolve();
+          } else {
+            setTimeout(tick, TICK_INTERVAL);
           }
-        }, 30);
+        };
+        setTimeout(tick, 0);
       });
     }).catch(() => {}); // page may navigate away mid-scroll
     await page.waitForTimeout(500); // extra wait for lazy-loaded content to render
@@ -961,10 +995,13 @@ class ScraperSession {
       proxy,
       uiVisible,
       initiatedBy,
+      totpSecret,
+      ssoProvider,
     } = options;
 
     this._captureScreenshots = captureScreenshots || false;
     this._politeDelay = parseInt(politeDelay, 10) || 0;
+    this._options = options;
 
     const targetUrls = urls && urls.length > 0 ? urls : (url ? [url] : []);
     if (targetUrls.length === 0) throw new Error('No URL(s) provided');
@@ -1253,6 +1290,9 @@ class ScraperSession {
               username: authUser,
               password: authPass,
               verificationCode,
+              totpSecret: totpSecret || null,
+              ssoProvider: ssoProvider || null,
+              context: this.context,
               waitForVerification: this.waitForVerification.bind(this),
               log: this.log.bind(this),
             });
@@ -1838,6 +1878,9 @@ class ScraperSession {
         username: creds.username,
         password: creds.password,
         verificationCode: null,
+        totpSecret: this._options?.totpSecret || null,
+        ssoProvider: this._options?.ssoProvider || null,
+        context: this.context,
         waitForVerification: this.waitForVerification.bind(this),
         log: this.log.bind(this),
       });
