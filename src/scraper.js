@@ -1435,7 +1435,7 @@ class ScraperSession {
           this.log(`After auth — current URL: ${page.url()}`);
           await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
           await page.waitForTimeout(500);
-          this.log(`Settled URL: ${page.url
+          this.log(`Settled URL: ${page.url()}`);
           // Dismiss any post-login notification/permission popups (wait up to 5s for slow modals)
           await this._dismissPopups(page, 2500);
           this.log('Authentication complete', 'success');
