@@ -167,17 +167,19 @@ function clearSession(url) {
   return false;
 }
 
-module.exports = {
-  clearSession,
-  loadSession,
-  createSessionSnapshot,
-};
-exports.clearSession = clearSession;
-exports.loadSession = loadSession;
-exports.createSessionSnapshot = createSessionSnapshot;
+ScraperSession.clearSession = clearSession;
+ScraperSession.loadSession = loadSession;
+ScraperSession.createSessionSnapshot = createSessionSnapshot;
+module.exports = ScraperSession;
 
 // ── SPA route memory ─────────────────────────────────────────────────────────
 // URLs that 504 on direct server access but work via client-side SPA navigation
+
+// Assign static properties for legacy test compatibility
+ScraperSession.clearSession = clearSession;
+ScraperSession.loadSession = loadSession;
+ScraperSession.createSessionSnapshot = createSessionSnapshot;
+module.exports = ScraperSession;
 function spaRoutesFile(url) {
   try {
     const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');

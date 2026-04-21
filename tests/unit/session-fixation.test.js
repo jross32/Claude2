@@ -2,8 +2,9 @@
 // Automated tests for session fixation and reuse logic in the scraper
 
 const scraper = require('../../src/scraper');
-const loadSession = scraper.loadSession || scraper['loadSession'];
-const clearSession = scraper.clearSession || scraper['clearSession'];
+console.log('DEBUG SCRAPER EXPORT:', scraper);
+const loadSession = typeof scraper.loadSession === 'function' ? scraper.loadSession : undefined;
+const clearSession = typeof scraper.clearSession === 'function' ? scraper.clearSession : undefined;
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
