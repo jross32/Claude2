@@ -1,0 +1,186 @@
+{
+  "timestamp": "2026-04-21T03:33:14.595Z",
+  "git_commit": "58e2963",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "extracts email addresses from text",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "emails": [
+          "hello@example.com",
+          "support@corp.org"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "deduplicates repeated emails",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "emails": [
+          "info@test.com"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extracts US phone numbers",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "phones": [
+          "+15551234567",
+          "+18005550199"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extracts https URLs",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "urls": [
+          "https://example.com",
+          "https://docs.example.com/guide"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "filters linkedin and github URLs into socials",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "github": [
+          "https://github.com/user"
+        ],
+        "linkedin": [
+          "https://linkedin.com/in/user"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extracts twitter handles",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "twitter": [
+          "@example",
+          "@support_team"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "extracts street addresses",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "addresses": [
+          "123 Main Street"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "always returns all keys in result shape",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "keys": [
+          "emails",
+          "phones",
+          "urls",
+          "socials",
+          "addresses"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] empty string → all empty arrays",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] null input → all empty arrays",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] number input → all empty arrays",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] very long string with no entities → no crash",
+      "status": "pass",
+      "duration_ms": 30669,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 30694,
+    "avg_duration_ms": 2558
+  }
+}
