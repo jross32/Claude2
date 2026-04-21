@@ -3414,6 +3414,7 @@ class ScraperSession {
     for (const k of redact) if (out[k]) out[k] = '[REDACTED]';
     return out;
   }
+}
 
 // Assign static properties for legacy test compatibility (must be immediately after class definition)
 ScraperSession.clearSession = clearSession;
