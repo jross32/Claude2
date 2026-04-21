@@ -1,9 +1,9 @@
 # Test Results — unit-tool-improvements
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-21T03:34:49.557Z
-**Commit:** `58e2963`
-**Duration:** 92ms
+**Run:** 2026-04-21T03:46:00.939Z
+**Commit:** `6b4367d`
+**Duration:** 50ms
 
 ## Summary
 
@@ -15,8 +15,8 @@
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | fix-1: pause/resume/submit — description quality | pass | 32ms | |
-| ✅ | fix-2: openWorld flags for extract_entities, find_graphql_endpoints, find_site_issues | pass | 27ms | |
-| ✅ | fix-3: schedule persistence survives module reload | pass | 24ms | |
+| ✅ | fix-1: pause/resume/submit — description quality | pass | 18ms | |
+| ✅ | fix-2: openWorld flags for extract_entities, find_graphql_endpoints, find_site_issues | pass | 15ms | |
+| ✅ | fix-3: schedule persistence survives module reload | pass | 13ms | |
 
 
