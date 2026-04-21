@@ -1,7 +1,9 @@
 // tests/unit/session-fixation.test.js
 // Automated tests for session fixation and reuse logic in the scraper
 
-const { loadSession, clearSession } = require('../../src/scraper');
+const scraper = require('../../src/scraper');
+const loadSession = scraper.loadSession || scraper['loadSession'];
+const clearSession = scraper.clearSession || scraper['clearSession'];
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');

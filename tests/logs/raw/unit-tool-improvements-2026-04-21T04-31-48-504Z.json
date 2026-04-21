@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-04-21T04:36:15.656Z",
+  "timestamp": "2026-04-21T04:31:48.503Z",
   "git_commit": "eaa3cc1",
   "suite": "unit-tool-improvements",
   "tests": [
     {
       "name": "fix-1: pause/resume/submit — description quality",
       "status": "pass",
-      "duration_ms": 13,
+      "duration_ms": 21,
       "error": null,
       "input": {},
       "output": {
@@ -22,7 +22,7 @@
     {
       "name": "fix-2: openWorld flags for extract_entities, find_graphql_endpoints, find_site_issues",
       "status": "pass",
-      "duration_ms": 12,
+      "duration_ms": 17,
       "error": null,
       "input": {},
       "output": {
@@ -37,7 +37,7 @@
     {
       "name": "fix-3: schedule persistence survives module reload",
       "status": "pass",
-      "duration_ms": 10,
+      "duration_ms": 15,
       "error": null,
       "input": {},
       "output": {
@@ -55,7 +55,7 @@
     "passed": 3,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 44,
-    "avg_duration_ms": 15
+    "duration_ms": 61,
+    "avg_duration_ms": 20
   }
 }
