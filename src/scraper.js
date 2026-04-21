@@ -167,19 +167,52 @@ function clearSession(url) {
   return false;
 }
 
+// ── SPA route memory ─────────────────────────────────────────────────────────
+// URLs that 504 on direct server access but work via client-side SPA navigation
+
+function spaRoutesFile(url) {
+  try {
+    const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+    if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    return path.join(SESSIONS_DIR, `${hostname}.spa-routes.json`);
+  } catch { return null; }
+}
+
+function loadSpaRoutes(url) {
+  try {
+    const file = spaRoutesFile(url);
+    if (file && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {}
+  return [];
+}
+
+function saveSpaRoute(url) {
+  try {
+    const file = spaRoutesFile(url);
+    if (!file) return;
+    let routes = [];
+    if (fs.existsSync(file)) routes = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const norm = u => u.split('#')[0].replace(/\/$/, '') || u;
+    const nurl = norm(url);
+    if (!routes.includes(nurl)) routes.push(nurl);
+    fs.writeFileSync(file, JSON.stringify(routes));
+  // Assign static properties for legacy test compatibility (MUST be at absolute end of file)
+  // (do not assign static properties here)
+  } catch {}
+}
+
+
+
+// FINAL: Assign static properties for legacy test compatibility (MUST be at absolute end of file)
 ScraperSession.clearSession = clearSession;
 ScraperSession.loadSession = loadSession;
 ScraperSession.createSessionSnapshot = createSessionSnapshot;
 module.exports = ScraperSession;
+
 
 // ── SPA route memory ─────────────────────────────────────────────────────────
 // URLs that 504 on direct server access but work via client-side SPA navigation
 
-// Assign static properties for legacy test compatibility
-ScraperSession.clearSession = clearSession;
-ScraperSession.loadSession = loadSession;
-ScraperSession.createSessionSnapshot = createSessionSnapshot;
-module.exports = ScraperSession;
 function spaRoutesFile(url) {
   try {
     const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
@@ -3381,7 +3414,9 @@ class ScraperSession {
     for (const k of redact) if (out[k]) out[k] = '[REDACTED]';
     return out;
   }
-}
 
+// Assign static properties for legacy test compatibility (must be immediately after class definition)
+ScraperSession.clearSession = clearSession;
+ScraperSession.loadSession = loadSession;
+ScraperSession.createSessionSnapshot = createSessionSnapshot;
 module.exports = ScraperSession;
-module.exports.clearSession = clearSession;
