@@ -13,7 +13,9 @@ async function run2FATest({ page, type, secret, code, expectBypass }) {
     verificationCode: code,
     totpSecret: secret,
     waitForVerification: async () => code,
-    log: (msg, level) => { if (msg && msg.includes('Auto-generated TOTP code')) bypassed = true; },
+    log: (msg, level) => {
+      if (msg && msg.toString().includes('Auto-generated TOTP code')) bypassed = true;
+    },
   });
   assert.strictEqual(bypassed, expectBypass, `2FA bypass for ${type} failed`);
 }

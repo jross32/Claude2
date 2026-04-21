@@ -15,6 +15,7 @@ async function main() {
       .send({ url: 'https://example.com' });
   }
   assert.strictEqual(res.status, 429, 'Should return 429 after exceeding scrape rate limit');
+
   assert.match(res.body.error, /Rate limit exceeded/);
 
   // Returns 429 after exceeding generate endpoint rate limit

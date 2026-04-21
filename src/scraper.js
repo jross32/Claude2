@@ -167,7 +167,11 @@ function clearSession(url) {
   return false;
 }
 
-module.exports.clearSession = clearSession;
+module.exports = {
+  clearSession,
+  loadSession,
+  createSessionSnapshot,
+};
 
 // ── SPA route memory ─────────────────────────────────────────────────────────
 // URLs that 504 on direct server access but work via client-side SPA navigation

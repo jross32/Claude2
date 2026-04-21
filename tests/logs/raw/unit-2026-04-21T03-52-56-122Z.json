@@ -1,0 +1,209 @@
+{
+  "timestamp": "2026-04-21T03:52:56.121Z",
+  "git_commit": "b19293a",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "exportHAR returns object with log key",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "keys": [
+          "log"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "har.log has version \"1.2\"",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "version": "1.2"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "har.log has creator and browser fields",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "creator": "WebScraperPro",
+        "browser": "Chromium"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "har.log.entries is an array",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 2
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "entries contain one entry per graphql + rest call",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 2
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "each entry has required HAR fields",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "fields": [
+          "startedDateTime",
+          "time",
+          "request",
+          "response",
+          "cache",
+          "timings"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "entry request has method and url",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "method": "POST",
+        "url": "https://api.example.com/graphql"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "entry response has status",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "entry has _type set to \"graphql\" or \"rest\"",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "types": [
+          "graphql",
+          "rest"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "request headers are converted to name/value pairs",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "entry with no request body → postData absent",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] empty apiCalls → 0 entries",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] missing apiCalls key → 0 entries, no crash",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] call with no url → entry still built",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] call with no response → entry still built",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "ok": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 15,
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 20,
+    "avg_duration_ms": 1
+  }
+}

@@ -8,13 +8,15 @@ async function main() {
   // Detects Google OAuth button
   let fakePage = {
     $$(selector) {
-      return [
+      const arr = [
         {
           isVisible: async () => true,
           textContent: async () => 'Sign in with Google',
           getAttribute: async (attr) => attr === 'href' ? 'https://accounts.google.com/o/oauth2/auth' : '',
         },
       ];
+      arr.catch = () => arr; // Add .catch to array to match Playwright API
+      return arr;
     },
   };
   let result = await _findOAuthButton(fakePage, 'google');

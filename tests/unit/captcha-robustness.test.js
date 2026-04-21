@@ -13,6 +13,9 @@ async function main() {
         querySelectorAll: () => [],
       },
     }),
+    // Add .catch to match Playwright API
+    $: () => null,
+    $$: () => [],
   });
   assert.deepStrictEqual(result, { type: 'hcaptcha', sitekey: 'sitekey123' });
 

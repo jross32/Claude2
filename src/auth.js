@@ -35,31 +35,33 @@ function _generateTotp(base32Secret, digits = 6, step = 30) {
 // ── CAPTCHA detection and external solving ────────────────────────────────────
 
 async function _detectCaptcha(page) {
-  return page.evaluate(() => {
-    // Cloudflare Turnstile (check first — looks like reCAPTCHA)
-    const cf = document.querySelector('.cf-turnstile[data-sitekey], [data-cf-action] [data-sitekey]');
-    if (cf) return { type: 'turnstile', sitekey: cf.getAttribute('data-sitekey') };
+  try {
+    return await page.evaluate(() => {
+      // Cloudflare Turnstile (check first — looks like reCAPTCHA)
+      const cf = document.querySelector('.cf-turnstile[data-sitekey], [data-cf-action] [data-sitekey]');
+      if (cf) return { type: 'turnstile', sitekey: cf.getAttribute('data-sitekey') };
 
-    // hCaptcha
-    const hc = document.querySelector('.h-captcha[data-sitekey]');
-    if (hc) return { type: 'hcaptcha', sitekey: hc.getAttribute('data-sitekey') };
+      // hCaptcha
+      const hc = document.querySelector('.h-captcha[data-sitekey]');
+      if (hc) return { type: 'hcaptcha', sitekey: hc.getAttribute('data-sitekey') };
 
-    // reCAPTCHA (v2 or invisible)
-    const rc = document.querySelector('.g-recaptcha[data-sitekey], [data-sitekey]:not(.cf-turnstile):not(.h-captcha)');
-    if (rc) {
-      const sitekey = rc.getAttribute('data-sitekey');
-      const size = rc.getAttribute('data-size') || '';
-      return { type: size === 'invisible' ? 'recaptcha_invisible' : 'recaptcha_v2', sitekey };
-    }
+      // reCAPTCHA (v2 or invisible)
+      const rc = document.querySelector('.g-recaptcha[data-sitekey], [data-sitekey]:not(.cf-turnstile):not(.h-captcha)');
+      if (rc) {
+        const sitekey = rc.getAttribute('data-sitekey');
+        const size = rc.getAttribute('data-size') || '';
+        return { type: size === 'invisible' ? 'recaptcha_invisible' : 'recaptcha_v2', sitekey };
+      }
 
-    // reCAPTCHA v3 — sitekey in script src
-    for (const s of document.querySelectorAll('script[src*="recaptcha"]')) {
-      const m = s.src.match(/[?&]render=([^&]+)/);
-      if (m && m[1] !== 'explicit') return { type: 'recaptcha_v3', sitekey: m[1] };
-    }
+      // reCAPTCHA v3 — sitekey in script src
+      for (const s of document.querySelectorAll('script[src*="recaptcha"]')) {
+        const m = s.src.match(/[?&]render=([^&]+)/);
+        if (m && m[1] !== 'explicit') return { type: 'recaptcha_v3', sitekey: m[1] };
+      }
 
-    return null;
-  }).catch(() => null);
+      return null;
+    });
+  } catch { return null; }
 }
 
 async function _solveCaptchaExternal(captchaInfo, pageUrl, log) {
@@ -210,7 +212,10 @@ async function _findOAuthButton(page, providerHint) {
     ? _OAUTH_PATTERNS.filter(p => p.provider.toLowerCase().includes(providerHint.toLowerCase()))
     : _OAUTH_PATTERNS;
 
-  const candidates = await page.$$('a, button, [role="button"], [type="submit"]').catch(() => []);
+  let candidates;
+  try {
+    candidates = await page.$$('a, button, [role="button"], [type="submit"]');
+  } catch { candidates = []; }
   for (const pat of patterns) {
     for (const el of candidates) {
       try {
@@ -569,4 +574,15 @@ async function handleVerification(page, options) {
   log('Verification submitted');
 }
 
-module.exports = { handleAuth, handleOAuth: _handleOAuth };
+module.exports = {
+  handleAuth,
+  handleOAuth: _handleOAuth,
+  _detectCaptcha,
+  _solveCaptchaExternal,
+  _injectCaptchaToken,
+  _findOAuthButton,
+  _handleOAuth,
+  handleVerification,
+  detectVerificationType,
+  _generateTotp,
+};
