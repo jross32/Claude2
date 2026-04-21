@@ -5,6 +5,7 @@ try {
 } catch {}
 const torManager = require('./tor-manager');
 const redisCache = require('./redis-cache');
+const { bypassCloudflare } = require('./cloudflare');
 
 // ── User-agent pool (realistic Chrome on Windows strings) ─────────────────
 const _UA_POOL = [
@@ -1434,7 +1435,7 @@ class ScraperSession {
           this.log(`After auth — current URL: ${page.url()}`);
           await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
           await page.waitForTimeout(500);
-          this.log(`Settled URL: ${page.url()}`);
+          this.log(`Settled URL: ${page.url
           // Dismiss any post-login notification/permission popups (wait up to 5s for slow modals)
           await this._dismissPopups(page, 2500);
           this.log('Authentication complete', 'success');
@@ -1521,8 +1522,7 @@ class ScraperSession {
         }
       } else {
         const visited = new Set();
-        const pageLimit = maxPages > 0 ? maxPages : Infinity;
-        allResults = await this._scrapePage(page, crawlStartUrl, scrapeDepth || 1, visited, autoScroll, pageLimit, avoidFilter, captureDropdowns);
+        const pageLimit = maxPages
         if (allResults.length >= pageLimit) {
           this.log(`Page limit reached (${pageLimit} pages).`, 'warn');
         }
