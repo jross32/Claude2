@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-04-21T04:40:04.616Z",
+  "timestamp": "2026-04-21T04:39:06.541Z",
   "git_commit": "004a376",
   "suite": "unit-tool-improvements",
   "tests": [
     {
       "name": "fix-1: pause/resume/submit — description quality",
       "status": "pass",
-      "duration_ms": 36,
+      "duration_ms": 34,
       "error": null,
       "input": {},
       "output": {
@@ -55,7 +55,7 @@
     "passed": 3,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 105,
-    "avg_duration_ms": 35
+    "duration_ms": 97,
+    "avg_duration_ms": 32
   }
 }

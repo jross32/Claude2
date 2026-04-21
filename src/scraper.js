@@ -172,6 +172,9 @@ module.exports = {
   loadSession,
   createSessionSnapshot,
 };
+exports.clearSession = clearSession;
+exports.loadSession = loadSession;
+exports.createSessionSnapshot = createSessionSnapshot;
 
 // ── SPA route memory ─────────────────────────────────────────────────────────
 // URLs that 504 on direct server access but work via client-side SPA navigation

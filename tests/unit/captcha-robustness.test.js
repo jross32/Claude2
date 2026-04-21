@@ -12,6 +12,7 @@ async function main() {
         querySelector: (sel) => sel.includes('h-captcha') ? { getAttribute: () => 'sitekey123' } : null,
         querySelectorAll: () => [],
       },
+      window: {},
     }),
   });
   assert.deepStrictEqual(result, { type: 'hcaptcha', sitekey: 'sitekey123' });
@@ -23,6 +24,7 @@ async function main() {
         querySelector: (sel) => sel.includes('g-recaptcha') ? { getAttribute: (attr) => attr === 'data-sitekey' ? 'recaptcha-key' : '' } : null,
         querySelectorAll: () => [],
       },
+      window: {},
     }),
   });
   assert.deepStrictEqual(result, { type: 'recaptcha_v2', sitekey: 'recaptcha-key' });
@@ -34,6 +36,7 @@ async function main() {
         querySelector: () => null,
         querySelectorAll: () => [],
       },
+      window: {},
     }),
   });
   assert.strictEqual(result, null);
