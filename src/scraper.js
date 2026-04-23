@@ -203,13 +203,6 @@ function saveSpaRoute(url) {
 
 
 
-// FINAL: Assign static properties for legacy test compatibility (MUST be at absolute end of file)
-ScraperSession.clearSession = clearSession;
-ScraperSession.loadSession = loadSession;
-ScraperSession.createSessionSnapshot = createSessionSnapshot;
-module.exports = ScraperSession;
-
-
 // ── SPA route memory ─────────────────────────────────────────────────────────
 // URLs that 504 on direct server access but work via client-side SPA navigation
 
