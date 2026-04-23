@@ -1,24 +1,27 @@
 # Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-23T22:41:43.186Z
-**Commit:** `e6327b9`
-**Duration:** 5927ms
+**Run:** 2026-04-23T22:42:05.079Z
+**Commit:** `eca3e84`
+**Duration:** 5929ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 5 | 5 | 0 | 0 |
+| 8 | 8 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | POST /api/schema with graphqlCalls → 200 + schema object | pass | 74ms | |
-| ✅ | Schema response includes typescript or jsonSchema fields | pass | 5ms | |
-| ✅ | [chaos] POST /api/schema with no graphqlCalls → 400 | pass | 4ms | |
-| ✅ | [chaos] POST /api/schema with empty array → does not 500 | pass | 3ms | |
-| ✅ | [chaos] POST /api/schema with malformed call → does not 500 | pass | 3ms | |
+| ✅ | GET /api/session/check with valid url → 200 + { exists: boolean } | pass | 96ms | |
+| ✅ | GET /api/session/check for poolplayers.com → exists field present | pass | 54ms | |
+| ✅ | DELETE /api/session with url → 200 + { cleared: boolean } | pass | 7ms | |
+| ✅ | GET /api/site-credentials for unknown site → { found: false } | pass | 5ms | |
+| ✅ | GET /api/site-credentials for poolplayers.com → { found: true, username: string } | pass | 4ms | |
+| ✅ | [chaos] GET /api/session/check with no url → { exists: false } | pass | 4ms | |
+| ✅ | [chaos] DELETE /api/session with no url → does not 500 | pass | 4ms | |
+| ✅ | [chaos] GET /api/site-credentials with no url → does not 500 | pass | 4ms | |
 
 
