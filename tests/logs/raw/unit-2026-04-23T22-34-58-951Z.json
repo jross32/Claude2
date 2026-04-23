@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-04-23T22:34:58.950Z",
+  "git_commit": "50b50c0",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "autosave persists console logs, websocket data, errors, and downloaded images",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "consoleLogs": 1,
+        "errors": 1,
+        "websockets": 1,
+        "downloadedImages": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "autosave persists headless visibility metadata for MCP saves",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "uiVisible": false,
+        "initiatedBy": "mcp"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 10,
+    "avg_duration_ms": 5
+  }
+}

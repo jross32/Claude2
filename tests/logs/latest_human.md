@@ -1,9 +1,9 @@
 # Test Results — unit
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-23T22:31:20.381Z
-**Commit:** `0f7aea0`
-**Duration:** 14ms
+**Run:** 2026-04-23T22:34:58.944Z
+**Commit:** `50b50c0`
+**Duration:** 9ms
 
 ## Summary
 
@@ -15,10 +15,10 @@
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | ScraperSession exposes initial live status snapshot | pass | 2ms | |
-| ✅ | progress updates live counters and step metadata | pass | 1ms | |
-| ✅ | pause and resume update state snapshot | pass | 1ms | |
+| ✅ | ScraperSession exposes initial live status snapshot | pass | 3ms | |
+| ✅ | progress updates live counters and step metadata | pass | 0ms | |
+| ✅ | pause and resume update state snapshot | pass | 0ms | |
 | ✅ | credential and verification waits toggle flags without leaking secrets | pass | 1ms | |
-| ✅ | markComplete and markError shape terminal snapshot fields | pass | 0ms | |
+| ✅ | markComplete and markError shape terminal snapshot fields | pass | 1ms | |
 
 

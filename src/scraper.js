@@ -188,46 +188,11 @@ function loadSpaRoutes(url) {
 
 function saveSpaRoute(url) {
   try {
-    const file = spaRoutesFile(url);
-    if (!file) return;
-    let routes = [];
-    if (fs.existsSync(file)) routes = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const norm = u => u.split('#')[0].replace(/\/$/, '') || u;
-    const nurl = norm(url);
-    if (!routes.includes(nurl)) routes.push(nurl);
-    fs.writeFileSync(file, JSON.stringify(routes));
-  // Assign static properties for legacy test compatibility (MUST be at absolute end of file)
-  // (do not assign static properties here)
-  } catch {}
-}
-
-
-
-// ── SPA route memory ─────────────────────────────────────────────────────────
-// URLs that 504 on direct server access but work via client-side SPA navigation
-
-function spaRoutesFile(url) {
-  try {
     const hostname = new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
-    if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-    return path.join(SESSIONS_DIR, `${hostname}.spa-routes.json`);
-  } catch { return null; }
-}
-
-function loadSpaRoutes(url) {
-  try {
     const file = spaRoutesFile(url);
-    if (file && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {}
-  return [];
-}
-
-function saveSpaRoute(url) {
-  try {
     const parsed = new URL(url);
-    const file = spaRoutesFile(url);
     if (!file) return;
-    const routes = loadSpaRoutes(url);
+    const routes = loadSpaRoutes(`${parsed.protocol}//${hostname}`);
     // Store the path prefix up to the second segment so siblings are also covered
     // e.g. /RioGrandeValley/divisions/ → /RioGrandeValley/
     const segments = parsed.pathname.split('/').filter(Boolean);
@@ -245,6 +210,17 @@ function isSpaRoute(url, routes) {
     const { pathname } = new URL(url);
     return routes.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
   } catch { return false; }
+}
+
+async function closeBrowserSafely(browser, timeoutMs = 2000) {
+  if (!browser) return;
+
+  try {
+    await Promise.race([
+      browser.close().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  } catch {}
 }
 
 
@@ -1557,7 +1533,17 @@ class ScraperSession {
         }
       } else {
         const visited = new Set();
-        const pageLimit = maxPages
+        const pageLimit = maxPages > 0 ? maxPages : Infinity;
+        allResults = await this._scrapePage(
+          page,
+          crawlStartUrl,
+          scrapeDepth || 1,
+          visited,
+          autoScroll,
+          pageLimit,
+          avoidFilter,
+          captureDropdowns
+        );
         if (allResults.length >= pageLimit) {
           this.log(`Page limit reached (${pageLimit} pages).`, 'warn');
         }
@@ -1718,7 +1704,8 @@ class ScraperSession {
         this._writeAutosave(this.stopped ? 'stopped' : 'complete');
       }
       this._stopLiveStream();
-      if (this.browser) await this.browser.close().catch(() => {});
+      await closeBrowserSafely(this.browser);
+      this.browser = null;
     }
   }
 

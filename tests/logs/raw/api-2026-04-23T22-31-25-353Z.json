@@ -1,67 +1,71 @@
 {
-  "timestamp": "2026-04-23T22:34:58.944Z",
-  "git_commit": "50b50c0",
-  "suite": "unit",
+  "timestamp": "2026-04-23T22:31:25.351Z",
+  "git_commit": "0f7aea0",
+  "suite": "api",
   "tests": [
     {
-      "name": "ScraperSession exposes initial live status snapshot",
+      "name": "POST /api/schema with graphqlCalls → 200 + schema object",
       "status": "pass",
-      "duration_ms": 3,
+      "duration_ms": 30,
       "error": null,
       "input": {},
       "output": {
-        "state": "running"
+        "status": 200,
+        "keys": [
+          "jsonSchema",
+          "typescript"
+        ]
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "progress updates live counters and step metadata",
+      "name": "Schema response includes typescript or jsonSchema fields",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 1707,
       "error": null,
       "input": {},
       "output": {
-        "percent": 62,
-        "visited": 3
+        "keys": [
+          "jsonSchema",
+          "typescript"
+        ]
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "pause and resume update state snapshot",
+      "name": "[chaos] POST /api/schema with no graphqlCalls → 400",
       "status": "pass",
-      "duration_ms": 0,
+      "duration_ms": 10,
       "error": null,
       "input": {},
       "output": {
-        "paused": "paused",
-        "resumed": "running"
+        "status": 400
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "credential and verification waits toggle flags without leaking secrets",
+      "name": "[chaos] POST /api/schema with empty array → does not 500",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 4,
       "error": null,
       "input": {},
       "output": {
-        "finalState": "running"
+        "status": 200
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "markComplete and markError shape terminal snapshot fields",
+      "name": "[chaos] POST /api/schema with malformed call → does not 500",
       "status": "pass",
-      "duration_ms": 1,
+      "duration_ms": 4,
       "error": null,
       "input": {},
       "output": {
-        "completeState": "complete",
-        "errorState": "error"
+        "status": 200
       },
       "stack_trace": null,
       "screenshot": null
@@ -72,7 +76,7 @@
     "passed": 5,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 9,
-    "avg_duration_ms": 2
+    "duration_ms": 6928,
+    "avg_duration_ms": 1386
   }
 }
