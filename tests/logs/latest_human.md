@@ -1,27 +1,22 @@
-# Test Results — api
+# Test Results — unit
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-23T22:38:26.761Z
-**Commit:** `91a992a`
-**Duration:** 5156ms
+**Run:** 2026-04-23T22:39:50.316Z
+**Commit:** `352ad14`
+**Duration:** 12ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 8 | 8 | 0 | 0 |
+| 3 | 3 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/session/check with valid url → 200 + { exists: boolean } | pass | 23ms | |
-| ✅ | GET /api/session/check for poolplayers.com → exists field present | pass | 7ms | |
-| ✅ | DELETE /api/session with url → 200 + { cleared: boolean } | pass | 8ms | |
-| ✅ | GET /api/site-credentials for unknown site → { found: false } | pass | 6ms | |
-| ✅ | GET /api/site-credentials for poolplayers.com → { found: true, username: string } | pass | 6ms | |
-| ✅ | [chaos] GET /api/session/check with no url → { exists: false } | pass | 5ms | |
-| ✅ | [chaos] DELETE /api/session with no url → does not 500 | pass | 4ms | |
-| ✅ | [chaos] GET /api/site-credentials with no url → does not 500 | pass | 4ms | |
+| ✅ | TOTP verification auto-generates a code when a secret is provided | pass | 3ms | |
+| ✅ | Manual verification codes are submitted without auto-generation | pass | 1ms | |
+| ✅ | Missing verification codes log a warning and skip submission gracefully | pass | 0ms | |
 
 
