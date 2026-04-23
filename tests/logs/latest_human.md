@@ -1,21 +1,28 @@
-# Test Results — unit
+# Test Results — smoke
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-23T22:36:14.948Z
-**Commit:** `5e8368e`
-**Duration:** 11ms
+**Run:** 2026-04-23T22:36:46.707Z
+**Commit:** `40ba646`
+**Duration:** 9311ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 2 | 2 | 0 | 0 |
+| 9 | 9 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | autosave persists console logs, websocket data, errors, and downloaded images | pass | 5ms | |
-| ✅ | autosave persists headless visibility metadata for MCP saves | pass | 2ms | |
+| ✅ | Chromium launches in headless mode | pass | 752ms | |
+| ✅ | Browser can open a new page | pass | 115ms | |
+| ✅ | Browser reports correct version string | pass | 0ms | |
+| ✅ | Multiple pages open and close independently | pass | 179ms | |
+| ✅ | Browser closes cleanly | pass | 138ms | |
+| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 4447ms | |
+| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 1213ms | |
+| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 1296ms | |
+| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 1167ms | |
 
 
