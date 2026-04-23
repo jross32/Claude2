@@ -1,32 +1,45 @@
-// tests/unit/rate-limit-lockout.test.js
-// Automated tests for rate limiting and lockout logic in the server
+const { TestRunner } = require('../runner');
+const { start, stop, post, json } = require('../api/_server');
 
-describe('Rate Limiting & Lockout', () => {
-const request = require('supertest');
-const server = require('../../src/server');
-const assert = require('assert');
-
-async function main() {
-  // Returns 429 after exceeding scrape endpoint rate limit
-  let res;
-  for (let i = 0; i < 31; i++) {
-    res = await request(server)
-      .post('/api/scrape')
-      .send({ url: 'https://example.com' });
+async function hitLimit(path, body, attempts) {
+  let response = null;
+  for (let i = 0; i < attempts; i++) {
+    response = await post(path, body);
   }
-  assert.strictEqual(res.status, 429, 'Should return 429 after exceeding scrape rate limit');
-
-  assert.match(res.body.error, /Rate limit exceeded/);
-
-  // Returns 429 after exceeding generate endpoint rate limit
-  for (let i = 0; i < 61; i++) {
-    res = await request(server)
-      .post('/api/generate')
-      .send({ type: 'react', url: 'https://example.com' });
-  }
-  assert.strictEqual(res.status, 429, 'Should return 429 after exceeding generate rate limit');
-  assert.match(res.body.error, /Rate limit exceeded/);
-  console.log('rate-limit-lockout: all tests passed');
+  return response;
 }
 
-if (require.main === module) main();
+async function main() {
+  const runner = new TestRunner('unit');
+  await start();
+
+  await runner.run('Scrape endpoints return 429 after exceeding the per-minute limit', async ({ setOutput }) => {
+    const response = await hitLimit('/api/scrape', { url: 'https://example.com' }, 31);
+    const body = json(response);
+
+    if (response.status !== 429) throw new Error(`Expected 429, got ${response.status}`);
+    if (!/Rate limit exceeded/i.test(body.error || '')) throw new Error(`Unexpected error payload: ${JSON.stringify(body)}`);
+
+    setOutput({ status: response.status, retryAfterSeconds: body.retryAfterSeconds });
+  });
+
+  await runner.run('Generate endpoints return 429 after exceeding the per-minute limit', async ({ setOutput }) => {
+    const response = await hitLimit('/api/generate/react', { pageData: { meta: { title: 'Example' }, headings: { h1: [{ text: 'Example' }] }, links: [] } }, 61);
+    const body = json(response);
+
+    if (response.status !== 429) throw new Error(`Expected 429, got ${response.status}`);
+    if (!/Rate limit exceeded/i.test(body.error || '')) throw new Error(`Unexpected error payload: ${JSON.stringify(body)}`);
+
+    setOutput({ status: response.status, retryAfterSeconds: body.retryAfterSeconds });
+  });
+
+  stop();
+  const result = runner.finish();
+  process.exit(result.summary.failed > 0 ? 1 : 0);
+}
+
+main().catch((err) => {
+  stop();
+  console.error('Test runner crashed:', err.message);
+  process.exit(1);
+});
