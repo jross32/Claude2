@@ -117,6 +117,14 @@ const SCRAPE_STATUS_STATES = {
   ERROR: 'error',
 };
 
+function isActiveSessionState(state) {
+  return ![
+    SCRAPE_STATUS_STATES.COMPLETE,
+    SCRAPE_STATUS_STATES.STOPPED,
+    SCRAPE_STATUS_STATES.ERROR,
+  ].includes(state);
+}
+
 // WebSocket connection for real-time progress
 wss.on('connection', (ws) => {
   ws.id = uuidv4();
@@ -274,6 +282,7 @@ function getActiveSessionSnapshots() {
       try {
         const snapshot = sanitizeSessionSnapshot(session.getStatusSnapshot?.());
         if (!snapshot) return null;
+        if (!isActiveSessionState(snapshot.state)) return null;
         snapshot.uiVisible = session.uiVisible !== false;
         snapshot.initiatedBy = session.initiatedBy || (snapshot.uiVisible ? 'ui' : 'mcp');
         return snapshot;
