@@ -1,28 +1,26 @@
-# Test Results — smoke
+# Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-23T22:36:46.707Z
-**Commit:** `40ba646`
-**Duration:** 9311ms
+**Run:** 2026-04-23T22:37:35.038Z
+**Commit:** `e6b364a`
+**Duration:** 5410ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 9 | 9 | 0 | 0 |
+| 7 | 7 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | Chromium launches in headless mode | pass | 752ms | |
-| ✅ | Browser can open a new page | pass | 115ms | |
-| ✅ | Browser reports correct version string | pass | 0ms | |
-| ✅ | Multiple pages open and close independently | pass | 179ms | |
-| ✅ | Browser closes cleanly | pass | 138ms | |
-| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 4447ms | |
-| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 1213ms | |
-| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 1296ms | |
-| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 1167ms | |
+| ✅ | POST /api/diff with two valid results → 200 + diff object | pass | 38ms | |
+| ✅ | Diff result shows added page in resultB | pass | 4ms | |
+| ✅ | Diff result shows added text in resultB | pass | 3ms | |
+| ✅ | POST /api/diff identical results → pages added/removed are empty | pass | 3ms | |
+| ✅ | [chaos] POST /api/diff with no body → 400 | pass | 3ms | |
+| ✅ | [chaos] POST /api/diff with empty results → does not 500 | pass | 4ms | |
+| ✅ | [chaos] POST /api/diff missing resultB → 400 | pass | 3ms | |
 
 

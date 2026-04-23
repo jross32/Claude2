@@ -1,0 +1,273 @@
+{
+  "timestamp": "2026-04-23T22:37:29.341Z",
+  "git_commit": "e6b364a",
+  "suite": "security-pingfed_lab",
+  "tests": [
+    {
+      "name": "mock PingFederate starts",
+      "status": "pass",
+      "duration_ms": 24,
+      "error": null,
+      "input": {},
+      "output": {
+        "port": 65403,
+        "baseUrl": "http://127.0.0.1:65403"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "redirect_uri: all bypass variants blocked (PA_LEGACY_VENDOR)",
+      "status": "pass",
+      "duration_ms": 105,
+      "error": null,
+      "input": {},
+      "output": {
+        "totalCases": 14,
+        "vulnerabilities": 0,
+        "failed": []
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "redirect_uri: open redirect blocked on PA_ client",
+      "status": "pass",
+      "duration_ms": 20,
+      "error": null,
+      "input": {},
+      "output": {
+        "blocked": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "state_entropy: 50 unique states, entropy OK",
+      "status": "pass",
+      "duration_ms": 78,
+      "error": null,
+      "input": {},
+      "output": {
+        "uniqueCount": 50,
+        "entropy": 3.997
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "alg_none: PingFed issues signed JWT (alg header RS256)",
+      "status": "pass",
+      "duration_ms": 13,
+      "error": null,
+      "input": {},
+      "output": {
+        "originalAlg": "RS256"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "alg_none: forged token rejected by /idp/userinfo.openid",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "forgedAccepted": false,
+        "status": 401
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "pkce: PA_VENDOR_PORTAL requires PKCE — no code_challenge rejected",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "vulnerabilities": 0,
+        "cases": [
+          {
+            "label": "PKCE-required client: no code_challenge",
+            "finding": "OK"
+          },
+          {
+            "label": "PKCE-required client: valid S256 code_challenge",
+            "finding": "OK"
+          },
+          {
+            "label": "legacy client: no code_challenge (PKCE not required)",
+            "finding": "INFO"
+          }
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "pkce: PA_LEGACY_VENDOR has no PKCE (documented as upgrade target)",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "legacyCase": {
+          "label": "legacy client: no code_challenge (PKCE not required)",
+          "expected": "code-issued",
+          "actual": "code-issued",
+          "finding": "INFO",
+          "status": 302,
+          "note": "No PKCE enforcement on this client — upgrade recommended"
+        }
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "token_rotation: PingFed rotates refresh tokens correctly",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "rotationWorked": true,
+        "replayRejected": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "bola_idor: PA_VENDOR_A cannot access PA_VENDOR_B report",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "vulnerabilities": 0,
+        "results": [
+          {
+            "id": "rpt-vendor-a-weekly",
+            "finding": "OK",
+            "status": 200
+          },
+          {
+            "id": "rpt-vendor-b-weekly",
+            "finding": "OK",
+            "status": 403
+          }
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "scope_escalation: PA_LIMITED cannot escalate to vendor:reports",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "grantedScopes": [
+          "openid",
+          "vendor:read"
+        ],
+        "escalatedScopes": []
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "header_injection: /pa/protected rejects all X-PingAccess-* header injections",
+      "status": "pass",
+      "duration_ms": 21,
+      "error": null,
+      "input": {},
+      "output": {
+        "bypassCount": 0,
+        "headersProbed": 8
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "header_injection: /pa/misconfigured shows X-Authenticated-User bypass (vuln demo)",
+      "status": "pass",
+      "duration_ms": 25,
+      "error": null,
+      "input": {},
+      "output": {
+        "hit": {
+          "header": "X-Authenticated-User",
+          "accepted": true,
+          "authn": "header-injection",
+          "status": 200
+        },
+        "note": "Demonstrates what a misconfigured PingAccess backend looks like — the vulnerable endpoint accepts injected identity headers without JWT verification"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "full suite (all 8 tests): risk score LOW against mock PingFed",
+      "status": "pass",
+      "duration_ms": 127,
+      "error": null,
+      "input": {},
+      "output": {
+        "riskScore": {
+          "score": 0,
+          "label": "LOW"
+        },
+        "testsRun": [
+          "redirect_uri_validation",
+          "state_entropy",
+          "alg_none_attack",
+          "pkce_enforcement",
+          "token_rotation",
+          "bola_idor",
+          "scope_escalation",
+          "header_injection",
+          "auth_code_replay"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "chaos: non-PA_ client_id returns PingFed-format error",
+      "status": "pass",
+      "duration_ms": 21,
+      "error": null,
+      "input": {},
+      "output": {
+        "vulnerabilities": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "chaos: replayed refresh token triggers session invalidation",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "replayRejected": true,
+        "replayStatus": 400,
+        "error": null
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 16,
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 474,
+    "avg_duration_ms": 30
+  }
+}
