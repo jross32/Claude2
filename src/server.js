@@ -1314,6 +1314,226 @@ app.get('/api/tool-logs/requests', (req, res) => {
   }
 });
 
+// ── APA Live Scores proxy routes ─────────────────────────────────────────────
+const apaGql = require('./apa-gql');
+const ID_MAP_PATH = path.join(__dirname, '..', 'apps', 'apa', 'id_map.json');
+
+const APA_TEAM_SCHEDULE_Q = `
+query teamSchedule($id: Int!) {
+  team(id: $id) {
+    id
+    matches(unscheduled: true) {
+      id week type isBye status scoresheet startTime isMine isPaid isScored isFinalized
+      isPlayoff description tableNumber
+      results { homeAway points { total __typename } __typename }
+      timeZone { id name __typename }
+      location { id name address { id name __typename } __typename }
+      home { id name number isMine __typename }
+      away { id name number isMine __typename }
+      division { id scheduleInEdit isTournament __typename }
+      __typename
+    }
+    __typename
+  }
+}`;
+
+const APA_MATCH_Q = `
+query MatchPage($id: Int!) {
+  match(id: $id) {
+    id isFinalized isTournament tableNumber
+    division { id electronicScoringEnabled type __typename }
+    type startTime week isBye isMine isScored scoresheet
+    home {
+      id name number isMine
+      division { id type __typename }
+      roster {
+        id memberNumber displayName matchesWon matchesPlayed
+        ... on EightBallPlayer { pa ppm skillLevel __typename }
+        ... on NineBallPlayer  { pa ppm skillLevel __typename }
+        __typename
+      }
+      __typename
+    }
+    away {
+      id name number isMine
+      division { id type __typename }
+      roster {
+        id memberNumber displayName matchesWon matchesPlayed
+        ... on EightBallPlayer { pa ppm skillLevel __typename }
+        ... on NineBallPlayer  { pa ppm skillLevel __typename }
+        __typename
+      }
+      __typename
+    }
+    division { id scheduleInEdit type __typename }
+    session { id name year __typename }
+    results {
+      homeAway matchesWon matchesPlayed
+      points { bonus penalty won adjustment sportsmanship total __typename }
+      scores {
+        id matchPositionNumber playerPosition skillLevel
+        innings defensiveShots eightBallWins nineBallPoints
+        winLoss matchForfeited teamSlot eightBallMatchPointsEarned
+        player { id displayName __typename }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}`;
+
+const APA_VIEWER_TEAMS_Q = `
+query dashboard {
+  viewer {
+    ... on Member {
+      teams {
+        id name number
+        division { id name format nightOfPlay number state __typename }
+        session { id name __typename }
+        league { id slug __typename }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}`;
+
+const APA_ALIAS_STATS_Q = `
+query AliasSessionStats($format: FormatType!, $id: Int!, $session: Int!) {
+  alias(id: $id) {
+    id
+    displayName
+    memberNumber
+    ... on EightBallAlias {
+      sessionStats(sessionId: $session) {
+        matchesWon matchesPlayed pa ppm skillLevel
+        eightOnBreaks eightBallBreakAndRuns rackless miniSlams
+        __typename
+      }
+      __typename
+    }
+    ... on NineBallAlias {
+      sessionStats(sessionId: $session) {
+        matchesWon matchesPlayed pa ppm skillLevel
+        nineOnSnaps nineBallBreakAndRuns miniSlams skunks
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}`;
+
+function loadIdMap() {
+  try {
+    if (fs.existsSync(ID_MAP_PATH)) return JSON.parse(fs.readFileSync(ID_MAP_PATH, 'utf8'));
+  } catch {}
+  return {};
+}
+
+function isTonightMatch(startTime) {
+  if (!startTime) return false;
+  try {
+    const matchDate = new Date(startTime).toLocaleDateString('en-CA');
+    const today     = new Date().toLocaleDateString('en-CA');
+    return matchDate === today;
+  } catch { return false; }
+}
+
+function isThisWeek(startTime) {
+  if (!startTime) return false;
+  try {
+    const dt  = new Date(startTime);
+    const now = new Date();
+    const diffDays = (dt - now) / 86400000;
+    return diffDays >= -2 && diffDays <= 7;
+  } catch { return false; }
+}
+
+// Serve id_map.json
+app.get('/api/apa/id-map', (req, res) => {
+  try { res.json(loadIdMap()); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Tonight's matches for all viewer teams (groups 8-ball + 9-ball by real team name)
+app.get('/api/apa/tonight', async (req, res) => {
+  try {
+    const resp  = await apaGql.gql('dashboard', {}, APA_VIEWER_TEAMS_Q);
+    const teams = resp?.data?.viewer?.teams || [];
+    const idMap = loadIdMap();
+
+    const results = [];
+    for (const team of teams) {
+      const schedResp = await apaGql.gql('teamSchedule', { id: team.id }, APA_TEAM_SCHEDULE_Q);
+      const matches   = schedResp?.data?.team?.matches || [];
+      const tonight   = matches.filter(m => !m.isBye && isTonightMatch(m.startTime));
+      for (const m of tonight) {
+        results.push({ team, match: m });
+      }
+    }
+
+    // Group by real-world team (same name + session = same team, just different format)
+    const groups = {};
+    for (const { team, match } of results) {
+      const key = `${team.name.toLowerCase()}_${team.session?.id}`;
+      if (!groups[key]) groups[key] = { teamName: team.name, session: team.session, matches: [] };
+      groups[key].matches.push({ format: team.division?.format || '', teamId: team.id, match });
+    }
+
+    res.json({ groups: Object.values(groups), raw: results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// This week's matches
+app.get('/api/apa/week', async (req, res) => {
+  try {
+    const resp  = await apaGql.gql('dashboard', {}, APA_VIEWER_TEAMS_Q);
+    const teams = resp?.data?.viewer?.teams || [];
+
+    const results = [];
+    for (const team of teams) {
+      const schedResp = await apaGql.gql('teamSchedule', { id: team.id }, APA_TEAM_SCHEDULE_Q);
+      const matches   = schedResp?.data?.team?.matches || [];
+      const week      = matches.filter(m => !m.isBye && isThisWeek(m.startTime));
+      for (const m of week) {
+        results.push({ team, match: m });
+      }
+    }
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Full match detail
+app.get('/api/apa/match/:id', async (req, res) => {
+  try {
+    const id   = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid match id' });
+    const resp = await apaGql.gql('MatchPage', { id }, APA_MATCH_Q);
+    res.json(resp?.data?.match || {});
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Team schedule
+app.get('/api/apa/team/:id/schedule', async (req, res) => {
+  try {
+    const id   = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid team id' });
+    const resp = await apaGql.gql('teamSchedule', { id }, APA_TEAM_SCHEDULE_Q);
+    res.json(resp?.data?.team || {});
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
