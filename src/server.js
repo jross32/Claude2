@@ -1534,6 +1534,11 @@ app.get('/api/apa/team/:id/schedule', async (req, res) => {
   }
 });
 
+
+// --- MCP HTTP Tool API ---
+const apiRouter = require('./apiRouter');
+app.use('/api/mcp', apiRouter);
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
