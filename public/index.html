@@ -59,11 +59,7 @@
           <span class="nav-icon">&#129504;</span>
           <span class="nav-label">AI</span>
         </button>
-        <button class="nav-item" data-panel="apa-api" title="APA API" aria-label="Open APA API panel">
-          <span class="nav-icon">&#128306;</span>
-          <span class="nav-label">APA API</span>
-        </button>
-        <button class="nav-item" data-panel="logs" title="Tool Logs" aria-label="Open Tool Logs panel">
+<button class="nav-item" data-panel="logs" title="Tool Logs" aria-label="Open Tool Logs panel">
           <span class="nav-icon">&#128202;</span>
           <span class="nav-label">Logs</span>
         </button>
@@ -1336,72 +1332,6 @@
               <div class="form-actions">
                 <button class="btn-primary" id="btn-ai-send">&#9654; Ask AI</button>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel" id="panel-apa-api">
-        <div class="panel-header">
-          <h1>APA GraphQL API</h1>
-          <p class="subtitle">Directly query the APA GraphQL endpoint from your browser</p>
-        </div>
-        <div class="apa-api-wrap">
-          <div class="apa-api-top">
-            <div class="apa-api-endpoint-row">
-              <label class="apa-api-label">Endpoint</label>
-              <input id="apa-endpoint" class="apa-input" type="text" value="https://gql.poolplayers.com/graphql/" spellcheck="false" />
-              <button class="btn-primary" id="apa-btn-introspect">&#128269; Introspect Schema</button>
-            </div>
-            <div class="apa-api-endpoint-row">
-              <label class="apa-api-label">Auth Header</label>
-              <input id="apa-auth-header" class="apa-input" type="text" placeholder='Authorization: Bearer <token>  (or any header, e.g. x-token: abc)' spellcheck="false" />
-            </div>
-            <div class="apa-api-endpoint-row" id="apa-extra-headers-row" style="display:none">
-              <label class="apa-api-label">Extra Headers</label>
-              <textarea id="apa-extra-headers" class="apa-input apa-textarea-sm" placeholder='{"Cookie": "session=abc", "x-app-id": "123"}' spellcheck="false"></textarea>
-            </div>
-            <div class="apa-api-link-row">
-              <button class="btn-link" id="apa-btn-toggle-headers">+ Add extra headers</button>
-            </div>
-          </div>
-          <div class="apa-api-body">
-            <div class="apa-api-left">
-              <div class="apa-query-header">
-                <span class="apa-section-title">Query / Mutation</span>
-                <div class="apa-query-actions">
-                  <button class="btn-secondary btn-sm" id="apa-btn-prettify">&#9999; Prettify</button>
-                  <button class="btn-primary btn-sm" id="apa-btn-run">&#9654; Run</button>
-                </div>
-              </div>
-              <textarea id="apa-query" class="apa-textarea apa-code" placeholder="{ __typename }" spellcheck="false"></textarea>
-              <div class="apa-variables-header">
-                <span class="apa-section-title">Variables (JSON)</span>
-              </div>
-              <textarea id="apa-variables" class="apa-textarea apa-code apa-textarea-vars" placeholder="{}" spellcheck="false"></textarea>
-            </div>
-            <div class="apa-api-right">
-              <div class="apa-result-header">
-                <span class="apa-section-title">Result</span>
-                <button class="btn-link" id="apa-btn-copy-result" style="display:none">&#128203; Copy</button>
-              </div>
-              <pre id="apa-result" class="apa-result-box"><span class="apa-result-hint">Run a query to see results here.</span></pre>
-            </div>
-          </div>
-          <div class="apa-api-schema-wrap" id="apa-schema-wrap" style="display:none">
-            <div class="apa-query-header">
-              <span class="apa-section-title">&#128221; Schema Explorer</span>
-              <button class="btn-link" id="apa-btn-close-schema">&#10005; Close</button>
-            </div>
-            <div id="apa-schema-body" class="apa-schema-body"></div>
-          </div>
-          <div id="apa-saved-queries-wrap" class="apa-saved-queries-wrap">
-            <div class="apa-query-header">
-              <span class="apa-section-title">&#128190; Saved Queries</span>
-              <button class="btn-secondary btn-sm" id="apa-btn-save-query">+ Save current</button>
-            </div>
-            <div id="apa-saved-list" class="apa-saved-list">
-              <span class="empty-hint">No saved queries yet.</span>
             </div>
           </div>
         </div>
