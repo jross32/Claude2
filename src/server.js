@@ -94,7 +94,7 @@ h1 span{color:#4f8ef7}
     <a class="btn btn-primary" href="/wsp">Web Scraper Panel</a>
     <a class="btn btn-secondary" href="/docs">API Docs</a>
   </div>
-  <div class="footer">Running on localhost &nbsp;·&nbsp; <a href="/api/status" style="color:#4a5168">status</a></div>
+  <div class="footer">Running on localhost &nbsp;·&nbsp; <a href="/api/mcp-meta" style="color:#4a5168">server info</a></div>
 </div>
 </body>
 </html>`;
