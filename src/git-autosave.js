@@ -14,7 +14,7 @@ const fs   = require('fs');
 const path = require('path');
 
 const REPO_ROOT      = path.join(__dirname, '..');
-const INTERVAL_MS    = 10 * 60 * 1000; // 10 minutes
+const INTERVAL_MS    = 6 * 60 * 60 * 1000; // 6 hours
 const LOCK_FILE      = path.join(REPO_ROOT, '.git', 'index.lock');
 const LOCK_STALE_MS  = 30 * 1000; // consider lock stale after 30 s
 
