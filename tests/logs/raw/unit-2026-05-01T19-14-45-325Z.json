@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-05-01T19:14:45.323Z",
+  "git_commit": "128513a",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "Scrape endpoints return 429 after exceeding the per-minute limit",
+      "status": "pass",
+      "duration_ms": 645,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 429,
+        "retryAfterSeconds": 60
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Generate endpoints return 429 after exceeding the per-minute limit",
+      "status": "pass",
+      "duration_ms": 203,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 429,
+        "retryAfterSeconds": 60
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 8306,
+    "avg_duration_ms": 4153
+  }
+}
