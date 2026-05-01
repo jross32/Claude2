@@ -1,0 +1,253 @@
+{
+  "timestamp": "2026-05-01T15:35:23.571Z",
+  "git_commit": "4b2457a",
+  "suite": "api",
+  "tests": [
+    {
+      "name": "POST /api/scrape with no body → 400 + error",
+      "status": "pass",
+      "duration_ms": 101,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400,
+        "error": "URL is required"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape with valid url → 200 + { sessionId, message }",
+      "status": "pass",
+      "duration_ms": 10,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "sessionId": "7960fa7c-29db-4070-9dd3-62c0529b4b9d"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/active returns active session snapshots",
+      "status": "pass",
+      "duration_ms": 563,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 1,
+        "state": "running"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/:id/status returns live session snapshot",
+      "status": "pass",
+      "duration_ms": 18,
+      "error": null,
+      "input": {},
+      "output": {
+        "state": "running",
+        "step": "Launching browser"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/stop for active session → 200",
+      "status": "pass",
+      "duration_ms": 24,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/:id/status falls back after active session is removed",
+      "status": "pass",
+      "duration_ms": 1566,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "state": "stopped"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape with uiVisible=false starts a headless session",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "sessionId": "6340e5cc-7b4a-4e00-93ec-bd2c47b9369a"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/active hides headless sessions by default",
+      "status": "pass",
+      "duration_ms": 11,
+      "error": null,
+      "input": {},
+      "output": {
+        "state": "running",
+        "initiatedBy": "mcp"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/saves hides headless MCP saves by default but exposes them with includeHidden",
+      "status": "pass",
+      "duration_ms": 14245,
+      "error": null,
+      "input": {},
+      "output": {
+        "uiVisible": false,
+        "initiatedBy": "mcp"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/stop for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/pause for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/scrape/:id/status for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/ai/chat with no question → 400",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400,
+        "error": "question is required"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/ai/chat analyzes current scrape data without Ollama for extractive questions",
+      "status": "pass",
+      "duration_ms": 16,
+      "error": null,
+      "input": {},
+      "output": {
+        "routeUsed": "extractive",
+        "confidence": "high",
+        "answer": "Found 3 strongly matching sections across 2 page(s)."
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/resume for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/verify for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/scrape/:id/credentials for unknown session → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/scrape with urls: [] → 400",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/scrape with malformed maxPages → does not 500",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 19,
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 26307,
+    "avg_duration_ms": 1385
+  }
+}
