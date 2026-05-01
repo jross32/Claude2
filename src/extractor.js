@@ -851,10 +851,13 @@ async function extractPageData(page, url, opts = {}) {
     return {
       meta,
       headings,
+      headingOutline,
       fullText,
       textBlocks,
       links,
       images,
+      trackingPixels,
+      thirdPartyScripts,
       svgs,
       media,
       fontFaces,
