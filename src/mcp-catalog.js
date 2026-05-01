@@ -93,6 +93,7 @@ const TOOL_CATEGORY_GROUPS = [
       'find_patterns',
       'crawl_sitemap',
       'get_robots_txt',
+      'get_cache_headers',
     ],
   },
   {
@@ -105,6 +106,7 @@ const TOOL_CATEGORY_GROUPS = [
       'inspect_ssl',
       'score_security_headers',
       'lookup_dns',
+      'lookup_ip_info',
     ],
   },
   {
