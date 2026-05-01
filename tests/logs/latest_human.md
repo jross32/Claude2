@@ -1,24 +1,52 @@
 # Test Results — api
 
-**Status:** ✅ HEALTHY
-**Run:** 2026-05-01T19:27:11.046Z
-**Commit:** `1ef2b7c`
-**Duration:** 7830ms
+**Status:** ❌ FAILING
+**Run:** 2026-05-01T19:27:34.683Z
+**Commit:** `e41fd91`
+**Duration:** 23302ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 5 | 5 | 0 | 0 |
+| 19 | 18 | 1 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | POST /api/schema with graphqlCalls → 200 + schema object | pass | 71ms | |
-| ✅ | Schema response includes typescript or jsonSchema fields | pass | 8ms | |
-| ✅ | [chaos] POST /api/schema with no graphqlCalls → 400 | pass | 3ms | |
-| ✅ | [chaos] POST /api/schema with empty array → does not 500 | pass | 4ms | |
-| ✅ | [chaos] POST /api/schema with malformed call → does not 500 | pass | 4ms | |
+| ✅ | POST /api/scrape with no body → 400 + error | pass | 71ms | |
+| ✅ | POST /api/scrape with valid url → 200 + { sessionId, message } | pass | 6ms | |
+| ✅ | GET /api/scrape/active returns active session snapshots | pass | 256ms | |
+| ✅ | GET /api/scrape/:id/status returns live session snapshot | pass | 19ms | |
+| ✅ | POST /api/scrape/:id/stop for active session → 200 | pass | 6ms | |
+| ✅ | GET /api/scrape/:id/status falls back after active session is removed | pass | 1897ms | |
+| ✅ | POST /api/scrape with uiVisible=false starts a headless session | pass | 9ms | |
+| ✅ | GET /api/scrape/active hides headless sessions by default | pass | 23ms | |
+| ❌ | GET /api/saves hides headless MCP saves by default but exposes them with includeHidden | fail | 12105ms | |
+| ✅ | POST /api/scrape/:id/stop for unknown session → 404 | pass | 5ms | |
+| ✅ | POST /api/scrape/:id/pause for unknown session → 404 | pass | 4ms | |
+| ✅ | GET /api/scrape/:id/status for unknown session → 404 | pass | 4ms | |
+| ✅ | POST /api/ai/chat with no question → 400 | pass | 4ms | |
+| ✅ | POST /api/ai/chat analyzes current scrape data without Ollama for extractive questions | pass | 14ms | |
+| ✅ | POST /api/scrape/:id/resume for unknown session → 404 | pass | 4ms | |
+| ✅ | POST /api/scrape/:id/verify for unknown session → 404 | pass | 3ms | |
+| ✅ | POST /api/scrape/:id/credentials for unknown session → 404 | pass | 2ms | |
+| ✅ | [chaos] POST /api/scrape with urls: [] → 400 | pass | 3ms | |
+| ✅ | [chaos] POST /api/scrape with malformed maxPages → does not 500 | pass | 2ms | |
 
+## Errors
 
+### ❌ GET /api/saves hides headless MCP saves by default but exposes them with includeHidden
+```
+Condition not met within 12000ms
+Error: Condition not met within 12000ms
+    at waitFor (C:\Users\justi\Claude2\tests\api\scrape.test.js:17:9)
+    at async C:\Users\justi\Claude2\tests\api\scrape.test.js:145:5
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\api\scrape.test.js:142:3)
+```
+## Suggested Next Steps
+
+- Run `/new-test` to dig into failing tests
+- Check `tests/logs/raw/` for full history
