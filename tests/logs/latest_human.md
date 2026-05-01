@@ -1,35 +1,132 @@
-# Test Results — security-pingfed_lab
+# Test Results — api
 
-**Status:** ✅ HEALTHY
-**Run:** 2026-05-01T14:34:33.849Z
-**Commit:** `25c6f1a`
-**Duration:** 840ms
+**Status:** ❌ FAILING
+**Run:** 2026-05-01T15:08:51.448Z
+**Commit:** `aaf3fd8`
+**Duration:** 13872ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 16 | 16 | 0 | 0 |
+| 19 | 10 | 9 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | mock PingFederate starts | pass | 33ms | |
-| ✅ | redirect_uri: all bypass variants blocked (PA_LEGACY_VENDOR) | pass | 200ms | |
-| ✅ | redirect_uri: open redirect blocked on PA_ client | pass | 86ms | |
-| ✅ | state_entropy: 50 unique states, entropy OK | pass | 122ms | |
-| ✅ | alg_none: PingFed issues signed JWT (alg header RS256) | pass | 27ms | |
-| ✅ | alg_none: forged token rejected by /idp/userinfo.openid | pass | 7ms | |
-| ✅ | pkce: PA_VENDOR_PORTAL requires PKCE — no code_challenge rejected | pass | 10ms | |
-| ✅ | pkce: PA_LEGACY_VENDOR has no PKCE (documented as upgrade target) | pass | 13ms | |
-| ✅ | token_rotation: PingFed rotates refresh tokens correctly | pass | 14ms | |
-| ✅ | bola_idor: PA_VENDOR_A cannot access PA_VENDOR_B report | pass | 12ms | |
-| ✅ | scope_escalation: PA_LIMITED cannot escalate to vendor:reports | pass | 6ms | |
-| ✅ | header_injection: /pa/protected rejects all X-PingAccess-* header injections | pass | 34ms | |
-| ✅ | header_injection: /pa/misconfigured shows X-Authenticated-User bypass (vuln demo) | pass | 34ms | |
-| ✅ | full suite (all 8 tests): risk score LOW against mock PingFed | pass | 189ms | |
-| ✅ | chaos: non-PA_ client_id returns PingFed-format error | pass | 31ms | |
-| ✅ | chaos: replayed refresh token triggers session invalidation | pass | 10ms | |
+| ❌ | POST /api/scrape with no body → 400 + error | fail | 403ms | |
+| ❌ | POST /api/scrape with valid url → 200 + { sessionId, message } | fail | 10ms | |
+| ❌ | GET /api/scrape/active returns active session snapshots | fail | 0ms | |
+| ❌ | GET /api/scrape/:id/status returns live session snapshot | fail | 0ms | |
+| ✅ | POST /api/scrape/:id/stop for active session → 200 | pass | 0ms | |
+| ❌ | GET /api/scrape/:id/status falls back after active session is removed | fail | 0ms | |
+| ❌ | POST /api/scrape with uiVisible=false starts a headless session | fail | 5ms | |
+| ❌ | GET /api/scrape/active hides headless sessions by default | fail | 0ms | |
+| ❌ | GET /api/saves hides headless MCP saves by default but exposes them with includeHidden | fail | 0ms | |
+| ✅ | POST /api/scrape/:id/stop for unknown session → 404 | pass | 39ms | |
+| ✅ | POST /api/scrape/:id/pause for unknown session → 404 | pass | 10ms | |
+| ✅ | GET /api/scrape/:id/status for unknown session → 404 | pass | 67ms | |
+| ✅ | POST /api/ai/chat with no question → 400 | pass | 42ms | |
+| ✅ | POST /api/ai/chat analyzes current scrape data without Ollama for extractive questions | pass | 20ms | |
+| ✅ | POST /api/scrape/:id/resume for unknown session → 404 | pass | 3ms | |
+| ✅ | POST /api/scrape/:id/verify for unknown session → 404 | pass | 2ms | |
+| ✅ | POST /api/scrape/:id/credentials for unknown session → 404 | pass | 3ms | |
+| ❌ | [chaos] POST /api/scrape with urls: [] → 400 | fail | 3ms | |
+| ✅ | [chaos] POST /api/scrape with malformed maxPages → does not 500 | pass | 2ms | |
 
+## Errors
 
+### ❌ POST /api/scrape with no body → 400 + error
+```
+Expected 400, got 429
+Error: Expected 400, got 429
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:31:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\api\scrape.test.js:29:3)
+```
+
+### ❌ POST /api/scrape with valid url → 200 + { sessionId, message }
+```
+Expected 200, got 429
+Error: Expected 200, got 429
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:39:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\api\scrape.test.js:37:3)
+```
+
+### ❌ GET /api/scrape/active returns active session snapshots
+```
+Expected live session from previous test
+Error: Expected live session from previous test
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:48:31
+    at TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:28)
+    at main (C:\Users\justi\Claude2\tests\api\scrape.test.js:47:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+```
+
+### ❌ GET /api/scrape/:id/status returns live session snapshot
+```
+Expected live session from previous test
+Error: Expected live session from previous test
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:62:31
+    at TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:28)
+    at main (C:\Users\justi\Claude2\tests\api\scrape.test.js:61:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+```
+
+### ❌ GET /api/scrape/:id/status falls back after active session is removed
+```
+Expected live session from previous test
+Error: Expected live session from previous test
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:84:31
+    at TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:28)
+    at main (C:\Users\justi\Claude2\tests\api\scrape.test.js:83:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+```
+
+### ❌ POST /api/scrape with uiVisible=false starts a headless session
+```
+Expected 200, got 429
+Error: Expected 200, got 429
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:113:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\api\scrape.test.js:106:3)
+```
+
+### ❌ GET /api/scrape/active hides headless sessions by default
+```
+Expected hidden session from previous test
+Error: Expected hidden session from previous test
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:121:33
+    at TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:28)
+    at main (C:\Users\justi\Claude2\tests\api\scrape.test.js:120:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+```
+
+### ❌ GET /api/saves hides headless MCP saves by default but exposes them with includeHidden
+```
+Expected hidden session from previous test
+Error: Expected hidden session from previous test
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:143:33
+    at TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:28)
+    at main (C:\Users\justi\Claude2\tests\api\scrape.test.js:142:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+```
+
+### ❌ [chaos] POST /api/scrape with urls: [] → 400
+```
+Expected 400, got 429
+Error: Expected 400, got 429
+    at C:\Users\justi\Claude2\tests\api\scrape.test.js:258:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async TestRunner.run (C:\Users\justi\Claude2\tests\runner.js:40:22)
+    at async main (C:\Users\justi\Claude2\tests\api\scrape.test.js:256:3)
+```
+## Suggested Next Steps
+
+- Run `/new-test` to dig into failing tests
+- Check `tests/logs/raw/` for full history

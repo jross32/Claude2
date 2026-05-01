@@ -77,14 +77,6 @@ app.use((req, res, next) => {
   let limit = 120;
   if (/^\/api\/(scrape|fill-form|screenshot|oidc-test|tls-fingerprint)/.test(req.path)) limit = 30;
   else if (/^\/api\/(generate|schema|diff|schedules|monitor)/.test(req.path)) limit = 60;
-  if (req.method === 'POST' && req.path === '/api/scrape' && sessions.size >= MAX_ACTIVE_SCRAPES) {
-    return res.status(429).json({
-      error: 'Too many active scrape jobs — wait for an existing scrape to finish before starting another',
-      retryAfterSeconds: 60,
-      activeScrapes: sessions.size,
-      maxActiveScrapes: MAX_ACTIVE_SCRAPES,
-    });
-  }
   if (_checkRateLimit(`${ip}:${req.method}:${req.path.split('/').slice(0, 4).join('/')}`, limit)) {
     return res.status(429).json({ error: 'Rate limit exceeded — slow down requests', retryAfterSeconds: 60 });
   }
@@ -676,6 +668,14 @@ app.post('/api/scrape', async (req, res) => {
   if (urls && !Array.isArray(urls)) return res.status(400).json({ error: `'urls' must be an array` });
   if (maxPages !== undefined && maxPages !== null && (!Number.isInteger(Number(maxPages)) || Number(maxPages) < 1)) {
     return res.status(400).json({ error: `'maxPages' must be a positive integer` });
+  }
+  if (sessions.size >= MAX_ACTIVE_SCRAPES) {
+    return res.status(429).json({
+      error: 'Too many active scrape jobs — wait for an existing scrape to finish before starting another',
+      retryAfterSeconds: 60,
+      activeScrapes: sessions.size,
+      maxActiveScrapes: MAX_ACTIVE_SCRAPES,
+    });
   }
 
   // Auto-inject credentials from .env for known sites
