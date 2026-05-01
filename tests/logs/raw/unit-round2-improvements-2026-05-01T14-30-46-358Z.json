@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-05-01T14:30:46.354Z",
+  "git_commit": "7d5f2cd",
+  "suite": "unit-round2-improvements",
+  "tests": [
+    {
+      "name": "new-tool: extract_structured_data — definition, handler, classification",
+      "status": "fail",
+      "duration_ms": 3,
+      "error": "extract_structured_data not in READ_ONLY_TOOL_NAMES",
+      "input": {},
+      "output": {
+        "inTools": true,
+        "hasSchema": true,
+        "hasSummary": true,
+        "inRO": false
+      },
+      "stack_trace": "Error: extract_structured_data not in READ_ONLY_TOOL_NAMES\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:113:27\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:103:10)\n    at Object.<anonymous> (C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:194:1)\n    at Module._compile (node:internal/modules/cjs/loader:1812:14)\n    at Object..js (node:internal/modules/cjs/loader:1943:10)\n    at Module.load (node:internal/modules/cjs/loader:1533:32)\n    at Module._load (node:internal/modules/cjs/loader:1335:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)",
+      "screenshot": null
+    },
+    {
+      "name": "new-tool: crawl_sitemap — definition, handler, classification",
+      "status": "fail",
+      "duration_ms": 5,
+      "error": "robots.txt discovery missing",
+      "input": {},
+      "output": {
+        "inTools": true,
+        "hasLocParse": true,
+        "hasSitemapIdx": true,
+        "hasRobots": false,
+        "inOW": true
+      },
+      "stack_trace": "Error: robots.txt discovery missing\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:128:30\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:117:10)\n    at Object.<anonymous> (C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:194:1)\n    at Module._compile (node:internal/modules/cjs/loader:1812:14)\n    at Object..js (node:internal/modules/cjs/loader:1943:10)\n    at Module.load (node:internal/modules/cjs/loader:1533:32)\n    at Module._load (node:internal/modules/cjs/loader:1335:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)",
+      "screenshot": null
+    },
+    {
+      "name": "new-tool: delete_monitor — definition and DESTRUCTIVE classification",
+      "status": "fail",
+      "duration_ms": 1,
+      "error": "delete_monitor not in DESTRUCTIVE_TOOL_NAMES",
+      "input": {},
+      "output": {
+        "inTools": true,
+        "inDest": false
+      },
+      "stack_trace": "Error: delete_monitor not in DESTRUCTIVE_TOOL_NAMES\n    at C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:188:25\n    at TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:28)\n    at main (C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:180:10)\n    at Object.<anonymous> (C:\\Users\\justi\\Claude2\\tests\\unit\\round2-improvements.test.js:194:1)\n    at Module._compile (node:internal/modules/cjs/loader:1812:14)\n    at Object..js (node:internal/modules/cjs/loader:1943:10)\n    at Module.load (node:internal/modules/cjs/loader:1533:32)\n    at Module._load (node:internal/modules/cjs/loader:1335:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)",
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 0,
+    "failed": 3,
+    "skipped": 0,
+    "duration_ms": 44,
+    "avg_duration_ms": 15
+  }
+}
