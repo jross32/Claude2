@@ -2071,6 +2071,36 @@ class ScraperSession {
     results.push(...dropdownResults);
     this._incrementPartialPageCount(results.length);
 
+    // ── IFRAME CONTENT ────────────────────────────────────────────────────────
+    try {
+      const childFrames = page.frames().filter(f =>
+        f !== page.mainFrame() &&
+        f.url() &&
+        !f.url().startsWith('about:') &&
+        !f.url().startsWith('data:')
+      );
+      if (childFrames.length > 0) {
+        const iframeContents = [];
+        for (const frame of childFrames.slice(0, 10)) {
+          try {
+            const content = await frame.evaluate(() => ({
+              url: window.location.href,
+              title: document.title,
+              text: document.body?.innerText?.trim().substring(0, 2000) || '',
+              links: Array.from(document.querySelectorAll('a[href]')).slice(0, 20).map(a => ({
+                href: a.href,
+                text: a.innerText.trim().substring(0, 100),
+              })),
+              hasForm: document.forms.length > 0,
+              inputCount: document.querySelectorAll('input').length,
+            }));
+            if (content) iframeContents.push({ frameUrl: frame.url(), ...content });
+          } catch { /* cross-origin frame — skip */ }
+        }
+        if (iframeContents.length > 0) pageData.iframeContents = iframeContents;
+      }
+    } catch { /* frame API unavailable — skip */ }
+
     if (depth > 1) {
       const links = (pageData.links || [])
         .filter(l => l.isInternal && !visited.has(l.href) && l.href?.startsWith('http'))
