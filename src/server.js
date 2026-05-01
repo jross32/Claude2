@@ -27,6 +27,14 @@ const { createSchedule, deleteSchedule, listSchedules } = require('./scheduler')
 const { generateReact, extractCSS, generateMarkdown, generateSitemap } = require('./generators');
 const gitAutosave = require('./git-autosave');
 const { performOidcSecurityTests, testTlsFingerprint } = require('./oidc-tester');
+const { decodeJWT, extractJWTs } = require('./jwt-decoder');
+const { lookupDNS } = require('./dns-lookup');
+const { inspectSSL } = require('./ssl-inspector');
+const { scoreSecurityHeaders } = require('./security-scorer');
+const { buildLinkGraph, findRedirectChains, discoverSubdomains, checkBrokenLinks } = require('./link-graph');
+const { extractProductData } = require('./product-extractor');
+const { extractJobData } = require('./job-extractor');
+const { extractCompanyInfo } = require('./company-extractor');
 const {
   handleTool: handleMcpTool,
   __private__: {
@@ -1309,6 +1317,208 @@ app.get('/api/tool-logs/requests', (req, res) => {
       } catch { return null; }
     }).filter(Boolean);
     res.json(requests);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- JWT Token Decoder ----
+app.post('/api/jwt-decode', async (req, res) => {
+  const { sessionId, tokens } = req.body;
+  try {
+    if (tokens && Array.isArray(tokens)) {
+      const results = tokens.map(t => decodeJWT(t, 'manual'));
+      return res.json({ count: results.length, tokens: results });
+    }
+    if (!sessionId) return res.status(400).json({ error: 'sessionId or tokens required' });
+    const save = loadSaveById(sessionId);
+    if (!save) return res.status(404).json({ error: 'Session not found' });
+    const result = extractJWTs(save);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- DNS Lookup ----
+app.get('/api/dns', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url query param required' });
+  try {
+    const result = await lookupDNS(url);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- SSL Certificate Inspector ----
+app.get('/api/ssl', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url query param required' });
+  try {
+    const result = await inspectSSL(url);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Security Header Scorer ----
+app.post('/api/security-score', (req, res) => {
+  const { sessionId, securityHeaders } = req.body;
+  try {
+    let headers = securityHeaders;
+    if (!headers && sessionId) {
+      const save = loadSaveById(sessionId);
+      if (!save) return res.status(404).json({ error: 'Session not found' });
+      headers = save.securityHeaders || {};
+    }
+    if (!headers) return res.status(400).json({ error: 'securityHeaders or sessionId required' });
+    const result = scoreSecurityHeaders(headers);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Link Graph Builder ----
+app.post('/api/link-graph', (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+  try {
+    const save = loadSaveById(sessionId);
+    if (!save) return res.status(404).json({ error: 'Session not found' });
+    const pages = save.pages || [];
+    const apiCalls = save.apiCalls || {};
+    const targetDomain = (() => { try { return new URL(save.startUrl || '').hostname; } catch { return ''; } })();
+    const graph = buildLinkGraph(pages);
+    const redirectChains = findRedirectChains(pages, apiCalls);
+    const subdomains = discoverSubdomains(pages, apiCalls, targetDomain);
+    res.json({ graph, redirectChains, subdomains });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Broken Link Checker ----
+app.post('/api/broken-links', async (req, res) => {
+  const { sessionId, internalOnly, maxLinks } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+  try {
+    const save = loadSaveById(sessionId);
+    if (!save) return res.status(404).json({ error: 'Session not found' });
+    const allLinks = (save.pages || []).flatMap(p => (p.links || []).map(l => l.href)).filter(Boolean);
+    const unique = [...new Set(allLinks)];
+    const result = await checkBrokenLinks(unique, {
+      internalOnly: internalOnly !== false,
+      maxLinks: maxLinks || 100,
+      baseUrl: save.startUrl,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- CORS Preflights ----
+app.get('/api/cors-preflights', (req, res) => {
+  const { sessionId } = req.query;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId query param required' });
+  try {
+    const save = loadSaveById(sessionId);
+    if (!save) return res.status(404).json({ error: 'Session not found' });
+    res.json({ corsPreflights: save.captures?.corsPreflights || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- WebRTC Connections ----
+app.get('/api/webrtc', (req, res) => {
+  const { sessionId } = req.query;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId query param required' });
+  try {
+    const save = loadSaveById(sessionId);
+    if (!save) return res.status(404).json({ error: 'Session not found' });
+    res.json({
+      webrtcConnections: save.captures?.webrtcConnections || [],
+      deviceApiCalls: save.captures?.deviceApiCalls || [],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Product Data Extractor ----
+app.post('/api/extract-product', (req, res) => {
+  const { sessionId, pageIndex } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+  try {
+    const save = loadSaveById(sessionId);
+    if (!save) return res.status(404).json({ error: 'Session not found' });
+    const pages = save.pages || [];
+    if (pageIndex !== undefined) {
+      const page = pages[pageIndex];
+      if (!page) return res.status(404).json({ error: 'Page not found' });
+      return res.json(extractProductData(page));
+    }
+    // Run on all pages, return those detected as product pages
+    const results = pages.map((p, i) => ({ pageIndex: i, url: p.url, ...extractProductData(p) }))
+      .filter(r => r.isProductPage);
+    res.json({ products: results, count: results.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Job Listing Extractor ----
+app.post('/api/extract-jobs', (req, res) => {
+  const { sessionId, pageIndex } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+  try {
+    const save = loadSaveById(sessionId);
+    if (!save) return res.status(404).json({ error: 'Session not found' });
+    const pages = save.pages || [];
+    if (pageIndex !== undefined) {
+      const page = pages[pageIndex];
+      if (!page) return res.status(404).json({ error: 'Page not found' });
+      return res.json(extractJobData(page));
+    }
+    const results = pages.map((p, i) => ({ pageIndex: i, url: p.url, ...extractJobData(p) }))
+      .filter(r => r.isJobPage);
+    res.json({ jobPages: results, totalJobs: results.reduce((n, r) => n + (r.jobs?.length || 0), 0) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Company Info Extractor ----
+app.post('/api/extract-company', (req, res) => {
+  const { sessionId, pageIndex } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+  try {
+    const save = loadSaveById(sessionId);
+    if (!save) return res.status(404).json({ error: 'Session not found' });
+    const pages = save.pages || [];
+    if (pageIndex !== undefined) {
+      const page = pages[pageIndex];
+      if (!page) return res.status(404).json({ error: 'Page not found' });
+      return res.json(extractCompanyInfo(page));
+    }
+    // Merge across all pages — later pages win on non-null fields
+    let merged = {};
+    for (const page of pages) {
+      const { company } = extractCompanyInfo(page);
+      if (company) {
+        for (const [k, v] of Object.entries(company)) {
+          if (v !== null && v !== undefined && (!merged[k] || (typeof v === 'object' && Object.keys(v).length > 0))) {
+            merged[k] = v;
+          }
+        }
+      }
+    }
+    res.json({ company: Object.keys(merged).length ? merged : null, pagesScanned: pages.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

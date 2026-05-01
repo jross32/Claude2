@@ -68,6 +68,13 @@ async function extractPageData(page, url, opts = {}) {
       robots: document.querySelector('meta[name="robots"]')?.content,
       themeColor: document.querySelector('meta[name="theme-color"]')?.content,
       canonical: document.querySelector('link[rel="canonical"]')?.href,
+      language: document.documentElement.lang ||
+                document.querySelector('meta[http-equiv="content-language"]')?.content ||
+                navigator.language || null,
+      hreflang: Array.from(document.querySelectorAll('link[hreflang]')).map(el => ({
+        lang: el.getAttribute('hreflang'),
+        url: el.href,
+      })),
       favicon: document.querySelector('link[rel="icon"]')?.href ||
                document.querySelector('link[rel="shortcut icon"]')?.href,
       appleTouchIcon: document.querySelector('link[rel="apple-touch-icon"]')?.href,
@@ -650,6 +657,130 @@ async function extractPageData(page, url, opts = {}) {
       });
     } catch {}
 
+    // ── RSS / ATOM / JSON FEEDS ──
+    const feeds = (() => {
+      const found = [];
+      const FEED_TYPES = [
+        { selector: 'link[type="application/rss+xml"]', type: 'rss' },
+        { selector: 'link[type="application/atom+xml"]', type: 'atom' },
+        { selector: 'link[type="application/json"]', type: 'json-feed' },
+        { selector: 'link[type="application/feed+json"]', type: 'json-feed' },
+      ];
+      for (const { selector, type } of FEED_TYPES) {
+        document.querySelectorAll(selector).forEach(el => {
+          found.push({ type, url: el.href, title: el.title || el.getAttribute('title') || null });
+        });
+      }
+      return found;
+    })();
+
+    // ── PDF LINKS ──
+    const pdfLinks = Array.from(document.querySelectorAll('a[href]'))
+      .filter(el => /\.pdf(\?|$)/i.test(el.href) || el.getAttribute('type') === 'application/pdf')
+      .slice(0, 100)
+      .map(el => ({ url: el.href, text: el.innerText.trim() || el.title || null, download: el.download || null }));
+
+    // ── OPENAPI / SWAGGER SPEC DETECTION ──
+    const apiSpecLinks = (() => {
+      const specPaths = [
+        { pattern: /openapi\.json$/i, format: 'openapi' },
+        { pattern: /openapi\.ya?ml$/i, format: 'openapi' },
+        { pattern: /swagger\.json$/i, format: 'swagger' },
+        { pattern: /swagger\.ya?ml$/i, format: 'swagger' },
+        { pattern: /api[-_]?docs(\.json|\.ya?ml)?$/i, format: 'openapi' },
+        { pattern: /v\d+\/openapi(\.json|\.ya?ml)?$/i, format: 'openapi' },
+        { pattern: /swagger-ui\.html?$/i, format: 'swagger-ui' },
+        { pattern: /redoc(\.html?)?$/i, format: 'redoc' },
+      ];
+      const found = [];
+      const seen = new Set();
+
+      // Check all <a href> for spec paths
+      document.querySelectorAll('a[href]').forEach(el => {
+        for (const { pattern, format } of specPaths) {
+          if (pattern.test(el.href) && !seen.has(el.href)) {
+            seen.add(el.href);
+            found.push({ url: el.href, format, detectedVia: 'link' });
+          }
+        }
+      });
+
+      // Check if swagger-ui-bundle or redoc is loaded as a script
+      document.querySelectorAll('script[src]').forEach(el => {
+        if (/swagger-ui-bundle/i.test(el.src) && !seen.has('swagger-ui')) {
+          seen.add('swagger-ui');
+          found.push({ url: null, format: 'swagger-ui', detectedVia: 'script', scriptSrc: el.src });
+        }
+        if (/redoc/i.test(el.src) && !seen.has('redoc-script')) {
+          seen.add('redoc-script');
+          found.push({ url: null, format: 'redoc', detectedVia: 'script', scriptSrc: el.src });
+        }
+      });
+
+      return found;
+    })();
+
+    // ── GDPR / COOKIE CONSENT DETECTION ──
+    const cookieConsent = (() => {
+      const w = window;
+      const html = document.documentElement.innerHTML;
+
+      const VENDORS = [
+        { vendor: 'OneTrust', detect: () => !!(w.OneTrust || w.OptanonWrapper || html.includes('onetrust') || document.getElementById('onetrust-consent-sdk')) },
+        { vendor: 'Cookiebot', detect: () => !!(w.Cookiebot || w.CookieConsent || html.includes('cookiebot.com')) },
+        { vendor: 'Osano', detect: () => !!(w.Osano || html.includes('osano.com')) },
+        { vendor: 'Quantcast', detect: () => !!(w.__qc || html.includes('quantcast.mgr.consensu.org') || html.includes('quantcast.com/choice')) },
+        { vendor: 'TrustArc', detect: () => !!(html.includes('truste.com') || html.includes('trustarc.com') || document.querySelector('.truste_overlay')) },
+        { vendor: 'Didomi', detect: () => !!(w.Didomi || html.includes('sdk.privacy-center.org')) },
+        { vendor: 'Iubenda', detect: () => !!(w._iub || html.includes('iubenda.com')) },
+        { vendor: 'CookieYes', detect: () => !!(html.includes('cookieyes.com') || document.querySelector('.cky-consent-container')) },
+        { vendor: 'Usercentrics', detect: () => !!(w.UC_UI || html.includes('usercentrics.eu')) },
+        { vendor: 'Termly', detect: () => !!(html.includes('app.termly.io') || document.querySelector('.termly-styles-overlay')) },
+      ];
+
+      let detected = false;
+      let vendor = null;
+
+      for (const v of VENDORS) {
+        try {
+          if (v.detect()) { detected = true; vendor = v.vendor; break; }
+        } catch { /* ignore */ }
+      }
+
+      // Detect consent dialog DOM presence
+      const dialogSelectors = [
+        '[id*="cookie"][id*="consent"]', '[class*="cookie-consent"]',
+        '[id*="gdpr"]', '[class*="gdpr"]', '[role="dialog"][aria-label*="cookie"]',
+        '#cookie-banner', '.cookie-banner', '#consent-modal', '.consent-modal',
+      ];
+      const domPresent = dialogSelectors.some(sel => {
+        try { return !!document.querySelector(sel); } catch { return false; }
+      });
+
+      // Try to detect model (opt-in vs opt-out) from known APIs
+      let model = 'unknown';
+      try {
+        if (w.OneTrust?.IsAlertBoxClosed?.()) model = 'opt-in';
+        else if (w.Cookiebot?.consented) model = 'opt-in';
+        else if (detected) model = 'unknown';
+      } catch { /* ignore */ }
+
+      // Detect categories from OneTrust/Cookiebot APIs
+      const categories = [];
+      try {
+        if (w.OneTrust?.GetDomainData?.()?.Groups) {
+          w.OneTrust.GetDomainData().Groups.forEach(g => categories.push(g.GroupName || g.CustomGroupName));
+        } else if (w.Cookiebot?.consent) {
+          if (w.Cookiebot.consent.necessary) categories.push('Necessary');
+          if (w.Cookiebot.consent.preferences) categories.push('Preferences');
+          if (w.Cookiebot.consent.statistics) categories.push('Statistics');
+          if (w.Cookiebot.consent.marketing) categories.push('Marketing');
+        }
+      } catch { /* ignore */ }
+
+      return { detected, vendor, model, domPresent, categories };
+    })();
+
     return {
       meta,
       headings,
@@ -685,6 +816,10 @@ async function extractPageData(page, url, opts = {}) {
       customElements: customElements_,
       shadowDOMContent,
       jsGlobalState,
+      feeds,
+      pdfLinks,
+      apiSpecLinks,
+      cookieConsent,
     };
   }, { pageUrl: url, lightMode: !!opts.lightMode });
 
@@ -794,6 +929,7 @@ async function extractPageData(page, url, opts = {}) {
             transferSize: nav.transferSize,
             encodedBodySize: nav.encodedBodySize,
             decodedBodySize: nav.decodedBodySize,
+            httpVersion: nav.nextHopProtocol || null,
           } : null,
           paint: Object.fromEntries(paint.map(p => [p.name, Math.round(p.startTime)])),
           resources: resources.map(r => ({
@@ -853,6 +989,50 @@ async function extractPageData(page, url, opts = {}) {
     }
   } catch {
     data.entities = { emails: [], phones: [], urls: [], socials: {}, addresses: [], coordinates: [], ipAddresses: [], crypto: { bitcoin: [], ethereum: [] } };
+  }
+
+  // ── 8. Source map detection ───────────────────────────────────────────────
+  try {
+    const sourceMaps = [];
+    const seen = new Set();
+
+    // Check inline scripts for sourceMappingURL comments
+    const inlineScripts = data.scripts?.filter(s => s.inline && s.content) || [];
+    for (const script of inlineScripts) {
+      const match = script.content.match(/\/\/# sourceMappingURL=([^\s]+)/);
+      if (match && !seen.has(match[1])) {
+        seen.add(match[1]);
+        const isAbsolute = match[1].startsWith('http');
+        sourceMaps.push({ scriptUrl: '[inline]', mapUrl: match[1], isAbsolute, detectedVia: 'inline-script' });
+      }
+    }
+
+    // Check external scripts by fetching their last 500 bytes
+    const externalScripts = (data.scripts || []).filter(s => s.src || s.href).slice(0, 20);
+    await Promise.all(externalScripts.map(async (script) => {
+      const src = script.src || script.href;
+      try {
+        const tail = await page.evaluate(async (url) => {
+          try {
+            const r = await fetch(url);
+            const text = await r.text();
+            return text.slice(-1000); // last 1KB — sourceMappingURL is always at the end
+          } catch { return null; }
+        }, src);
+        if (tail) {
+          const match = tail.match(/\/\/# sourceMappingURL=([^\s]+)/);
+          if (match && !seen.has(src + match[1])) {
+            seen.add(src + match[1]);
+            const mapUrl = match[1].startsWith('http') ? match[1] : new URL(match[1], src).toString();
+            sourceMaps.push({ scriptUrl: src, mapUrl, isAbsolute: match[1].startsWith('http'), detectedVia: 'external-script' });
+          }
+        }
+      } catch { /* skip */ }
+    }));
+
+    data.sourceMaps = sourceMaps;
+  } catch {
+    data.sourceMaps = [];
   }
 
   return data;

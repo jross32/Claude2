@@ -906,6 +906,291 @@ class ScraperSession {
     return results;
   }
 
+  // ── Infinite scroll capture ────────────────────────────────────────────────
+  async _captureInfiniteScroll(page, opts = {}) {
+    const steps = Math.min(opts.infiniteScrollSteps || 5, 20);
+    const results = [];
+    try {
+      const getSnapshot = () => page.evaluate(() => ({
+        textCount: document.querySelectorAll('p, li, article, [data-testid]').length,
+        imageCount: document.images.length,
+        linkCount: document.links.length,
+        lastItemText: (() => {
+          const items = document.querySelectorAll('article, [data-testid], li, .item, .post, .card');
+          const last = items[items.length - 1];
+          return last ? last.innerText?.trim().substring(0, 100) : null;
+        })(),
+      }));
+
+      let prev = await getSnapshot();
+
+      for (let step = 1; step <= steps; step++) {
+        // Scroll to bottom
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.waitForTimeout(1500);
+
+        // Wait for new content (network idle for 1s)
+        try { await page.waitForLoadState('networkidle', { timeout: 3000 }); } catch {}
+
+        const next = await getSnapshot();
+        const delta = {
+          step,
+          newElements: Math.max(0, next.textCount - prev.textCount),
+          newImages: Math.max(0, next.imageCount - prev.imageCount),
+          newLinks: Math.max(0, next.linkCount - prev.linkCount),
+          lastItemText: next.lastItemText,
+        };
+        results.push(delta);
+
+        // Stop if nothing new loaded
+        if (delta.newElements === 0 && delta.newImages === 0 && delta.newLinks === 0) {
+          this.log(`Infinite scroll: no new content at step ${step} — stopping early`);
+          break;
+        }
+        prev = next;
+      }
+    } catch (err) {
+      this.log(`_captureInfiniteScroll error: ${err.message}`, 'warn');
+    }
+    return results;
+  }
+
+  // ── Pagination traversal ───────────────────────────────────────────────────
+  async _traversePagination(page, url, extractFn, opts = {}) {
+    const maxPages = Math.min(opts.maxPaginationPages || 10, 50);
+    const results = [];
+    let currentUrl = url;
+    const visited = new Set([url]);
+
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      try {
+        const pageData = await extractFn(page);
+        pageData._paginationPage = pageNum;
+        pageData._paginationUrl = currentUrl;
+        results.push(pageData);
+
+        // Find next page link
+        const nextUrl = await page.evaluate((currentUrl) => {
+          // rel="next" is the most reliable
+          const relNext = document.querySelector('link[rel="next"]');
+          if (relNext) return relNext.href;
+
+          // Aria-label patterns
+          const ariaNext = document.querySelector('[aria-label*="next" i], [aria-label*="Next"]');
+          if (ariaNext?.href) return ariaNext.href;
+
+          // Pagination container links — find one that looks like "next"
+          const paginationLinks = Array.from(document.querySelectorAll('.pagination a, [class*="pagination"] a, [class*="pager"] a'));
+          const nextLink = paginationLinks.find(a =>
+            /next|›|»|→|>/i.test(a.innerText.trim()) && a.href !== currentUrl
+          );
+          if (nextLink) return nextLink.href;
+
+          // URL pattern: ?page=N or ?p=N
+          const url = new URL(currentUrl);
+          const pageParam = url.searchParams.get('page') || url.searchParams.get('p') || url.searchParams.get('pg');
+          if (pageParam) {
+            url.searchParams.set(url.searchParams.has('page') ? 'page' : url.searchParams.has('p') ? 'p' : 'pg',
+              parseInt(pageParam) + 1);
+            // Can't verify it exists — caller will detect no-content and stop
+            return null; // safer to rely on rel="next" only for URL patterns
+          }
+
+          return null;
+        }, currentUrl);
+
+        if (!nextUrl || visited.has(nextUrl) || nextUrl === currentUrl) break;
+        visited.add(nextUrl);
+
+        await page.goto(nextUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        await page.waitForTimeout(500);
+        currentUrl = nextUrl;
+      } catch (err) {
+        this.log(`_traversePagination error on page ${pageNum}: ${err.message}`, 'warn');
+        break;
+      }
+    }
+    return results;
+  }
+
+  // ── Modal / dialog content capture ────────────────────────────────────────
+  async _captureModals(page) {
+    const modals = [];
+    try {
+      const triggers = await page.evaluate(() => {
+        const candidates = Array.from(document.querySelectorAll(
+          '[data-modal], [data-toggle="modal"], [data-bs-toggle="modal"], ' +
+          '[aria-haspopup="dialog"], [data-open], [data-target*="modal"]'
+        ));
+        // Also find buttons with modal-suggesting text
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"], a[href="#"]'));
+        const modalButtons = buttons.filter(el =>
+          /modal|popup|dialog|overlay|lightbox|learn more|view details/i.test(el.innerText + el.getAttribute('aria-label') + el.className)
+        );
+        const all = [...new Set([...candidates, ...modalButtons])].slice(0, 15);
+        return all.map((el, i) => ({
+          index: i,
+          tag: el.tagName,
+          text: el.innerText?.trim().substring(0, 100),
+          ariaLabel: el.getAttribute('aria-label'),
+          selector: el.id ? `#${el.id}` : (el.className ? `.${el.className.split(' ')[0]}` : el.tagName.toLowerCase()),
+        }));
+      });
+
+      for (const trigger of triggers) {
+        try {
+          // Click the trigger
+          const el = await page.$(`${trigger.tag.toLowerCase()}:nth-of-type(${trigger.index + 1})`);
+          if (!el) continue;
+
+          await el.click({ timeout: 3000 });
+          // Wait for a dialog/modal to appear
+          await page.waitForSelector(
+            '[role="dialog"], .modal, .modal-content, [class*="modal"], [class*="overlay"], [class*="lightbox"]',
+            { timeout: 2000 }
+          );
+
+          const modalContent = await page.evaluate(() => {
+            const dialog = document.querySelector('[role="dialog"], .modal:not(.d-none), .modal-content');
+            if (!dialog) return null;
+            return {
+              text: dialog.innerText?.trim().substring(0, 3000),
+              html: dialog.innerHTML?.substring(0, 5000),
+              ariaLabel: dialog.getAttribute('aria-label'),
+              links: Array.from(dialog.querySelectorAll('a[href]')).map(a => ({ href: a.href, text: a.innerText?.trim() })),
+              buttons: Array.from(dialog.querySelectorAll('button')).map(b => b.innerText?.trim()),
+            };
+          });
+
+          if (modalContent) {
+            modals.push({ trigger: { text: trigger.text, ariaLabel: trigger.ariaLabel }, ...modalContent });
+          }
+
+          // Dismiss: try Escape key first, then close button
+          await page.keyboard.press('Escape').catch(() => {});
+          await page.waitForTimeout(300);
+          const stillOpen = await page.$('[role="dialog"]');
+          if (stillOpen) {
+            const closeBtn = await page.$('[aria-label="Close"], [aria-label="close"], .modal-close, .close-modal, button.close');
+            if (closeBtn) await closeBtn.click().catch(() => {});
+          }
+          await page.waitForTimeout(300);
+        } catch { /* trigger failed — skip */ }
+      }
+    } catch (err) {
+      this.log(`_captureModals error: ${err.message}`, 'warn');
+    }
+    return modals;
+  }
+
+  // ── Accordion / tab content capture ───────────────────────────────────────
+  async _captureAccordions(page) {
+    const accordions = [];
+    try {
+      const triggers = await page.evaluate(() => {
+        const SELECTORS = [
+          '[data-accordion]', '.accordion-button', '[role="tab"]',
+          'details > summary', '[data-toggle="collapse"]',
+          '[aria-expanded="false"]', '.accordion-header',
+        ];
+        const found = [];
+        for (const sel of SELECTORS) {
+          document.querySelectorAll(sel).forEach(el => {
+            if (!found.includes(el)) found.push(el);
+          });
+        }
+        return found.slice(0, 20).map((el, i) => ({
+          index: i,
+          tag: el.tagName.toLowerCase(),
+          text: el.innerText?.trim().substring(0, 100),
+          expanded: el.getAttribute('aria-expanded'),
+          selector: el.id ? `#${el.id}` : null,
+        }));
+      });
+
+      for (const trigger of triggers) {
+        try {
+          const el = trigger.selector
+            ? await page.$(trigger.selector)
+            : (await page.$$(`${trigger.tag}`))[trigger.index];
+          if (!el) continue;
+
+          const before = await page.evaluate(() => document.body.innerText.length);
+          await el.click({ timeout: 2000 });
+          await page.waitForTimeout(600);
+          const after = await page.evaluate(() => document.body.innerText.length);
+
+          if (after > before) {
+            const revealed = await el.evaluate(node => {
+              // Walk siblings and children for revealed content
+              const panel = node.nextElementSibling || node.parentElement?.nextElementSibling;
+              if (!panel) return null;
+              return {
+                text: panel.innerText?.trim().substring(0, 2000),
+                links: Array.from(panel.querySelectorAll('a[href]')).map(a => ({ href: a.href, text: a.innerText?.trim() })),
+              };
+            });
+            if (revealed?.text) {
+              accordions.push({ trigger: trigger.text, revealed });
+            }
+          }
+        } catch { /* skip failed triggers */ }
+      }
+    } catch (err) {
+      this.log(`_captureAccordions error: ${err.message}`, 'warn');
+    }
+    return accordions;
+  }
+
+  // ── Search / autocomplete suggestion capture ───────────────────────────────
+  async _captureSearchSuggestions(page) {
+    const results = [];
+    try {
+      const searchInputs = await page.$$('input[type="search"], input[name*="search" i], input[placeholder*="search" i], input[aria-label*="search" i]');
+      const QUERIES = ['a', 'the', 'pro', 'new'];
+
+      for (const input of searchInputs.slice(0, 2)) {
+        try {
+          await input.click({ timeout: 1500 });
+          for (const query of QUERIES) {
+            await input.fill('');
+            await input.type(query, { delay: 80 });
+            // Wait for autocomplete to appear (network idle or visible dropdown)
+            await page.waitForTimeout(800);
+            try { await page.waitForLoadState('networkidle', { timeout: 2000 }); } catch {}
+
+            const suggestions = await page.evaluate(() => {
+              const SUGGESTION_SELECTORS = [
+                '[role="listbox"] [role="option"]',
+                '[role="combobox"] + ul li',
+                '.autocomplete-results li',
+                '.suggestions li',
+                '[class*="suggestion"] li',
+                '[class*="autocomplete"] li',
+                '[class*="dropdown"] li',
+                '.pac-item', // Google Maps Places
+              ];
+              for (const sel of SUGGESTION_SELECTORS) {
+                const items = Array.from(document.querySelectorAll(sel));
+                if (items.length > 0) return items.map(el => el.innerText?.trim()).filter(Boolean).slice(0, 10);
+              }
+              return [];
+            });
+
+            if (suggestions.length > 0) {
+              results.push({ query, suggestions });
+              await page.keyboard.press('Escape').catch(() => {});
+              break; // one successful query per input is enough
+            }
+          }
+        } catch { /* skip */ }
+      }
+    } catch (err) {
+      this.log(`_captureSearchSuggestions error: ${err.message}`, 'warn');
+    }
+    return results;
+  }
+
   // Build avoidance filter from user-selected tags
   _buildAvoidFilter(tags = []) {
     if (!tags || tags.length === 0) return null;
@@ -1089,6 +1374,13 @@ class ScraperSession {
       ssoProvider,
       useTor,
       redisDedupe,
+      captureModals,
+      captureAccordions,
+      captureInfiniteScroll,
+      infiniteScrollSteps,
+      captureSearchSuggestions,
+      capturePagination,
+      maxPaginationPages,
     } = options;
 
     this._captureScreenshots = captureScreenshots || false;
@@ -1497,6 +1789,37 @@ class ScraperSession {
         await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
       }
 
+      // ── Infinite scroll capture ──────────────────────────────────────────
+      if (captureInfiniteScroll) {
+        this.progress('Capturing infinite scroll steps', 44);
+        this.infiniteScrollCaptures = await this._captureInfiniteScroll(page, { infiniteScrollSteps });
+        this.log(`Infinite scroll: captured ${this.infiniteScrollCaptures.length} step(s)`);
+        // Scroll back to top after capture
+        await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+        await page.waitForTimeout(500);
+      }
+
+      // ── Modal content capture ────────────────────────────────────────────
+      if (captureModals) {
+        this.progress('Capturing modal/dialog content', 45);
+        this.capturedModals = await this._captureModals(page);
+        this.log(`Modals: captured ${this.capturedModals.length} modal(s)`);
+      }
+
+      // ── Accordion / tab capture ───────────────────────────────────────────
+      if (captureAccordions) {
+        this.progress('Capturing accordion/tab content', 46);
+        this.capturedAccordions = await this._captureAccordions(page);
+        this.log(`Accordions: captured ${this.capturedAccordions.length} accordion(s)`);
+      }
+
+      // ── Search suggestion capture ─────────────────────────────────────────
+      if (captureSearchSuggestions) {
+        this.progress('Capturing search suggestions', 47);
+        this.capturedSearchSuggestions = await this._captureSearchSuggestions(page);
+        this.log(`Search suggestions: captured ${this.capturedSearchSuggestions.length} query result(s)`);
+      }
+
       // ── Scrape pages ─────────────────────────────────────────────────────
       // Use current page URL as crawl start (may differ from primaryUrl after auth redirect)
       const crawlStartUrl = page.url().startsWith('http') ? page.url() : primaryUrl;
@@ -1577,6 +1900,9 @@ class ScraperSession {
           this.log(`SSE streams captured: ${this.sseCalls.length} connection(s), ${this.sseCalls.reduce((n, s) => n + s.events.length, 0)} total events`, 'info');
         }
       }
+
+      // ── Flush injected capture buffers (CSP violations, WebRTC, device APIs) ──
+      await this._flushInjectedCaptures(page);
 
       // ── Download images as base64 ────────────────────────────────────────
       if (captureImages && allResults.length > 0) {
@@ -2309,7 +2635,7 @@ class ScraperSession {
   // forces the app to fetch fresh from the network so we capture all API calls.
   async _detectServiceWorkers(page) {
     try {
-      return await page.evaluate(async () => {
+      const registrations = await page.evaluate(async () => {
         if (!navigator.serviceWorker) return [];
         const regs = await navigator.serviceWorker.getRegistrations();
         return regs.map(r => ({
@@ -2319,6 +2645,36 @@ class ScraperSession {
           updateViaCache: r.updateViaCache,
         }));
       });
+
+      // Phase 5: Enhance with strategy analysis — fetch SW script and pattern-match
+      for (const reg of registrations) {
+        if (!reg.scriptURL) continue;
+        try {
+          const analysis = await page.evaluate(async (swUrl) => {
+            try {
+              const resp = await fetch(swUrl);
+              const text = await resp.text();
+              const usesWorkbox = /workbox/i.test(text);
+              const strategies = [];
+              if (/cache[\s-]?first|cacheFirst/i.test(text)) strategies.push('cache-first');
+              if (/network[\s-]?first|networkFirst/i.test(text)) strategies.push('network-first');
+              if (/stale[\s-]?while[\s-]?revalidate|staleWhileRevalidate/i.test(text)) strategies.push('stale-while-revalidate');
+              if (/network[\s-]?only|networkOnly/i.test(text)) strategies.push('network-only');
+              if (/cache[\s-]?only|cacheOnly/i.test(text)) strategies.push('cache-only');
+              // Count precache entries
+              const precacheMatch = text.match(/precacheAndRoute\s*\(\s*\[([^\]]+)\]/);
+              const precacheCount = precacheMatch
+                ? (precacheMatch[1].match(/\{/g) || []).length
+                : (text.match(/"url"\s*:/g) || []).length;
+              return { usesWorkbox, strategies, precacheCount, scriptSize: text.length };
+            } catch { return null; }
+          }, reg.scriptURL);
+
+          if (analysis) Object.assign(reg, analysis);
+        } catch { /* skip analysis */ }
+      }
+
+      return registrations;
     } catch { return []; }
   }
 
@@ -2358,6 +2714,132 @@ class ScraperSession {
     } catch {}
   }
 
+  // ── gRPC binary frame parser ───────────────────────────────────────────────
+  // gRPC framing: byte 0 = compressed flag, bytes 1-4 = message length (big-endian uint32),
+  // bytes 5+ = protobuf-encoded message body.
+  _parseGrpcFrame(buf) {
+    if (!buf || buf.length < 5) return null;
+    try {
+      const compressed = buf[0] === 1;
+      const msgLength = buf.readUInt32BE(1);
+      const body = buf.slice(5, 5 + msgLength);
+      const hexDump = body.slice(0, 256).toString('hex').match(/.{1,2}/g).join(' ');
+
+      const fields = this._parseProtobufFields(body);
+      return { compressed, messageLength: msgLength, fields, hexDump: hexDump.substring(0, 400) };
+    } catch { return null; }
+  }
+
+  // Decode protobuf wire types from a buffer into readable fields.
+  // Wire type 0 = varint, wire type 2 = length-delimited (string or nested).
+  _parseProtobufFields(buf, depth = 0) {
+    const fields = [];
+    if (!buf || buf.length === 0 || depth > 3) return fields;
+
+    let offset = 0;
+    const maxOffset = Math.min(buf.length, 10000);
+
+    while (offset < maxOffset) {
+      try {
+        // Read field tag (varint)
+        const { value: tag, bytesRead: tagBytes } = this._readVarint(buf, offset);
+        if (!tagBytes) break;
+        offset += tagBytes;
+
+        const fieldNumber = Number(tag >> 3n);
+        const wireType = Number(tag & 7n);
+
+        if (wireType === 0) {
+          // Varint value
+          const { value, bytesRead } = this._readVarint(buf, offset);
+          offset += bytesRead;
+          if (!bytesRead) break;
+          fields.push({ field: fieldNumber, type: 'varint', value: Number(value) });
+
+        } else if (wireType === 2) {
+          // Length-delimited
+          const { value: len, bytesRead: lenBytes } = this._readVarint(buf, offset);
+          offset += lenBytes;
+          if (!lenBytes) break;
+          const length = Number(len);
+          const data = buf.slice(offset, offset + length);
+          offset += length;
+
+          // Try UTF-8 decode first
+          const str = data.toString('utf8');
+          const isPrintable = /^[\x20-\x7E\t\n\rÀ-￿]*$/.test(str) && str.length > 0;
+
+          if (isPrintable) {
+            fields.push({ field: fieldNumber, type: 'string', value: str.substring(0, 500) });
+          } else if (length > 0 && length < 5000 && depth < 2) {
+            // Try nested protobuf decode
+            const nested = this._parseProtobufFields(data, depth + 1);
+            if (nested.length > 0) {
+              fields.push({ field: fieldNumber, type: 'nested', value: nested });
+            } else {
+              fields.push({ field: fieldNumber, type: 'bytes', value: data.slice(0, 32).toString('hex') });
+            }
+          } else {
+            fields.push({ field: fieldNumber, type: 'bytes', value: data.slice(0, 32).toString('hex') });
+          }
+
+        } else if (wireType === 1) {
+          // 64-bit fixed
+          if (offset + 8 > buf.length) break;
+          const hi = buf.readUInt32LE(offset + 4);
+          const lo = buf.readUInt32LE(offset);
+          fields.push({ field: fieldNumber, type: 'fixed64', value: `0x${hi.toString(16).padStart(8,'0')}${lo.toString(16).padStart(8,'0')}` });
+          offset += 8;
+
+        } else if (wireType === 5) {
+          // 32-bit fixed
+          if (offset + 4 > buf.length) break;
+          fields.push({ field: fieldNumber, type: 'fixed32', value: buf.readUInt32LE(offset) });
+          offset += 4;
+
+        } else {
+          break; // Unknown wire type — stop
+        }
+      } catch { break; }
+    }
+    return fields;
+  }
+
+  _readVarint(buf, offset) {
+    let result = 0n;
+    let shift = 0n;
+    let bytesRead = 0;
+    while (offset + bytesRead < buf.length) {
+      const byte = buf[offset + bytesRead];
+      result |= BigInt(byte & 0x7F) << shift;
+      shift += 7n;
+      bytesRead++;
+      if (!(byte & 0x80)) break;
+      if (bytesRead > 10) return { value: 0n, bytesRead: 0 }; // varint too long
+    }
+    return { value: result, bytesRead };
+  }
+
+  // ── Flush injected capture buffers from window.__ globals ──────────────────
+  async _flushInjectedCaptures(page) {
+    try {
+      const [cspViolations, webrtcCaptures, deviceApiCalls] = await page.evaluate(() => [
+        window.__cspViolations || [],
+        window.__webrtcCaptures || [],
+        window.__deviceApiCalls || [],
+      ]);
+      if (cspViolations.length) {
+        this.cspViolations = [...(this.cspViolations || []), ...cspViolations];
+      }
+      if (webrtcCaptures.length) {
+        this.webrtcConnections = [...(this.webrtcConnections || []), ...webrtcCaptures];
+      }
+      if (deviceApiCalls.length) {
+        this.deviceApiCalls = [...(this.deviceApiCalls || []), ...deviceApiCalls];
+      }
+    } catch { /* page may be closed */ }
+  }
+
   // ── Reusable network/console/error interception setup ─────────────────────
   // `captures` is either `this` (for single-worker) or a plain object with the
   // same array properties (for parallel workers).
@@ -2369,6 +2851,10 @@ class ScraperSession {
     if (!captures.sseCalls) captures.sseCalls = [];
     if (!captures.beaconCalls) captures.beaconCalls = [];
     if (!captures.binaryResponses) captures.binaryResponses = [];
+    if (!captures.corsPreflights) captures.corsPreflights = [];
+    if (!captures.cspViolations) captures.cspViolations = [];
+    if (!captures.webrtcConnections) captures.webrtcConnections = [];
+    if (!captures.deviceApiCalls) captures.deviceApiCalls = [];
 
     // ── SSE PATCHER — injected before page load so EventSource is hooked from the start ──
     // Patches window.EventSource to record every event fired on every SSE connection.
@@ -2444,6 +2930,137 @@ class ScraperSession {
       });
     });
 
+    // ── CSP VIOLATION MONITOR — injected before page load ──────────────────
+    // Listens for CSP policy violation events fired by the browser itself.
+    await page.addInitScript(() => {
+      if (window.__cspViolations) return;
+      window.__cspViolations = [];
+      document.addEventListener('securitypolicyviolation', (e) => {
+        window.__cspViolations.push({
+          blockedURI: e.blockedURI,
+          violatedDirective: e.violatedDirective,
+          effectiveDirective: e.effectiveDirective,
+          originalPolicy: e.originalPolicy?.substring(0, 500),
+          sourceFile: e.sourceFile,
+          lineNumber: e.lineNumber,
+          columnNumber: e.columnNumber,
+          statusCode: e.statusCode,
+          disposition: e.disposition,
+          timestamp: new Date().toISOString(),
+        });
+      }, true);
+    });
+
+    // ── WEBRTC DETECTION — proxy RTCPeerConnection before page load ─────────
+    // Captures ICE candidates (revealing real infrastructure IPs) and SDP signals.
+    await page.addInitScript(() => {
+      if (window.__webrtcCaptures) return;
+      window.__webrtcCaptures = [];
+      const _OrigRTC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+      if (!_OrigRTC) return;
+
+      window.RTCPeerConnection = window.webkitRTCPeerConnection = function(config, constraints) {
+        const conn = new _OrigRTC(config, constraints);
+        const entry = {
+          createdAt: new Date().toISOString(),
+          config: config ? { iceServers: (config.iceServers || []).map(s => ({ urls: s.urls })) } : null,
+          iceCandidates: [],
+          sdpOffers: [],
+          sdpAnswers: [],
+          state: 'new',
+        };
+        window.__webrtcCaptures.push(entry);
+
+        conn.addEventListener('icecandidate', (e) => {
+          if (e.candidate) {
+            const c = e.candidate;
+            entry.iceCandidates.push({
+              candidate: c.candidate?.substring(0, 200),
+              protocol: c.protocol,
+              address: c.address,
+              port: c.port,
+              type: c.type,
+            });
+          }
+        });
+        conn.addEventListener('connectionstatechange', () => { entry.state = conn.connectionState; });
+
+        const _origCreateOffer = conn.createOffer.bind(conn);
+        conn.createOffer = async function(...args) {
+          const sdp = await _origCreateOffer(...args);
+          entry.sdpOffers.push(sdp?.sdp?.substring(0, 1000));
+          return sdp;
+        };
+
+        return conn;
+      };
+
+      try { Object.defineProperty(window.RTCPeerConnection, 'name', { value: 'RTCPeerConnection' }); } catch {}
+    });
+
+    // ── DEVICE API ACCESS DETECTION — proxy browser capability APIs ──────────
+    // Detects if the page attempts to access geolocation, camera, microphone,
+    // notifications, or permissions without user intent.
+    await page.addInitScript(() => {
+      if (window.__deviceApiCalls) return;
+      window.__deviceApiCalls = [];
+
+      const _track = (api, method, args) => {
+        window.__deviceApiCalls.push({ api, method, args, timestamp: new Date().toISOString() });
+      };
+
+      // Geolocation
+      if (navigator.geolocation) {
+        const _origGeo = navigator.geolocation;
+        const _origGetCurrent = _origGeo.getCurrentPosition.bind(_origGeo);
+        const _origWatch = _origGeo.watchPosition.bind(_origGeo);
+        navigator.geolocation.getCurrentPosition = function(success, error, opts) {
+          _track('geolocation', 'getCurrentPosition', { enableHighAccuracy: opts?.enableHighAccuracy });
+          return _origGetCurrent(success, error, opts);
+        };
+        navigator.geolocation.watchPosition = function(success, error, opts) {
+          _track('geolocation', 'watchPosition', { enableHighAccuracy: opts?.enableHighAccuracy });
+          return _origWatch(success, error, opts);
+        };
+      }
+
+      // MediaDevices (camera/microphone)
+      if (navigator.mediaDevices?.getUserMedia) {
+        const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = function(constraints) {
+          _track('mediaDevices', 'getUserMedia', constraints);
+          return _origGUM(constraints);
+        };
+      }
+
+      // Notifications
+      if (window.Notification) {
+        const _origReqPerm = Notification.requestPermission.bind(Notification);
+        Notification.requestPermission = function(...args) {
+          _track('Notification', 'requestPermission', {});
+          return _origReqPerm(...args);
+        };
+      }
+
+      // Permissions API
+      if (navigator.permissions?.query) {
+        const _origQuery = navigator.permissions.query.bind(navigator.permissions);
+        navigator.permissions.query = function(descriptor) {
+          _track('permissions', 'query', { name: descriptor?.name });
+          return _origQuery(descriptor);
+        };
+      }
+
+      // Clipboard
+      if (navigator.clipboard?.readText) {
+        const _origRead = navigator.clipboard.readText.bind(navigator.clipboard);
+        navigator.clipboard.readText = function() {
+          _track('clipboard', 'readText', {});
+          return _origRead();
+        };
+      }
+    });
+
     await page.route('**/*', async (route) => {
       if (this.stopped) { await route.abort().catch(() => {}); return; }
 
@@ -2453,6 +3070,36 @@ class ScraperSession {
       const headers = request.headers();
       const postData = request.postData();
       const resourceType = request.resourceType();
+
+      // ── CORS PREFLIGHT CAPTURE ──────────────────────────────────────────────
+      if (method === 'OPTIONS') {
+        const preflightEntry = {
+          url: reqUrl,
+          method: 'OPTIONS',
+          origin: headers['origin'] || headers['Origin'] || null,
+          requestMethod: headers['access-control-request-method'] || null,
+          requestHeaders: headers['access-control-request-headers'] || null,
+          timestamp: new Date().toISOString(),
+        };
+        // Let the request proceed and capture the CORS response headers
+        try {
+          const response = await route.fetch();
+          const respHeaders = response.headers();
+          preflightEntry.responseStatus = response.status();
+          preflightEntry.allowOrigin = respHeaders['access-control-allow-origin'] || null;
+          preflightEntry.allowMethods = respHeaders['access-control-allow-methods'] || null;
+          preflightEntry.allowHeaders = respHeaders['access-control-allow-headers'] || null;
+          preflightEntry.maxAge = respHeaders['access-control-max-age'] || null;
+          preflightEntry.allowCredentials = respHeaders['access-control-allow-credentials'] || null;
+          captures.corsPreflights.push(preflightEntry);
+          await route.fulfill({ response });
+          return;
+        } catch {
+          captures.corsPreflights.push(preflightEntry);
+          await route.continue().catch(() => {});
+          return;
+        }
+      }
 
       if (captureGraphQL) {
         const isGraphQL =
@@ -2587,8 +3234,19 @@ class ScraperSession {
       const status = response.status();
       const respHeaders = response.headers();
 
-      // Security headers — write to captures (not this) so workers populate correctly
+      // Security headers + HTTP version — write to captures (not this) so workers populate correctly
       if (response.request().resourceType() === 'document') {
+        // Detect HTTP version from PerformanceResourceTiming (most accurate)
+        // Falls back to header heuristics: alt-svc h3/h2, or absence of HTTP/1.1 markers
+        if (!captures.httpVersion) {
+          const altSvc = respHeaders['alt-svc'] || '';
+          const via = respHeaders['via'] || '';
+          if (/h3/i.test(altSvc)) captures.httpVersion = 'h3';
+          else if (/h2/i.test(altSvc) || /2\s+/i.test(via)) captures.httpVersion = 'h2';
+          else if (/1\.1/i.test(via)) captures.httpVersion = 'http/1.1';
+          else captures.httpVersion = null; // will be filled by page.evaluate performance timing
+        }
+
         captures.securityHeaders = {
           url: respUrl, status,
           'content-security-policy': respHeaders['content-security-policy'],
@@ -2608,6 +3266,21 @@ class ScraperSession {
       }
 
       // O(1) response matching via pending maps
+      // ── Granular per-request network timing (DNS, TCP, SSL, TTFB, transfer) ──
+      const _getTiming = (resp) => {
+        try {
+          const t = resp.timing();
+          if (!t) return null;
+          return {
+            dns: t.dnsEnd >= 0 && t.dnsStart >= 0 ? Math.round(t.dnsEnd - t.dnsStart) : null,
+            connect: t.connectEnd >= 0 && t.connectStart >= 0 ? Math.round(t.connectEnd - t.connectStart) : null,
+            ssl: t.sslEnd >= 0 && t.sslStart >= 0 ? Math.round(t.sslEnd - t.sslStart) : null,
+            send: t.sendEnd >= 0 && t.sendStart >= 0 ? Math.round(t.sendEnd - t.sendStart) : null,
+            ttfb: t.receiveHeadersEnd >= 0 && t.sendStart >= 0 ? Math.round(t.receiveHeadersEnd - t.sendStart) : null,
+          };
+        } catch { return null; }
+      };
+
       const gqlIdx = pendingGql.get(respUrl);
       if (gqlIdx !== undefined) {
         try {
@@ -2615,6 +3288,7 @@ class ScraperSession {
           let parsed = null; try { parsed = JSON.parse(text); } catch {}
           const reqMs = captures.graphqlCalls[gqlIdx].requestMs;
           captures.graphqlCalls[gqlIdx].duration = reqMs ? Date.now() - reqMs : undefined;
+          captures.graphqlCalls[gqlIdx].timing = _getTiming(response);
           captures.graphqlCalls[gqlIdx].response = { status, headers: respHeaders, body: parsed || text };
         } catch {}
         pendingGql.delete(respUrl);
@@ -2626,21 +3300,33 @@ class ScraperSession {
           const ct = respHeaders['content-type'] || '';
           const reqMs = captures.restCalls[restIdx].requestMs;
           captures.restCalls[restIdx].duration = reqMs ? Date.now() - reqMs : undefined;
+          captures.restCalls[restIdx].timing = _getTiming(response);
           // Binary protocol detection — flag before attempting text parse
           const _BINARY_CTS = ['application/octet-stream', 'application/msgpack', 'application/x-msgpack',
             'application/x-protobuf', 'application/protobuf', 'application/cbor', 'application/x-cbor',
             'application/grpc', 'application/grpc-web'];
           const isBinary = _BINARY_CTS.some(t => ct.includes(t));
           if (isBinary) {
-            captures.restCalls[restIdx].response = { status, headers: respHeaders, body: null, binary: true, encoding: ct };
+            const isGrpc = ct.includes('application/grpc');
+            let grpcParsed = null;
+            if (isGrpc && captureBinaryResponses) {
+              try {
+                const buf = await response.body();
+                grpcParsed = this._parseGrpcFrame(buf);
+              } catch { /* skip */ }
+            }
+            captures.restCalls[restIdx].response = { status, headers: respHeaders, body: null, binary: true, encoding: ct, grpc: grpcParsed };
             if (captureBinaryResponses) {
               captures.binaryResponses.push({
                 url: respUrl, status, contentType: ct,
                 contentLength: respHeaders['content-length'] || null,
-                note: 'Binary-encoded response (MessagePack/Protobuf/CBOR/gRPC). Requires binary decoder.',
+                grpc: grpcParsed,
+                note: isGrpc
+                  ? 'gRPC response — protobuf framing parsed (field values may be hex for non-UTF8 content)'
+                  : 'Binary-encoded response (MessagePack/Protobuf/CBOR). Requires binary decoder.',
                 timestamp: new Date().toISOString(),
               });
-              this.log(`Binary response: ${ct} at ${respUrl}`, 'warn');
+              this.log(`Binary response${isGrpc ? ' (gRPC)' : ''}: ${ct} at ${respUrl}`, 'warn');
             }
           } else if (ct.includes('application/json') || ct.includes('text/')) {
             const text = await response.text();
@@ -2730,7 +3416,8 @@ class ScraperSession {
       graphqlCalls: [], restCalls: [], assets: [], allRequests: [],
       sseCalls: [], beaconCalls: [], binaryResponses: [],
       consoleLogs: [], errors: [], websockets: [], downloadedImages: [],
-      securityHeaders: {},
+      securityHeaders: {}, httpVersion: null,
+      corsPreflights: [], cspViolations: [], webrtcConnections: [], deviceApiCalls: [],
     };
     await this._setupPageCapture(page, captures, captureOptions);
     return { context, page, captures };
