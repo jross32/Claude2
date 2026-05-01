@@ -1639,31 +1639,102 @@ main{max-width:1000px;margin:0 auto;padding:24px}
 .param-desc{color:var(--text2)}
 .no-params{color:var(--text2);font-size:12px;margin-top:8px}
 #no-results{text-align:center;color:var(--text2);padding:40px;display:none}
+.tabs{display:flex;gap:2px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border)}
+.tab{padding:10px 18px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;white-space:nowrap}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.prompt-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;margin-bottom:8px;overflow:hidden}
+.prompt-header{padding:12px 16px;cursor:pointer;display:flex;align-items:flex-start;gap:12px}
+.prompt-header:hover{background:var(--surface2)}
+.prompt-name{font-family:'JetBrains Mono','Fira Code',monospace;font-size:13px;font-weight:600;color:var(--accent);flex-shrink:0;min-width:220px}
+.prompt-desc{color:var(--text2);font-size:12px;flex:1;padding-top:1px}
+.prompt-body{display:none;padding:0 16px 14px;border-top:1px solid var(--border)}
+.prompt-body.open{display:block}
+.prompt-args{margin-top:10px}
+.arg-row{display:grid;grid-template-columns:160px 60px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.arg-row:last-child{border-bottom:none}
+.arg-name{font-family:monospace;color:var(--accent2)}
+.arg-req{color:var(--d);font-size:10px;margin-left:2px}
+.arg-type{color:var(--text2)}
+.arg-desc{color:var(--text2)}
+.prompt-usage{margin-top:10px;background:var(--surface2);border-radius:5px;padding:8px 12px;font-family:monospace;font-size:12px;color:var(--text)}
+.prompt-usage-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+#prompt-search{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:13px;width:240px;outline:none;display:none}
+#prompt-search:focus{border-color:var(--accent)}
+#no-prompt-results{text-align:center;color:var(--text2);padding:40px;display:none}
 </style>
 </head>
 <body>
 <header>
   <h1>Web Scraper MCP</h1>
   <input id="search" type="text" placeholder="Search ${MCP_TOOLS.length} tools..." autocomplete="off">
-  <div class="legend">
+  <input id="prompt-search" type="text" placeholder="Search ${MCP_PROMPTS.length} prompts..." autocomplete="off">
+  <div class="legend" id="tool-legend">
     <div class="legend-item"><span class="badge badge-ro">RO</span>Read-only</div>
     <div class="legend-item"><span class="badge badge-ow">OW</span>Outbound</div>
     <div class="legend-item"><span class="badge badge-d">D</span>Destructive</div>
   </div>
   <div class="meta">${MCP_TOOLS.length} tools · ${MCP_PROMPTS.length} prompts</div>
 </header>
+<div class="tabs">
+  <button class="tab active" data-tab="tools">Tools (${MCP_TOOLS.length})</button>
+  <button class="tab" data-tab="prompts">Prompts (${MCP_PROMPTS.length})</button>
+</div>
 <main>
-  <div id="tool-list">${toolsHtml}</div>
-  <div id="no-results">No tools match your search.</div>
+  <div id="tab-tools" class="tab-panel active">
+    <div id="tool-list">${toolsHtml}</div>
+    <div id="no-results">No tools match your search.</div>
+  </div>
+  <div id="tab-prompts" class="tab-panel">
+    <div id="prompt-list">${MCP_PROMPTS.map(p => {
+      const args = p.arguments || [];
+      const argRows = args.map(a =>
+        `<div class="arg-row"><span class="arg-name">${esc(a.name)}${a.required ? '<span class="arg-req">*</span>' : ''}</span><span class="arg-type">string</span><span class="arg-desc">${esc(a.description || '')}</span></div>`
+      ).join('');
+      const usageArgs = args.map(a => `${esc(a.name)}="${a.required ? '<value>' : '[optional]'}"`).join(' ');
+      return `<div class="prompt-card" data-search="${esc((p.name + ' ' + (p.description || '')).toLowerCase())}">
+        <div class="prompt-header" onclick="togglePrompt(this)">
+          <span class="prompt-name">${esc(p.name)}</span>
+          <span class="prompt-desc">${esc(p.description || '')}</span>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="prompt-body">
+          ${argRows ? `<div class="prompt-args">${argRows}</div>` : '<p class="no-params" style="margin-top:10px">No arguments required.</p>'}
+          <div class="prompt-usage">
+            <div class="prompt-usage-label">Usage</div>
+            get_prompt ${esc(p.name)}${usageArgs ? ' ' + usageArgs : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}</div>
+    <div id="no-prompt-results">No prompts match your search.</div>
+  </div>
 </main>
 <script>
 function toggle(h){const b=h.nextElementSibling,c=h.querySelector('.chevron');b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(90deg)':'';}
+function togglePrompt(h){const b=h.nextElementSibling,c=h.querySelector('.chevron');b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(90deg)':'';}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function(){
+  const tab=this.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));
+  this.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('search').style.display=tab==='tools'?'':'none';
+  document.getElementById('prompt-search').style.display=tab==='prompts'?'':'none';
+  document.getElementById('tool-legend').style.display=tab==='tools'?'':'none';
+}));
 document.getElementById('search').addEventListener('input',function(){
   const q=this.value.toLowerCase();
   let vis=0;
   document.querySelectorAll('.tool').forEach(el=>{const show=!q||el.dataset.search.includes(q);el.style.display=show?'':'none';if(show)vis++;});
   document.querySelectorAll('.category').forEach(cat=>{cat.style.display=[...cat.querySelectorAll('.tool')].some(t=>t.style.display!=='none')?'':'none';});
   document.getElementById('no-results').style.display=vis===0&&q?'':'none';
+});
+document.getElementById('prompt-search').addEventListener('input',function(){
+  const q=this.value.toLowerCase();
+  let vis=0;
+  document.querySelectorAll('.prompt-card').forEach(el=>{const show=!q||el.dataset.search.includes(q);el.style.display=show?'':'none';if(show)vis++;});
+  document.getElementById('no-prompt-results').style.display=vis===0&&q?'':'none';
 });
 </script>
 </body>
