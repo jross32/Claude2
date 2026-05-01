@@ -256,7 +256,7 @@ function _headRequest(url) {
  * @returns {Promise<object>}
  */
 async function checkBrokenLinks(links, opts = {}) {
-  const { internalOnly = false, origin = '', maxLinks = 100 } = opts;
+  const { internalOnly = false, origin = '', maxLinks = 100, onProgress = null } = opts;
 
   // Filter links
   let toCheck = links
@@ -278,6 +278,7 @@ async function checkBrokenLinks(links, opts = {}) {
   const broken = [];
   const redirected = [];
   let okCount = 0;
+  let done = 0;
 
   // Process in concurrent batches
   let index = 0;
@@ -302,6 +303,9 @@ async function checkBrokenLinks(links, opts = {}) {
       } else {
         broken.push({ url, status: result.status, error: result.error || `HTTP ${result.status}` });
       }
+
+      done++;
+      if (onProgress) onProgress(done, toCheck.length);
 
       // Rate limiting
       const elapsed = Date.now() - startAt;
