@@ -149,6 +149,8 @@ const TOOL_MATURITY = {
   extract_business_intel: 'beta',
   extract_reviews: 'beta',
   get_robots_txt: 'beta',
+  get_cache_headers: 'beta',
+  lookup_ip_info: 'beta',
   server_info: 'beta',
 };
 
