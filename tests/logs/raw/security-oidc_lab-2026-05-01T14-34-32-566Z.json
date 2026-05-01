@@ -1,0 +1,399 @@
+{
+  "timestamp": "2026-05-01T14:34:32.565Z",
+  "git_commit": "25c6f1a",
+  "suite": "security-oidc_lab",
+  "tests": [
+    {
+      "name": "mock IdP starts and listens",
+      "status": "pass",
+      "duration_ms": 31,
+      "error": null,
+      "input": {},
+      "output": {
+        "port": 50905,
+        "baseUrl": "http://127.0.0.1:50905"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "redirect_uri: exact match accepted",
+      "status": "pass",
+      "duration_ms": 145,
+      "error": null,
+      "input": {},
+      "output": {
+        "vulnerabilities": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "redirect_uri: all 13 attack variants blocked",
+      "status": "pass",
+      "duration_ms": 35,
+      "error": null,
+      "input": {},
+      "output": {
+        "totalCases": 14,
+        "vulnerabilities": 0,
+        "failed": []
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "state_entropy: 50 unique values, entropy >= 3.5",
+      "status": "pass",
+      "duration_ms": 110,
+      "error": null,
+      "input": {},
+      "output": {
+        "uniqueCount": 50,
+        "entropy": 3.997,
+        "flag": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "state_entropy: server echoes state correctly",
+      "status": "pass",
+      "duration_ms": 89,
+      "error": null,
+      "input": {},
+      "output": {
+        "mismatchedEchoes": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "alg_none: server issues HS256 JWT",
+      "status": "pass",
+      "duration_ms": 30,
+      "error": null,
+      "input": {},
+      "output": {
+        "originalAlg": "HS256"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "alg_none: forged token rejected (HTTP 401)",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "forgedAccepted": false,
+        "status": 401
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "pkce: PKCE-required client rejects request without code_challenge",
+      "status": "pass",
+      "duration_ms": 9,
+      "error": null,
+      "input": {},
+      "output": {
+        "vulnerabilities": 0,
+        "cases": [
+          {
+            "label": "PKCE-required client: no code_challenge",
+            "finding": "OK"
+          },
+          {
+            "label": "PKCE-required client: valid S256 code_challenge",
+            "finding": "OK"
+          },
+          {
+            "label": "legacy client: no code_challenge (PKCE not required)",
+            "finding": "INFO"
+          }
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "pkce: PKCE client accepts request with valid S256 challenge",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "validCase": {
+          "label": "PKCE-required client: valid S256 code_challenge",
+          "expected": "code-issued",
+          "actual": "code-issued",
+          "finding": "OK",
+          "status": 302
+        }
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "token_rotation: refresh token rotates on use",
+      "status": "pass",
+      "duration_ms": 12,
+      "error": null,
+      "input": {},
+      "output": {
+        "rotationWorked": true,
+        "replayRejected": true,
+        "finding": "OK"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "token_rotation: replayed refresh token is rejected",
+      "status": "pass",
+      "duration_ms": 12,
+      "error": null,
+      "input": {},
+      "output": {
+        "replayRejected": true,
+        "replayStatus": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "bola_idor: vendor-a can access own resource",
+      "status": "pass",
+      "duration_ms": 11,
+      "error": null,
+      "input": {},
+      "output": {
+        "totalProbed": 1,
+        "vulnerabilities": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "bola_idor: vendor-a cannot access vendor-b resource",
+      "status": "pass",
+      "duration_ms": 11,
+      "error": null,
+      "input": {},
+      "output": {
+        "vulnerabilities": 0,
+        "results": [
+          {
+            "resourceId": "report-vendor-a",
+            "status": 200,
+            "accessible": true,
+            "ownedByAttacker": true,
+            "ownedBy": "vendor-a",
+            "finding": "OK"
+          },
+          {
+            "resourceId": "report-vendor-b",
+            "status": 403,
+            "accessible": false,
+            "ownedByAttacker": false,
+            "ownedBy": null,
+            "finding": "OK"
+          }
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "scope_escalation: server strips unregistered scopes",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "grantedScopes": [
+          "openid",
+          "read"
+        ],
+        "escalatedScopes": [],
+        "finding": "OK"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "scope_escalation: legitimate scopes are still granted",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "grantedScopes": [
+          "openid",
+          "read"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "header_injection: secure endpoint rejects all injection headers",
+      "status": "pass",
+      "duration_ms": 39,
+      "error": null,
+      "input": {},
+      "output": {
+        "headersProbed": 8,
+        "bypassCount": 0,
+        "finding": "OK"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "header_injection: vulnerable endpoint demonstrates bypass (X-Authenticated-User)",
+      "status": "pass",
+      "duration_ms": 28,
+      "error": null,
+      "input": {},
+      "output": {
+        "xAuthResult": {
+          "header": "X-Authenticated-User",
+          "accepted": true,
+          "authn": "header-injection",
+          "status": 200
+        },
+        "note": "Demonstrates what a misconfigured PingAccess backend looks like — the vulnerable endpoint accepts injected identity headers without JWT verification"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "tls_fingerprint: chrome-115 comparison runs without error",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "profile": "Chrome 115",
+        "similarityPct": 100,
+        "nodeVersion": "v24.14.0",
+        "openssl": "3.5.5",
+        "missingCount": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "tls_fingerprint: firefox-117 comparison runs without error",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "profile": "Firefox 117",
+        "similarityPct": 73
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "tls_fingerprint: config snippet is generated",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "snippetLength": 945
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "tls_fingerprint: unknown profile returns error gracefully",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "error": "Unknown profile: ie6. Available: chrome-115, firefox-117"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "full suite: riskScore LOW when all tests pass",
+      "status": "pass",
+      "duration_ms": 205,
+      "error": null,
+      "input": {},
+      "output": {
+        "riskScore": {
+          "score": 0,
+          "label": "LOW"
+        },
+        "testsRun": [
+          "redirect_uri_validation",
+          "state_entropy",
+          "alg_none_attack",
+          "pkce_enforcement",
+          "token_rotation",
+          "bola_idor",
+          "scope_escalation",
+          "header_injection",
+          "auth_code_replay"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "chaos: unknown client returns error, no bypass",
+      "status": "pass",
+      "duration_ms": 17,
+      "error": null,
+      "input": {},
+      "output": {
+        "vulnerabilities": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "chaos: wrong secret causes token tests to skip gracefully",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "algNoneSkipped": true,
+        "rotationSkipped": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "chaos: unreachable server returns structured result, no crash",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "vulnerabilities": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 25,
+    "passed": 25,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 834,
+    "avg_duration_ms": 33
+  }
+}
