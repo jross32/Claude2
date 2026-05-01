@@ -1,22 +1,26 @@
-# Test Results — unit-tool-improvements
+# Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-01T19:17:57.906Z
-**Commit:** `3e62177`
-**Duration:** 93ms
+**Run:** 2026-05-01T19:18:14.628Z
+**Commit:** `780e275`
+**Duration:** 8832ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 3 | 3 | 0 | 0 |
+| 7 | 7 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | fix-1: pause/resume/submit — description quality | pass | 29ms | |
-| ✅ | fix-2: openWorld flags for extract_entities, find_graphql_endpoints, find_site_issues | pass | 23ms | |
-| ✅ | fix-3: schedule persistence survives module reload | pass | 16ms | |
+| ✅ | POST /api/diff with two valid results → 200 + diff object | pass | 84ms | |
+| ✅ | Diff result shows added page in resultB | pass | 7ms | |
+| ✅ | Diff result shows added text in resultB | pass | 5ms | |
+| ✅ | POST /api/diff identical results → pages added/removed are empty | pass | 4ms | |
+| ✅ | [chaos] POST /api/diff with no body → 400 | pass | 4ms | |
+| ✅ | [chaos] POST /api/diff with empty results → does not 500 | pass | 5ms | |
+| ✅ | [chaos] POST /api/diff missing resultB → 400 | pass | 4ms | |
 
 
