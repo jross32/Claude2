@@ -876,6 +876,7 @@ async function extractPageData(page, url, opts = {}) {
       fontFaces,
       navigation,
       forms,
+      csrfTokens,
       buttons,
       tables,
       lists,

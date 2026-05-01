@@ -1,32 +1,26 @@
-# Test Results — unit
+# Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-01T14:30:11.536Z
-**Commit:** `cfc62ca`
-**Duration:** 14ms
+**Run:** 2026-05-01T14:30:17.746Z
+**Commit:** `de1e367`
+**Duration:** 6682ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 13 | 13 | 0 | 0 |
+| 7 | 7 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | returns pages, apiCalls, assets, summary | pass | 2ms | |
-| ✅ | detects added page in B | pass | 1ms | |
-| ✅ | detects removed page from A | pass | 0ms | |
-| ✅ | identical results → pages added/removed are empty | pass | 0ms | |
-| ✅ | detects added text block | pass | 0ms | |
-| ✅ | detects added link | pass | 0ms | |
-| ✅ | detects added image | pass | 1ms | |
-| ✅ | detects title change | pass | 0ms | |
-| ✅ | summary.pages counts match actual arrays | pass | 1ms | |
-| ✅ | [chaos] empty pages arrays → no crash, empty diffs | pass | 0ms | |
-| ✅ | [chaos] missing pages key → no crash | pass | 0ms | |
-| ✅ | [chaos] page with no meta → no crash | pass | 1ms | |
-| ✅ | [chaos] apiCalls missing in inputs → no crash | pass | 0ms | |
+| ✅ | POST /api/diff with two valid results → 200 + diff object | pass | 64ms | |
+| ✅ | Diff result shows added page in resultB | pass | 7ms | |
+| ✅ | Diff result shows added text in resultB | pass | 5ms | |
+| ✅ | POST /api/diff identical results → pages added/removed are empty | pass | 6ms | |
+| ✅ | [chaos] POST /api/diff with no body → 400 | pass | 5ms | |
+| ✅ | [chaos] POST /api/diff with empty results → does not 500 | pass | 5ms | |
+| ✅ | [chaos] POST /api/diff missing resultB → 400 | pass | 5ms | |
 
 
