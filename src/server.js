@@ -1553,48 +1553,47 @@ app.get('/docs', (req, res) => {
     'Scheduling & Monitoring': ['schedule_scrape','list_schedules','delete_schedule','monitor_page','delete_monitor','compare_scrapes','score_diff_significance'],
   };
 
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
   const byName = {};
   MCP_TOOLS.forEach(t => { byName[t.name] = t; });
   const categorized = new Set();
   let toolsHtml = '';
 
+  const renderTool = (tool) => {
+    const badges = [];
+    if (RO_SET.has(tool.name)) badges.push('<span class="badge badge-ro">RO</span>');
+    if (OW_SET.has(tool.name)) badges.push('<span class="badge badge-ow">OW</span>');
+    if (D_SET.has(tool.name))  badges.push('<span class="badge badge-d">D</span>');
+    const props = tool.inputSchema?.properties || {};
+    const required = new Set(tool.inputSchema?.required || []);
+    const params = Object.entries(props).map(([k, v]) =>
+      `<div class="param"><span class="param-name">${esc(k)}${required.has(k) ? '<span class="req">*</span>' : ''}</span><span class="param-type">${esc(v.type || 'any')}</span><span class="param-desc">${esc(v.description || '')}</span></div>`
+    ).join('');
+    return `<div class="tool" data-search="${esc((tool.name + ' ' + (tool.description || '') + ' ' + (RO_SET.has(tool.name) ? 'readonly' : '') + ' ' + (OW_SET.has(tool.name) ? 'outbound' : '') + ' ' + (D_SET.has(tool.name) ? 'destructive' : '')).toLowerCase())}">
+      <div class="tool-header" onclick="toggle(this)">
+        <span class="tool-name">${esc(tool.name)}</span>
+        <span class="tool-desc">${esc(tool.description || '')}</span>
+        <span class="badges">${badges.join('')}</span>
+        <span class="chevron">▶</span>
+      </div>
+      <div class="tool-body">${params ? `<div class="param-list">${params}</div>` : '<p class="no-params">No parameters.</p>'}</div>
+    </div>`;
+  };
+
   for (const [cat, names] of Object.entries(CATS)) {
     const catTools = names.map(n => byName[n]).filter(Boolean);
     if (!catTools.length) continue;
     catTools.forEach(t => categorized.add(t.name));
-    toolsHtml += `<div class="category" data-cat="${cat}"><div class="category-title">${cat} (${catTools.length})</div>`;
-    for (const tool of catTools) {
-      const badges = [];
-      if (RO_SET.has(tool.name)) badges.push('<span class="badge badge-ro">RO</span>');
-      if (OW_SET.has(tool.name)) badges.push('<span class="badge badge-ow">OW</span>');
-      if (D_SET.has(tool.name))  badges.push('<span class="badge badge-d">D</span>');
-      const props = tool.inputSchema?.properties || {};
-      const required = new Set(tool.inputSchema?.required || []);
-      const params = Object.entries(props).map(([k, v]) =>
-        `<div class="param"><span class="param-name">${k}${required.has(k) ? '<span class="req">*</span>' : ''}</span><span class="param-type">${v.type || 'any'}</span><span class="param-desc">${v.description || ''}</span></div>`
-      ).join('');
-      toolsHtml += `<div class="tool" data-search="${(tool.name + ' ' + (tool.description || '')).toLowerCase()}">
-        <div class="tool-header" onclick="toggle(this)">
-          <span class="tool-name">${tool.name}</span>
-          <span class="tool-desc">${tool.description || ''}</span>
-          <span class="badges">${badges.join('')}</span>
-          <span class="chevron">▶</span>
-        </div>
-        <div class="tool-body">${params ? `<div class="param-list">${params}</div>` : '<p class="no-params">No parameters.</p>'}</div>
-      </div>`;
-    }
+    toolsHtml += `<div class="category" data-cat="${esc(cat)}"><div class="category-title">${esc(cat)} (${catTools.length})</div>`;
+    for (const tool of catTools) toolsHtml += renderTool(tool);
     toolsHtml += '</div>';
   }
 
   const uncatTools = MCP_TOOLS.filter(t => !categorized.has(t.name));
   if (uncatTools.length) {
     toolsHtml += `<div class="category" data-cat="Other"><div class="category-title">Other (${uncatTools.length})</div>`;
-    for (const tool of uncatTools) {
-      toolsHtml += `<div class="tool" data-search="${(tool.name + ' ' + (tool.description || '')).toLowerCase()}">
-        <div class="tool-header" onclick="toggle(this)"><span class="tool-name">${tool.name}</span><span class="tool-desc">${tool.description || ''}</span><span class="chevron">▶</span></div>
-        <div class="tool-body"><p class="no-params">No parameters.</p></div>
-      </div>`;
-    }
+    for (const tool of uncatTools) toolsHtml += renderTool(tool);
     toolsHtml += '</div>';
   }
 
