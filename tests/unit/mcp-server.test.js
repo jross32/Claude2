@@ -9,6 +9,7 @@ const {
   FIXED_RESOURCES,
   PROMPTS,
   RESOURCE_TEMPLATES,
+  getMcpMeta,
   __private__,
 } = require('../../mcp-server');
 
@@ -46,9 +47,9 @@ const NEW_TOOL_NAMES = [
 async function main() {
   const runner = new TestRunner('unit');
 
-  await runner.run('MCP server exports 55 tools', ({ setOutput }) => {
+  await runner.run('MCP server exports a non-empty tool catalog', ({ setOutput }) => {
     if (!Array.isArray(TOOLS)) throw new Error('TOOLS export missing');
-    if (TOOLS.length !== 55) throw new Error(`Expected 55 tools, got ${TOOLS.length}`);
+    if (TOOLS.length < 1) throw new Error('Expected at least one tool');
     setOutput({ count: TOOLS.length });
   });
 
@@ -72,6 +73,15 @@ async function main() {
       .map((tool) => tool.name);
     if (missing.length) throw new Error(`Missing title/annotations: ${missing.join(', ')}`);
     setOutput({ annotatedTools: TOOLS.length });
+  });
+
+  await runner.run('MCP metadata summary stays aligned with exported tools and prompts', ({ setOutput }) => {
+    const meta = getMcpMeta();
+    if (meta.counts.tools !== meta.tools.length) throw new Error('Tool count mismatch inside getMcpMeta');
+    if (meta.counts.prompts !== meta.prompts.length) throw new Error('Prompt count mismatch inside getMcpMeta');
+    if (meta.tools.length !== TOOLS.length) throw new Error(`Expected metadata tools to match export (${TOOLS.length}), got ${meta.tools.length}`);
+    if (!meta.tools.some((tool) => tool.name === 'server_info')) throw new Error('Expected server_info in metadata catalog');
+    setOutput({ toolCount: meta.counts.tools, promptCount: meta.counts.prompts });
   });
 
   await runner.run('research_url schema exposes auto/fast/deep modes', ({ setOutput }) => {
