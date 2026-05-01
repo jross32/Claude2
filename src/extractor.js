@@ -217,6 +217,33 @@ async function extractPageData(page, url, opts = {}) {
       };
     }).filter(img => img.src);
 
+    // ── TRACKING PIXELS ──
+    const PIXEL_PATTERNS = [
+      { re: /facebook\.com\/tr/, name: 'Facebook Pixel' },
+      { re: /google-analytics\.com\/collect/, name: 'Google Analytics Collect' },
+      { re: /doubleclick\.net/, name: 'DoubleClick/Google Ads' },
+      { re: /bat\.bing\.com/, name: 'Microsoft Bing Ads' },
+      { re: /analytics\.twitter\.com/, name: 'Twitter/X Ads' },
+      { re: /px\.ads\.linkedin\.com/, name: 'LinkedIn Insight Tag' },
+      { re: /tr\.snapchat\.com/, name: 'Snapchat Pixel' },
+      { re: /analytics\.tiktok\.com/, name: 'TikTok Pixel' },
+      { re: /insight\.adsrvr\.org/, name: 'The Trade Desk' },
+      { re: /px\.moatads\.com/, name: 'Moat Analytics' },
+    ];
+    const trackingPixels = [
+      ...images.filter(img => {
+        const is1x1 = img.width === 1 && img.height === 1;
+        const known = PIXEL_PATTERNS.some(p => p.re.test(img.src));
+        return is1x1 || known;
+      }).map(img => {
+        const match = PIXEL_PATTERNS.find(p => p.re.test(img.src));
+        return { src: img.src, name: match?.name || null, is1x1: img.width === 1 && img.height === 1 };
+      }),
+      ...Array.from(document.querySelectorAll('noscript')).flatMap(el =>
+        PIXEL_PATTERNS.filter(p => p.re.test(el.innerHTML)).map(p => ({ src: null, name: p.name, fromNoscript: true }))
+      ),
+    ];
+
     // ── SVGs ──
     const svgs = Array.from(document.querySelectorAll('svg')).slice(0, 50).map(el => ({
       outerHTML: el.outerHTML.substring(0, 5000),
