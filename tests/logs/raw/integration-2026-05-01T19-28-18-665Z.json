@@ -1,0 +1,94 @@
+{
+  "timestamp": "2026-05-01T19:28:18.664Z",
+  "git_commit": "a009c9f",
+  "suite": "integration",
+  "tests": [
+    {
+      "name": "MCP tools/list returns the live exposed toolset",
+      "status": "pass",
+      "duration_ms": 18,
+      "error": null,
+      "input": {},
+      "output": {
+        "toolCount": 73
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP tools/call can invoke server_info end-to-end",
+      "status": "pass",
+      "duration_ms": 4369,
+      "error": null,
+      "input": {},
+      "output": {
+        "version": "2.5.0",
+        "prompts": 27
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP prompts/list and prompts/get return the current prompt catalog",
+      "status": "pass",
+      "duration_ms": 14,
+      "error": null,
+      "input": {},
+      "output": {
+        "promptCount": 27
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP resources/list, resources/templates/list, and resources/read expose saved scrape context",
+      "status": "pass",
+      "duration_ms": 4091,
+      "error": null,
+      "input": {},
+      "output": {
+        "resourceCount": 1927,
+        "templateCount": 10
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP completion/complete suggests saved session IDs",
+      "status": "pass",
+      "duration_ms": 3753,
+      "error": null,
+      "input": {},
+      "output": {
+        "suggestions": [
+          "mcp-integration-1777663671368"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP resource subscriptions emit update notifications when saves change",
+      "status": "pass",
+      "duration_ms": 11872,
+      "error": null,
+      "input": {},
+      "output": {
+        "updatedUris": [
+          "scrape://saves"
+        ],
+        "listChangedCount": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 34623,
+    "avg_duration_ms": 5771
+  }
+}

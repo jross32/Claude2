@@ -1,27 +1,28 @@
-# Test Results — api
+# Test Results — smoke
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-01T19:27:42.968Z
-**Commit:** `01901b6`
-**Duration:** 7928ms
+**Run:** 2026-05-01T19:31:27.153Z
+**Commit:** `a009c9f`
+**Duration:** 12598ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 8 | 8 | 0 | 0 |
+| 9 | 9 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/session/check with valid url → 200 + { exists: boolean } | pass | 32ms | |
-| ✅ | GET /api/session/check for poolplayers.com → exists field present | pass | 5ms | |
-| ✅ | DELETE /api/session with url → 200 + { cleared: boolean } | pass | 6ms | |
-| ✅ | GET /api/site-credentials for unknown site → { found: false } | pass | 5ms | |
-| ✅ | GET /api/site-credentials for poolplayers.com → { found: true, username: string } | pass | 4ms | |
-| ✅ | [chaos] GET /api/session/check with no url → { exists: false } | pass | 4ms | |
-| ✅ | [chaos] DELETE /api/session with no url → does not 500 | pass | 4ms | |
-| ✅ | [chaos] GET /api/site-credentials with no url → does not 500 | pass | 4ms | |
+| ✅ | Chromium launches in headless mode | pass | 1326ms | |
+| ✅ | Browser can open a new page | pass | 209ms | |
+| ✅ | Browser reports correct version string | pass | 0ms | |
+| ✅ | Multiple pages open and close independently | pass | 245ms | |
+| ✅ | Browser closes cleanly | pass | 225ms | |
+| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 4301ms | |
+| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 1941ms | |
+| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 2056ms | |
+| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 2287ms | |
 
 
