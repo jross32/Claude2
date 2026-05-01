@@ -1531,70 +1531,83 @@ app.use('/api/mcp', apiRouter);
 
 // ── MCP docs endpoints ────────────────────────────────────────────────────────
 app.get('/api/mcp-meta', (req, res) => {
-  res.json({ tools: MCP_TOOLS, prompts: MCP_PROMPTS, toolCount: MCP_TOOLS.length, promptCount: MCP_PROMPTS.length });
+  res.json(getMcpMeta());
 });
 
 app.get('/docs', (req, res) => {
-  const RO_SET = new Set(['get_scrape_status','list_saves','get_save_overview','get_page_text','list_links','list_images','list_forms','list_internal_pages','get_tech_stack','get_api_calls','get_api_surface','find_graphql_endpoints','search_scrape_text','extract_entities','extract_structured_data','extract_product_data','extract_job_listings','extract_company_info','extract_business_intel','extract_deals','to_markdown','generate_react','generate_css','generate_sitemap','export_har','infer_schema','scan_pii','score_security_headers','check_broken_links','get_link_graph','find_site_issues','classify_pages','find_patterns','flag_anomalies','analyze_sentiment','detect_intent','normalize_across_sites','score_diff_significance','list_active_scrapes','list_schedules','check_saved_session','get_known_site_credentials','get_store_context','detect_site','preflight_url','lookup_dns','inspect_ssl','decode_jwt_tokens']);
-  const OW_SET = new Set(['scrape_url','batch_scrape','research_url','map_site_for_goal','http_fetch','probe_endpoints','introspect_graphql','fill_form','take_screenshot','crawl_sitemap','monitor_page','schedule_scrape','test_tls_fingerprint','check_broken_links','get_link_graph','lookup_dns','inspect_ssl']);
-  const D_SET  = new Set(['delete_save','delete_schedule','delete_monitor','clear_saved_session','stop_scrape']);
+  const meta = getMcpMeta();
+  const MCP_TOOLS = meta.tools;
+  const MCP_PROMPTS = meta.prompts;
+  const MCP_WORKFLOWS = meta.workflows;
+  const esc = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 
-  const CATS = {
-    'Scraping': ['scrape_url','batch_scrape','http_fetch','fill_form','take_screenshot'],
-    'Session Management': ['list_active_scrapes','get_scrape_status','stop_scrape','pause_scrape','resume_scrape','submit_scrape_credentials','submit_verification_code','list_saves','delete_save','check_saved_session','clear_saved_session','get_known_site_credentials'],
-    'Page Data': ['get_page_text','list_links','list_images','list_forms','list_internal_pages','search_scrape_text','to_markdown','get_save_overview'],
-    'Intelligence': ['extract_entities','extract_structured_data','extract_product_data','extract_job_listings','extract_company_info','extract_business_intel','extract_deals','get_tech_stack','get_store_context'],
-    'API Capture': ['get_api_calls','get_api_surface','find_graphql_endpoints','introspect_graphql','infer_schema','export_har'],
-    'Site Analysis': ['detect_site','preflight_url','find_site_issues','classify_pages','find_patterns','flag_anomalies','analyze_sentiment','detect_intent','map_site_for_goal','normalize_across_sites','research_url'],
-    'SEO & Links': ['get_link_graph','check_broken_links','generate_sitemap','crawl_sitemap'],
-    'Security': ['score_security_headers','test_tls_fingerprint','scan_pii','decode_jwt_tokens','inspect_ssl','lookup_dns','probe_endpoints'],
-    'Code Generation': ['generate_react','generate_css'],
-    'Scheduling & Monitoring': ['schedule_scrape','list_schedules','delete_schedule','monitor_page','delete_monitor','compare_scrapes','score_diff_significance'],
+  const groupedTools = new Map();
+  for (const tool of MCP_TOOLS) {
+    if (!groupedTools.has(tool.category)) groupedTools.set(tool.category, []);
+    groupedTools.get(tool.category).push(tool);
+  }
+
+  const renderBadge = (badge) => {
+    if (badge === 'RO') return '<span class="badge badge-ro">RO</span>';
+    if (badge === 'OW') return '<span class="badge badge-ow">OW</span>';
+    if (badge === 'D') return '<span class="badge badge-d">D</span>';
+    return '';
   };
 
-  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-
-  const byName = {};
-  MCP_TOOLS.forEach(t => { byName[t.name] = t; });
-  const categorized = new Set();
-  let toolsHtml = '';
-
   const renderTool = (tool) => {
-    const badges = [];
-    if (RO_SET.has(tool.name)) badges.push('<span class="badge badge-ro">RO</span>');
-    if (OW_SET.has(tool.name)) badges.push('<span class="badge badge-ow">OW</span>');
-    if (D_SET.has(tool.name))  badges.push('<span class="badge badge-d">D</span>');
     const props = tool.inputSchema?.properties || {};
     const required = new Set(tool.inputSchema?.required || []);
-    const params = Object.entries(props).map(([k, v]) =>
-      `<div class="param"><span class="param-name">${esc(k)}${required.has(k) ? '<span class="req">*</span>' : ''}</span><span class="param-type">${esc(v.type || 'any')}</span><span class="param-desc">${esc(v.description || '')}</span></div>`
+    const params = Object.entries(props).map(([key, value]) =>
+      `<div class="param"><span class="param-name">${esc(key)}${required.has(key) ? '<span class="req">*</span>' : ''}</span><span class="param-type">${esc(value.type || 'any')}</span><span class="param-desc">${esc(value.description || '')}</span></div>`
     ).join('');
-    return `<div class="tool" data-search="${esc((tool.name + ' ' + (tool.description || '') + ' ' + (RO_SET.has(tool.name) ? 'readonly' : '') + ' ' + (OW_SET.has(tool.name) ? 'outbound' : '') + ' ' + (D_SET.has(tool.name) ? 'destructive' : '')).toLowerCase())}">
+    const badges = (tool.badges || []).map(renderBadge).join('');
+    const maturity = `<span class="maturity maturity-${esc(tool.maturity)}">${esc(tool.maturity)}</span>`;
+    const example = tool.exampleCall
+      ? `<div class="example-call"><div class="example-label">Example</div><code>${esc(tool.exampleCall)}</code></div>`
+      : '';
+    const searchIndex = [
+      tool.name,
+      tool.description || '',
+      tool.category || '',
+      tool.maturity || '',
+      (tool.badges || []).join(' '),
+    ].join(' ').toLowerCase();
+
+    return `<div class="tool" data-search="${esc(searchIndex)}">
       <div class="tool-header" onclick="toggle(this)">
         <span class="tool-name">${esc(tool.name)}</span>
         <span class="tool-desc">${esc(tool.description || '')}</span>
-        <span class="badges">${badges.join('')}</span>
+        <span class="badges">${maturity}${badges}</span>
         <span class="chevron">▶</span>
       </div>
-      <div class="tool-body">${params ? `<div class="param-list">${params}</div>` : '<p class="no-params">No parameters.</p>'}</div>
+      <div class="tool-body">
+        <div class="tool-meta">
+          <span class="meta-chip">${esc(tool.category)}</span>
+        </div>
+        ${example}
+        ${params ? `<div class="param-list">${params}</div>` : '<p class="no-params">No parameters.</p>'}
+      </div>
     </div>`;
   };
 
-  for (const [cat, names] of Object.entries(CATS)) {
-    const catTools = names.map(n => byName[n]).filter(Boolean);
-    if (!catTools.length) continue;
-    catTools.forEach(t => categorized.add(t.name));
-    toolsHtml += `<div class="category" data-cat="${esc(cat)}"><div class="category-title">${esc(cat)} (${catTools.length})</div>`;
-    for (const tool of catTools) toolsHtml += renderTool(tool);
+  let toolsHtml = '';
+  for (const [category, tools] of groupedTools.entries()) {
+    toolsHtml += `<div class="category" data-cat="${esc(category)}"><div class="category-title">${esc(category)} (${tools.length})</div>`;
+    for (const tool of tools) toolsHtml += renderTool(tool);
     toolsHtml += '</div>';
   }
 
-  const uncatTools = MCP_TOOLS.filter(t => !categorized.has(t.name));
-  if (uncatTools.length) {
-    toolsHtml += `<div class="category" data-cat="Other"><div class="category-title">Other (${uncatTools.length})</div>`;
-    for (const tool of uncatTools) toolsHtml += renderTool(tool);
-    toolsHtml += '</div>';
-  }
+  const workflowHtml = MCP_WORKFLOWS.map((workflow) => `
+    <div class="workflow-card">
+      <div class="workflow-title">${esc(workflow.title)}</div>
+      <div class="workflow-summary">${esc(workflow.summary)}</div>
+      <div class="workflow-tools">${workflow.tools.map((tool) => `<code>${esc(tool)}</code>`).join('<span class="workflow-arrow">→</span>')}</div>
+    </div>
+  `).join('');
 
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1616,6 +1629,13 @@ header h1{font-size:15px;font-weight:600;white-space:nowrap}
 main{max-width:1000px;margin:0 auto;padding:24px}
 .category{margin-bottom:28px}
 .category-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.workflow-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:22px}
+.workflow-card{background:linear-gradient(180deg,rgba(108,142,245,.12),rgba(108,142,245,.04));border:1px solid rgba(108,142,245,.25);border-radius:10px;padding:14px}
+.workflow-title{font-size:13px;font-weight:700;margin-bottom:6px}
+.workflow-summary{font-size:12px;color:var(--text2);margin-bottom:10px}
+.workflow-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.workflow-tools code{background:rgba(255,255,255,.05);padding:2px 6px;border-radius:4px;font-size:11px}
+.workflow-arrow{color:var(--text2);font-size:11px}
 .tool{background:var(--surface);border:1px solid var(--border);border-radius:7px;margin-bottom:6px;overflow:hidden}
 .tool-header{padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none}
 .tool-header:hover{background:var(--surface2)}
@@ -1626,9 +1646,18 @@ main{max-width:1000px;margin:0 auto;padding:24px}
 .badge-ro{background:rgba(34,197,94,.15);color:var(--ro);border:1px solid rgba(34,197,94,.3)}
 .badge-ow{background:rgba(245,158,11,.15);color:var(--ow);border:1px solid rgba(245,158,11,.3)}
 .badge-d{background:rgba(239,68,68,.15);color:var(--d);border:1px solid rgba(239,68,68,.3)}
+.maturity{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+.maturity-stable{background:rgba(74,222,128,.12);color:#86efac;border:1px solid rgba(74,222,128,.25)}
+.maturity-beta{background:rgba(250,204,21,.12);color:#fde68a;border:1px solid rgba(250,204,21,.25)}
+.maturity-experimental{background:rgba(248,113,113,.12);color:#fca5a5;border:1px solid rgba(248,113,113,.25)}
 .chevron{color:var(--text2);font-size:10px;transition:transform .15s;flex-shrink:0}
 .tool-body{display:none;padding:0 14px 14px;border-top:1px solid var(--border)}
 .tool-body.open{display:block}
+.tool-meta{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.meta-chip{font-size:11px;color:var(--text2);background:var(--surface2);padding:4px 8px;border-radius:999px}
+.example-call{margin-top:10px;background:var(--surface2);border-radius:6px;padding:8px 10px}
+.example-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.example-call code{font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px}
 .param-list{margin-top:10px}
 .param{display:grid;grid-template-columns:160px 70px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
 .param:last-child{border-bottom:none}
@@ -1681,6 +1710,7 @@ main{max-width:1000px;margin:0 auto;padding:24px}
 </div>
 <main>
   <div id="tab-tools" class="tab-panel active">
+    <div class="workflow-grid">${workflowHtml}</div>
     <div id="tool-list">${toolsHtml}</div>
     <div id="no-results">No tools match your search.</div>
   </div>
@@ -1690,7 +1720,6 @@ main{max-width:1000px;margin:0 auto;padding:24px}
       const argRows = args.map(a =>
         `<div class="arg-row"><span class="arg-name">${esc(a.name)}${a.required ? '<span class="arg-req">*</span>' : ''}</span><span class="arg-type">string</span><span class="arg-desc">${esc(a.description || '')}</span></div>`
       ).join('');
-      const usageArgs = args.map(a => `${esc(a.name)}="${a.required ? '<value>' : '[optional]'}"`).join(' ');
       return `<div class="prompt-card" data-search="${esc((p.name + ' ' + (p.description || '')).toLowerCase())}">
         <div class="prompt-header" onclick="togglePrompt(this)">
           <span class="prompt-name">${esc(p.name)}</span>
@@ -1701,7 +1730,7 @@ main{max-width:1000px;margin:0 auto;padding:24px}
           ${argRows ? `<div class="prompt-args">${argRows}</div>` : '<p class="no-params" style="margin-top:10px">No arguments required.</p>'}
           <div class="prompt-usage">
             <div class="prompt-usage-label">Usage</div>
-            get_prompt ${esc(p.name)}${usageArgs ? ' ' + usageArgs : ''}
+            ${esc(p.usage || `get_prompt ${p.name}`)}
           </div>
         </div>
       </div>`;
