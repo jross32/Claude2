@@ -1,55 +1,50 @@
 {
-  "timestamp": "2026-05-01T19:19:15.140Z",
+  "timestamp": "2026-05-01T19:18:58.176Z",
   "git_commit": "549fc03",
   "suite": "api",
   "tests": [
     {
-      "name": "POST /api/schema with graphqlCalls → 200 + schema object",
+      "name": "GET /api/saves → 200 + array",
       "status": "pass",
-      "duration_ms": 77,
+      "duration_ms": 4160,
       "error": null,
       "input": {},
       "output": {
         "status": 200,
-        "keys": [
-          "jsonSchema",
-          "typescript"
-        ]
+        "count": 157
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "Schema response includes typescript or jsonSchema fields",
+      "name": "GET /api/saves items have expected shape",
+      "status": "pass",
+      "duration_ms": 4633,
+      "error": null,
+      "input": {},
+      "output": {
+        "count": 157,
+        "shapeValid": true
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/saves/:id with unknown id → 404 + error",
+      "status": "pass",
+      "duration_ms": 9,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "DELETE /api/saves/:id with unknown id → 200 + { ok: true }",
       "status": "pass",
       "duration_ms": 10,
-      "error": null,
-      "input": {},
-      "output": {
-        "keys": [
-          "jsonSchema",
-          "typescript"
-        ]
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "[chaos] POST /api/schema with no graphqlCalls → 400",
-      "status": "pass",
-      "duration_ms": 7,
-      "error": null,
-      "input": {},
-      "output": {
-        "status": 400
-      },
-      "stack_trace": null,
-      "screenshot": null
-    },
-    {
-      "name": "[chaos] POST /api/schema with empty array → does not 500",
-      "status": "pass",
-      "duration_ms": 4,
       "error": null,
       "input": {},
       "output": {
@@ -59,9 +54,21 @@
       "screenshot": null
     },
     {
-      "name": "[chaos] POST /api/schema with malformed call → does not 500",
+      "name": "[chaos] GET /api/saves/:id with empty id segment → 404",
       "status": "pass",
-      "duration_ms": 4,
+      "duration_ms": 4500,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] DELETE /api/saves/:id with special chars in id",
+      "status": "pass",
+      "duration_ms": 20,
       "error": null,
       "input": {},
       "output": {
@@ -72,11 +79,11 @@
     }
   ],
   "summary": {
-    "total": 5,
-    "passed": 5,
+    "total": 6,
+    "passed": 6,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 8265,
-    "avg_duration_ms": 1653
+    "duration_ms": 20941,
+    "avg_duration_ms": 3490
   }
 }

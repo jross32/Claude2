@@ -1,22 +1,24 @@
 # Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-01T19:18:36.919Z
-**Commit:** `41c07f8`
-**Duration:** 13253ms
+**Run:** 2026-05-01T19:19:15.140Z
+**Commit:** `549fc03`
+**Duration:** 8265ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 3 | 3 | 0 | 0 |
+| 5 | 5 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/mcp/tools exposes the live MCP tool catalog | pass | 42ms | |
-| ✅ | POST /api/mcp/tool/server_info invokes MCP tools through the HTTP bridge | pass | 5316ms | |
-| ✅ | GET /api/mcp-meta returns enriched live metadata | pass | 13ms | |
+| ✅ | POST /api/schema with graphqlCalls → 200 + schema object | pass | 77ms | |
+| ✅ | Schema response includes typescript or jsonSchema fields | pass | 10ms | |
+| ✅ | [chaos] POST /api/schema with no graphqlCalls → 400 | pass | 7ms | |
+| ✅ | [chaos] POST /api/schema with empty array → does not 500 | pass | 4ms | |
+| ✅ | [chaos] POST /api/schema with malformed call → does not 500 | pass | 4ms | |
 
 
