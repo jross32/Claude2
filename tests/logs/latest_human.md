@@ -1,25 +1,28 @@
-# Test Results — integration
+# Test Results — smoke
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-01T15:36:11.487Z
-**Commit:** `160d14b`
-**Duration:** 37312ms
+**Run:** 2026-05-01T19:03:35.989Z
+**Commit:** `9bb205d`
+**Duration:** 13355ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 6 | 6 | 0 | 0 |
+| 9 | 9 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | MCP tools/list returns the live exposed toolset | pass | 18ms | |
-| ✅ | MCP tools/call can invoke server_info end-to-end | pass | 4471ms | |
-| ✅ | MCP prompts/list and prompts/get return the current prompt catalog | pass | 15ms | |
-| ✅ | MCP resources/list, resources/templates/list, and resources/read expose saved scrape context | pass | 4748ms | |
-| ✅ | MCP completion/complete suggests saved session IDs | pass | 4124ms | |
-| ✅ | MCP resource subscriptions emit update notifications when saves change | pass | 11770ms | |
+| ✅ | Chromium launches in headless mode | pass | 2006ms | |
+| ✅ | Browser can open a new page | pass | 623ms | |
+| ✅ | Browser reports correct version string | pass | 0ms | |
+| ✅ | Multiple pages open and close independently | pass | 277ms | |
+| ✅ | Browser closes cleanly | pass | 226ms | |
+| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 4356ms | |
+| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 1594ms | |
+| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 1948ms | |
+| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 2317ms | |
 
 
