@@ -36,8 +36,7 @@ const { extractProductData } = require('./product-extractor');
 const { extractJobData } = require('./job-extractor');
 const { extractCompanyInfo } = require('./company-extractor');
 const {
-  TOOLS: MCP_TOOLS,
-  PROMPTS: MCP_PROMPTS,
+  getMcpMeta,
   handleTool: handleMcpTool,
   __private__: {
     analyzeResearchQuestion,
