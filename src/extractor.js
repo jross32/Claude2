@@ -800,6 +800,21 @@ async function extractPageData(page, url, opts = {}) {
       return found;
     })();
 
+    // ── RESOURCE TIMINGS ──
+    const resourceTimings = (() => {
+      try {
+        return window.performance.getEntriesByType('resource')
+          .slice(0, 100)
+          .map(e => ({
+            name: e.name,
+            type: e.initiatorType,
+            duration: Math.round(e.duration),
+            transferSize: e.transferSize || 0,
+            encodedBodySize: e.encodedBodySize || 0,
+          }));
+      } catch { return []; }
+    })();
+
     // ── GDPR / COOKIE CONSENT DETECTION ──
     const cookieConsent = (() => {
       const w = window;

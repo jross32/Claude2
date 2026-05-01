@@ -1,27 +1,25 @@
-# Test Results — api
+# Test Results — integration
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-01T15:35:32.861Z
-**Commit:** `4b2457a`
-**Duration:** 8836ms
+**Run:** 2026-05-01T15:36:11.487Z
+**Commit:** `160d14b`
+**Duration:** 37312ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 8 | 8 | 0 | 0 |
+| 6 | 6 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/session/check with valid url → 200 + { exists: boolean } | pass | 45ms | |
-| ✅ | GET /api/session/check for poolplayers.com → exists field present | pass | 7ms | |
-| ✅ | DELETE /api/session with url → 200 + { cleared: boolean } | pass | 6ms | |
-| ✅ | GET /api/site-credentials for unknown site → { found: false } | pass | 6ms | |
-| ✅ | GET /api/site-credentials for poolplayers.com → { found: true, username: string } | pass | 5ms | |
-| ✅ | [chaos] GET /api/session/check with no url → { exists: false } | pass | 5ms | |
-| ✅ | [chaos] DELETE /api/session with no url → does not 500 | pass | 5ms | |
-| ✅ | [chaos] GET /api/site-credentials with no url → does not 500 | pass | 8ms | |
+| ✅ | MCP tools/list returns the live exposed toolset | pass | 18ms | |
+| ✅ | MCP tools/call can invoke server_info end-to-end | pass | 4471ms | |
+| ✅ | MCP prompts/list and prompts/get return the current prompt catalog | pass | 15ms | |
+| ✅ | MCP resources/list, resources/templates/list, and resources/read expose saved scrape context | pass | 4748ms | |
+| ✅ | MCP completion/complete suggests saved session IDs | pass | 4124ms | |
+| ✅ | MCP resource subscriptions emit update notifications when saves change | pass | 11770ms | |
 
 
