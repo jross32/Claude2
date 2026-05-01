@@ -318,6 +318,19 @@ async function extractPageData(page, url, opts = {}) {
       })),
     }));
 
+    // ── CSRF TOKENS ──
+    const CSRF_NAME_RE = /^(csrf|_csrf|csrf_token|authenticity_token|_token|__requestverificationtoken|_wpnonce|csrfmiddlewaretoken|xsrf.token|_xsrf)$/i;
+    const csrfTokens = [
+      // Hidden inputs with CSRF-like names
+      ...Array.from(document.querySelectorAll('input[type="hidden"]'))
+        .filter(el => CSRF_NAME_RE.test(el.name || ''))
+        .map(el => ({ source: 'input', name: el.name, hasValue: !!el.value })),
+      // Meta tags with CSRF-like names (e.g. Rails, Django)
+      ...Array.from(document.querySelectorAll('meta[name]'))
+        .filter(el => CSRF_NAME_RE.test(el.getAttribute('name') || ''))
+        .map(el => ({ source: 'meta', name: el.getAttribute('name'), hasValue: !!el.getAttribute('content') })),
+    ];
+
     // ── TABLES ──
     const tables = Array.from(document.querySelectorAll('table')).slice(0, 30).map(table => ({
       id: table.id || null,

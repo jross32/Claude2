@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-05-01T14:30:11.230Z",
+  "git_commit": "cfc62ca",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "Detects hCaptcha widgets and extracts the sitekey",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "type": "hcaptcha",
+        "sitekey": "sitekey123"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Detects reCAPTCHA v2 widgets and extracts the sitekey",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "type": "recaptcha_v2",
+        "sitekey": "recaptcha-key"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Returns null when no CAPTCHA widget is present",
+      "status": "pass",
+      "duration_ms": 0,
+      "error": null,
+      "input": {},
+      "output": {
+        "detected": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 8,
+    "avg_duration_ms": 3
+  }
+}

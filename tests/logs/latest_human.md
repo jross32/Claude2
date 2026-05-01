@@ -1,27 +1,32 @@
-# Test Results — api
+# Test Results — unit
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-04-23T22:42:05.079Z
-**Commit:** `eca3e84`
-**Duration:** 5929ms
+**Run:** 2026-05-01T14:30:11.536Z
+**Commit:** `cfc62ca`
+**Duration:** 14ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 8 | 8 | 0 | 0 |
+| 13 | 13 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/session/check with valid url → 200 + { exists: boolean } | pass | 96ms | |
-| ✅ | GET /api/session/check for poolplayers.com → exists field present | pass | 54ms | |
-| ✅ | DELETE /api/session with url → 200 + { cleared: boolean } | pass | 7ms | |
-| ✅ | GET /api/site-credentials for unknown site → { found: false } | pass | 5ms | |
-| ✅ | GET /api/site-credentials for poolplayers.com → { found: true, username: string } | pass | 4ms | |
-| ✅ | [chaos] GET /api/session/check with no url → { exists: false } | pass | 4ms | |
-| ✅ | [chaos] DELETE /api/session with no url → does not 500 | pass | 4ms | |
-| ✅ | [chaos] GET /api/site-credentials with no url → does not 500 | pass | 4ms | |
+| ✅ | returns pages, apiCalls, assets, summary | pass | 2ms | |
+| ✅ | detects added page in B | pass | 1ms | |
+| ✅ | detects removed page from A | pass | 0ms | |
+| ✅ | identical results → pages added/removed are empty | pass | 0ms | |
+| ✅ | detects added text block | pass | 0ms | |
+| ✅ | detects added link | pass | 0ms | |
+| ✅ | detects added image | pass | 1ms | |
+| ✅ | detects title change | pass | 0ms | |
+| ✅ | summary.pages counts match actual arrays | pass | 1ms | |
+| ✅ | [chaos] empty pages arrays → no crash, empty diffs | pass | 0ms | |
+| ✅ | [chaos] missing pages key → no crash | pass | 0ms | |
+| ✅ | [chaos] page with no meta → no crash | pass | 1ms | |
+| ✅ | [chaos] apiCalls missing in inputs → no crash | pass | 0ms | |
 
 
