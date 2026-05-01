@@ -5604,6 +5604,9 @@ async function handleTool(name, args, progressToken = null) {
         internalOnly: input.internalOnly || false,
         origin,
         maxLinks: input.maxLinks || 100,
+        onProgress: progressToken
+          ? (done, total) => sendProgress(progressToken, done, total, `Checked ${done}/${total} links`)
+          : null,
       });
     }
 

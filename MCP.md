@@ -46,7 +46,7 @@ Two patterns for tool implementation:
 
 ## Tool Count & Classification
 
-**Total: 68 tools** (as of last update 2026-04-30)
+**Total: 68 tools · 22 prompts** (as of last update 2026-05-01)
 
 | Classification | Count |
 |----------------|-------|
@@ -144,7 +144,7 @@ Compound tools — implemented in mcp-server.js handlers, reading save files dir
 
 | Tool | AI Use | Notes |
 |------|--------|-------|
-| `get_tech_stack` | 8 | Frameworks, CDNs, analytics, CMS from headers + DOM. |
+| `get_tech_stack` | 8 | Frameworks, CDNs, analytics, CMS from headers + DOM. Scrape result also includes `thirdPartyScripts` (categorized by domain) and `trackingPixels` (1×1 images + known pixel patterns). |
 | `get_store_context` | 7 | E-commerce platform, currency, product taxonomy. |
 | `map_site_for_goal` | 9 | OW. Goal-directed crawl ("find pricing page"). Most agentic tool. |
 | `research_url` | 9 | OW. All-in-one: tech stack, auth, API surface, data exposure. |
@@ -277,6 +277,9 @@ These are flags on `scrape_url` / the scraper session — not separate tools, bu
 - `page.meta.language` + `page.meta.hreflang[]` — language detection
 - gRPC binary frame decoding (content-type: application/grpc)
 - Service worker strategy analysis (cache-first, network-first, Workbox, precache count)
+- `page.headingOutline[]` — ordered flat list of H1–H6 in document order: `[{level, text, id}]` — AI-readable page structure outline
+- `page.thirdPartyScripts[]` — all external scripts with domain, category (analytics/advertising/cdn/error-monitoring/ab-testing/support/marketing/payment/social/unknown), async/defer flags
+- `page.trackingPixels[]` — 1×1 pixel images + 10 known tracking pixel URL patterns (Facebook, Google, Bing, LinkedIn, TikTok, Snap, etc.) + noscript fallback detection
 
 ---
 
@@ -323,6 +326,45 @@ All 13 issues from the initial audit were fixed on 2026-04-18. Round 2 improveme
 | ✅ | Round 3: interaction modes | Modals, accordions, infinite scroll, search suggestions, pagination, dropdowns |
 | ✅ | Round 3: extractor additions | Language/hreflang, feeds, PDF links, OpenAPI specs, cookie consent, source maps |
 | ✅ | Round 3: SW strategy analysis | Cache-first/network-first/stale-while-revalidate detection, Workbox, precache count |
+| ✅ | Round 4: MCP Protocol upgrade | Sampling (AI via connected model), logging, progress notifications, resource subscriptions, argument completions, server instructions, toolset profiles, 14 new prompts (22 total), 4 docs resources, /docs HTML page, roots |
+| ✅ | Round 4: extractor additions | `headingOutline` (H1–H6 in doc order), `thirdPartyScripts` (categorized 3rd-party JS), `trackingPixels` (1×1 + known pixel patterns) |
+| ✅ | Round 4: check_broken_links progress | `onProgress` callback added to `checkBrokenLinks` in link-graph.js; wired to MCP progress notifications |
+
+---
+
+## MCP Protocol Capabilities
+
+As of Round 4 (`mcp-server.js` v2.1.0), the server declares the following MCP protocol capabilities:
+
+| Capability | Status | Notes |
+|-----------|--------|-------|
+| `tools` | ✅ | 68 tools |
+| `prompts` | ✅ | 22 prompts — workflow guides for AI |
+| `resources` | ✅ | `subscribe: true, listChanged: true` — subscribe to `scrape://saves` for live updates |
+| `logging` | ✅ | `SetLevelRequestSchema` handler; `sendLog()` wraps every tool call |
+| `completions` | ✅ | `sessionId`, `url`, `apiKind`, `pageIndex` arguments auto-complete |
+| `sampling` | Client-side | Server calls `sampling/createMessage` at runtime — no capability declaration needed. `analyzeWithAI()` tries connected model first, falls back to HTTP. |
+
+**Toolset profiles** (`MCP_TOOLSET` env var):
+- `research` — 11 tools for browsing and analysis
+- `security` — 9 tools for security testing
+- `ecommerce` — 7 tools for product/deal extraction
+- `seo` — 4 tools for link and sitemap work
+- `ops` — 12 tools for managing jobs and sessions
+- `full` (default) — all 68 tools
+
+**Prompts** (`prompts/` in MCP protocol): 22 total. Use in Claude Code with `get_prompt <name> [args]`. Highlights:
+- `security_full_audit url="..."` — full security posture in one command
+- `competitive_intel sessionId="..."` — pricing, differentiators, tech stack
+- `site_health_check sessionId="..."` — broken links, JS errors, perf, SSL, security headers
+- `privacy_gdpr_audit sessionId="..."` — cookie consent, tracking pixels, third-party sharing
+- `tech_stack_fingerprint sessionId="..."` — CDN, frameworks, analytics, payments, monitoring
+
+**Docs resources** (`scrape://docs/*`):
+- `scrape://docs/quickstart` — 10-step onboarding
+- `scrape://docs/workflow-recipes` — copy-paste multi-tool sequences
+- `scrape://docs/tool-selection-guide` — decision tree for tool selection
+- `scrape://docs/troubleshooting` — common errors and fixes
 
 ---
 
@@ -339,4 +381,4 @@ Run tests: `node tests/security/oidc_lab.test.js` or `node tests/security/pingfe
 
 ---
 
-*Last updated: 2026-04-30. Tool count: 68.*
+*Last updated: 2026-05-01. Tool count: 68. Prompt count: 22.*

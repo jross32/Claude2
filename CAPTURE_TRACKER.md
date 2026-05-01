@@ -27,7 +27,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | SVG content extraction | ❌ | **4** | Icons and charts hidden in SVG |
 | Print stylesheet rendering | ❌ | **1** | Almost never useful |
 | Full-page PDF render | ❌ | **6** | Useful for archiving and AI doc analysis |
-| Heading hierarchy (H1–H6 outline) | ❌ | **8** | AI can understand page structure from this instantly |
+| Heading hierarchy (H1–H6 outline) | ✅ | — | extractor.js headingOutline — ordered flat list in document order with level, text, id |
 | Reading order / content flow | ❌ | **5** | |
 
 ---
@@ -64,7 +64,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | Feature | Have | Rating | Notes |
 |---|---|---|---|
 | JavaScript files loaded | ✅ | — | |
-| Third-party script inventory | ❌ | **9** | AI can identify trackers, ad networks, and risks — massive for privacy/security analysis |
+| Third-party script inventory | ✅ | — | extractor.js thirdPartyScripts — domain, category (analytics/advertising/cdn/support/etc.), async/defer per script |
 | JS console errors | ✅ | — | scraper.js page.on('pageerror') lines 2705–2708 |
 | JS console warnings | ❌ | **6** | |
 | Global variables exposed (window.*) | ✅ | — | extractor.js lines 594–651 jsGlobalState |
@@ -109,7 +109,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | Cookie attributes (httpOnly, secure, SameSite) | ✅ | — | scraper.js cookies map lines 1676–1686 |
 | JWT token structure decode | ✅ | — | jwt-decoder.js — header/payload decode, security flags, expiry |
 | CSRF token patterns | ❌ | **7** | |
-| Tracking pixel inventory | ❌ | **8** | Facebook pixel, Google, etc. — AI can tell you who's tracking users |
+| Tracking pixel inventory | ✅ | — | extractor.js trackingPixels — detects 1×1 images + 10 known pixel URL patterns + noscript fallback |
 | Fingerprinting script detection | ❌ | **7** | Canvas fingerprinting, AudioContext fingerprinting, etc. |
 | What the site sees about your browser | ❌ | **7** | User agent, IP, headers the server receives — reverse fingerprint |
 | GDPR / cookie consent analysis | ✅ | — | extractor.js cookieConsent — 10 vendors, opt-in/opt-out model |
