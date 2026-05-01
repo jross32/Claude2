@@ -919,6 +919,7 @@ async function extractPageData(page, url, opts = {}) {
       pdfLinks,
       apiSpecLinks,
       cookieConsent,
+      resourceTimings,
     };
   }, { pageUrl: url, lightMode: !!opts.lightMode });
 
