@@ -1,0 +1,126 @@
+{
+  "timestamp": "2026-05-01T15:34:49.129Z",
+  "git_commit": "e69c682",
+  "suite": "api",
+  "tests": [
+    {
+      "name": "GET /api/schedules → 200 + array",
+      "status": "pass",
+      "duration_ms": 47,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "count": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/schedules with valid data → 200 + { id, message }",
+      "status": "pass",
+      "duration_ms": 60,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "id": "7c5c9914-2308-4857-812f-69ae0b57cffe"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/schedules after create → contains new schedule",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "found": true,
+        "total": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "DELETE /api/schedules/:id for existing → 200 + message",
+      "status": "pass",
+      "duration_ms": 8,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/schedules after delete → schedule is gone",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "found": false
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "DELETE /api/schedules/:id for unknown → 404",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 404
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/schedules with no cronExpr → 400",
+      "status": "pass",
+      "duration_ms": 6,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/schedules with no scrapeOptions → 400",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/schedules with invalid cron → 400",
+      "status": "pass",
+      "duration_ms": 6,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 6340,
+    "avg_duration_ms": 704
+  }
+}
