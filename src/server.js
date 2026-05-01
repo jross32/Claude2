@@ -48,6 +48,7 @@ const {
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+const MAX_ACTIVE_SCRAPES = Number(process.env.MAX_ACTIVE_SCRAPES) || 4;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -76,6 +77,14 @@ app.use((req, res, next) => {
   let limit = 120;
   if (/^\/api\/(scrape|fill-form|screenshot|oidc-test|tls-fingerprint)/.test(req.path)) limit = 30;
   else if (/^\/api\/(generate|schema|diff|schedules|monitor)/.test(req.path)) limit = 60;
+  if (req.method === 'POST' && req.path === '/api/scrape' && sessions.size >= MAX_ACTIVE_SCRAPES) {
+    return res.status(429).json({
+      error: 'Too many active scrape jobs — wait for an existing scrape to finish before starting another',
+      retryAfterSeconds: 60,
+      activeScrapes: sessions.size,
+      maxActiveScrapes: MAX_ACTIVE_SCRAPES,
+    });
+  }
   if (_checkRateLimit(`${ip}:${req.method}:${req.path.split('/').slice(0, 4).join('/')}`, limit)) {
     return res.status(429).json({ error: 'Rate limit exceeded — slow down requests', retryAfterSeconds: 60 });
   }
