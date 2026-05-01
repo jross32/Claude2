@@ -19,8 +19,8 @@ const REQ_DIR    = path.join(LOGS_DIR, 'requests');
 const USAGE_JSON = path.join(LOGS_DIR, 'tool-usage.json');
 const USAGE_TXT  = path.join(LOGS_DIR, 'tool-usage.txt');
 
-// All MCP tools — counter starts at 0 for each
-const ALL_TOOLS = [
+// Fallback tool seed used if the caller doesn't provide a live tool catalog.
+const FALLBACK_TOOL_NAMES = [
   'batch_scrape',
   'check_saved_session',
   'clear_saved_session',
@@ -77,6 +77,8 @@ const ALL_TOOLS = [
   'to_markdown',
 ];
 
+let configuredToolNames = [...FALLBACK_TOOL_NAMES];
+
 // ── internal helpers ──────────────────────────────────────────────────────────
 
 function ensureDirs() {
@@ -91,9 +93,9 @@ function loadUsage() {
   return null;
 }
 
-function buildDefaultUsage() {
+function buildDefaultUsage(toolNames = configuredToolNames) {
   const tools = {};
-  for (const name of ALL_TOOLS) tools[name] = 0;
+  for (const name of toolNames) tools[name] = 0;
   return { lastUpdated: new Date().toISOString(), totalCalls: 0, tools };
 }
 
@@ -131,16 +133,20 @@ function truncateResult(result, maxChars = 4000) {
 /**
  * Call once at server startup — creates dirs + initializes counter files.
  */
-function init() {
+function init(allTools = FALLBACK_TOOL_NAMES) {
   try {
     ensureDirs();
+    configuredToolNames = Array.from(new Set(
+      (Array.isArray(allTools) ? allTools : FALLBACK_TOOL_NAMES)
+        .filter((name) => typeof name === 'string' && name.trim())
+    )).sort();
     const existing = loadUsage();
     if (!existing) {
       saveUsage(buildDefaultUsage());
     } else {
       // Add any new tools not yet in the file (zero them out)
       let changed = false;
-      for (const name of ALL_TOOLS) {
+      for (const name of configuredToolNames) {
         if (!(name in existing.tools)) { existing.tools[name] = 0; changed = true; }
       }
       if (changed) saveUsage(existing);
@@ -199,4 +205,4 @@ function record(toolName, args, result, durationMs, error) {
   }
 }
 
-module.exports = { init, record, ALL_TOOLS };
+module.exports = { init, record, ALL_TOOLS: FALLBACK_TOOL_NAMES };
