@@ -6957,7 +6957,7 @@ Report: JWT security assessment, CORS policy findings (wildcard exposure, creden
 // ── MCP server setup ────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'web-scraper', version: '2.1.0' },
+  { name: 'web-scraper', version: '2.2.0' },
   {
     capabilities: {
       tools:       {},
