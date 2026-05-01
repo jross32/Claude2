@@ -104,6 +104,11 @@ async function extractPageData(page, url, opts = {}) {
       }));
     }
 
+    // ── HEADING OUTLINE (document order — H1–H6 as a flat ordered list) ──
+    const headingOutline = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+      .map(el => ({ level: parseInt(el.tagName[1]), text: el.innerText.trim(), id: el.id || null }))
+      .filter(h => h.text);
+
     // ── FULL TEXT ──
     const fullText = document.body?.innerText?.replace(/\s+/g, ' ').trim().substring(0, 100000) || '';
 
