@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-05-01T15:26:01.057Z",
+  "git_commit": "1c0cf59",
+  "suite": "api",
+  "tests": [
+    {
+      "name": "GET /api/mcp/tools exposes the live MCP tool catalog",
+      "status": "pass",
+      "duration_ms": 4715,
+      "error": null,
+      "input": {},
+      "output": {
+        "toolCount": 71,
+        "sample": "server_info"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/mcp/tool/server_info invokes MCP tools through the HTTP bridge",
+      "status": "fail",
+      "duration_ms": 6019,
+      "error": "timeout",
+      "input": {},
+      "output": {},
+      "stack_trace": "Error: timeout\n    at ClientRequest.<anonymous> (C:\\Users\\justi\\Claude2\\tests\\api\\_server.js:87:53)\n    at ClientRequest.emit (node:events:508:28)\n    at Socket.emitRequestTimeout (node:_http_client:927:9)\n    at Object.onceWrapper (node:events:622:28)\n    at Socket.emit (node:events:520:35)\n    at Socket._onTimeout (node:net:604:8)\n    at listOnTimeout (node:internal/timers:605:17)\n    at process.processTimers (node:internal/timers:541:7)",
+      "screenshot": null
+    },
+    {
+      "name": "GET /api/mcp-meta returns enriched live metadata",
+      "status": "pass",
+      "duration_ms": 2418,
+      "error": null,
+      "input": {},
+      "output": {
+        "toolCount": 71,
+        "promptCount": 22,
+        "workflowCount": 5
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "duration_ms": 19428,
+    "avg_duration_ms": 6476
+  }
+}
