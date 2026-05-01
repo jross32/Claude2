@@ -77,7 +77,7 @@ async function autosave() {
 }
 
 function start() {
-  console.log(`[git-autosave] Started — will auto-commit & push every ${INTERVAL_MS / 60000} minutes.`);
+  console.log(`[git-autosave] Started — will auto-commit & push every ${INTERVAL_MS / 3600000} hours.`);
 
   // Run once immediately on startup
   autosave();
