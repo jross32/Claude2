@@ -30,7 +30,7 @@ async function main() {
 
     setOutput({
       version: result.server.version,
-      tools: result.counts.tools,
+      tools: result.counts.toolsExposed,
       prompts: result.counts.prompts,
     });
   });
