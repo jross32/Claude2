@@ -52,6 +52,56 @@ const MAX_ACTIVE_SCRAPES = Number(process.env.MAX_ACTIVE_SCRAPES) || 4;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
+
+// ── Landing page (must come before express.static so it intercepts GET /) ───
+const _LANDING_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Web Scraper MCP</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
+.card{max-width:560px;width:100%;text-align:center}
+.badge{display:inline-block;background:#1a1d2e;border:1px solid #2d3348;border-radius:999px;padding:.25rem .9rem;font-size:.75rem;color:#8892aa;margin-bottom:1.5rem;letter-spacing:.05em}
+h1{font-size:2.2rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.6rem}
+h1 span{color:#4f8ef7}
+.sub{color:#8892aa;font-size:1rem;line-height:1.6;margin-bottom:2.2rem;max-width:420px;margin-left:auto;margin-right:auto}
+.pills{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;margin-bottom:2.4rem}
+.pill{background:#1a1d2e;border:1px solid #2d3348;border-radius:8px;padding:.35rem .85rem;font-size:.8rem;color:#8892aa}
+.pill strong{color:#c8d0e0}
+.actions{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.75rem 1.5rem;border-radius:10px;font-size:.95rem;font-weight:600;text-decoration:none;transition:opacity .15s}
+.btn-primary{background:#4f8ef7;color:#fff}
+.btn-secondary{background:#1a1d2e;border:1px solid #2d3348;color:#c8d0e0}
+.btn:hover{opacity:.85}
+.footer{margin-top:3rem;font-size:.75rem;color:#4a5168}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="badge">WEB SCRAPER MCP &nbsp;·&nbsp; v2.5.0</div>
+  <h1>Web Scraper <span>MCP</span></h1>
+  <p class="sub">A production-grade web scraping platform with 73 tools, MCP protocol support, and deep browser automation.</p>
+  <div class="pills">
+    <div class="pill"><strong>73</strong> tools</div>
+    <div class="pill"><strong>27</strong> prompts</div>
+    <div class="pill"><strong>MCP 2.x</strong> protocol</div>
+    <div class="pill"><strong>Playwright</strong> automation</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="/wsp">Web Scraper Panel</a>
+    <a class="btn btn-secondary" href="/docs">API Docs</a>
+  </div>
+  <div class="footer">Running on localhost &nbsp;·&nbsp; <a href="/api/status" style="color:#4a5168">status</a></div>
+</div>
+</body>
+</html>`;
+
+app.get('/', (_req, res) => res.type('html').send(_LANDING_HTML));
+app.get('/wsp', (_req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ── In-memory rate limiter ─────────────────────────────────────────────────

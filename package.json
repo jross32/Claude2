@@ -1,6 +1,6 @@
 {
   "name": "web-scraper-app",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Web scraper with GraphQL/API interception, auth support, and JSON export",
   "main": "src/server.js",
   "scripts": {
