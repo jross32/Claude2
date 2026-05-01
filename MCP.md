@@ -1,0 +1,342 @@
+# MCP Server Reference — Web Scraper
+
+> **Living document.** Update this file whenever a tool is added, changed, or removed.
+> AI agents working on this repo should read this before building or modifying MCP tools.
+
+---
+
+## Architecture Overview
+
+```
+AI Agent (Claude, etc.)
+    │
+    │  MCP protocol (stdio)
+    ▼
+mcp-server.js          ← tool definitions, handlers, classification sets
+    │
+    ├── HTTP (localhost) → src/server.js (Express REST API, port 3000)
+    │       │
+    │       ├── src/scraper.js         (Playwright browser automation)
+    │       ├── src/extractor.js       (DOM extraction — 50+ data types)
+    │       ├── src/auth.js            (login, 2FA: TOTP/email/SMS)
+    │       ├── src/scheduler.js       (cron job management)
+    │       ├── src/diff.js            (compare two scrape results)
+    │       ├── src/generators.js      (React, CSS, Markdown, Sitemap codegen)
+    │       ├── src/schema-inferrer.js (TypeScript / JSON Schema from GraphQL)
+    │       ├── src/entity-extractor.js(email, phone, URL, address patterns)
+    │       ├── src/har-exporter.js    (HAR 1.2 format export)
+    │       └── src/oidc-tester.js     (OAuth2/OIDC security test suite)
+    │
+    └── Direct module imports (analysis tools — no HTTP round-trip):
+            ├── src/jwt-decoder.js     (JWT decode + security flag analysis)
+            ├── src/dns-lookup.js      (full DNS record lookup + tech inference)
+            ├── src/ssl-inspector.js   (TLS cert inspection, SANs, expiry flags)
+            ├── src/security-scorer.js (security header scoring 0–100, A+–F)
+            ├── src/link-graph.js      (link graph, redirect chains, broken links, subdomains)
+            ├── src/product-extractor.js (structured e-commerce data)
+            ├── src/job-extractor.js   (structured job listing data)
+            └── src/company-extractor.js (company info from About/Contact pages)
+```
+
+Two patterns for tool implementation:
+- **HTTP tools** — call `server.js` via internal `get()` / `post()` / `del()` helpers. All scraping and browser tools use this pattern.
+- **Direct import tools** — import source module directly in `mcp-server.js` and call functions in the handler. Used for pure analysis tools that don't need a browser (JWT decode, DNS, SSL, security scoring, link graph, structured extractors, AI analysis tools).
+
+---
+
+## Tool Count & Classification
+
+**Total: 68 tools** (as of last update 2026-04-30)
+
+| Classification | Count |
+|----------------|-------|
+| readOnly (RO) | 51 |
+| destructive (D) | 5 |
+| openWorld (OW) | 17 |
+
+All tools are classified. No unclassified tools.
+
+Classification sets defined in mcp-server.js (search for `READ_ONLY_TOOL_NAMES`).
+
+---
+
+## All 68 Tools — Quick Reference
+
+### Category 1: Core Scraping
+
+| Tool | REST endpoint | AI Use | Notes |
+|------|--------------|--------|-------|
+| `scrape_url` | POST /api/scrape | 10 | Main workhorse. Playwright + stealth. Returns content, links, API calls, structuredData. Supports: `captureModals`, `captureAccordions`, `captureInfiniteScroll`, `captureSearchSuggestions`, `capturePagination` flags. |
+| `batch_scrape` | POST /api/scrape (loop) | 9 | Parallel with semaphore. Per-URL error isolation. |
+| `stop_scrape` | POST /api/scrape/:id/stop | 6 | Kills in-flight job. |
+| `pause_scrape` | POST /api/scrape/:id/pause | 5 | Signal-based, not atomic. |
+| `resume_scrape` | POST /api/scrape/:id/resume | 5 | Symmetric with pause. |
+| `take_screenshot` | POST /api/screenshot | 7 | OW. Playwright screenshot → base64 PNG. fullPage option. |
+| `list_active_scrapes` | GET /api/scrape/active | 8 | In-flight jobs + status. |
+| `get_scrape_status` | GET /api/scrape/:id/status | 8 | Per-job poll with partial results. |
+
+### Category 2: Session & Auth
+
+| Tool | REST endpoint | AI Use | Notes |
+|------|--------------|--------|-------|
+| `detect_site` | GET /api/detect | 9 | Infers site type, auth type, bot-detection level. Returns `recommendedScrapeOptions`. Best first call. |
+| `check_saved_session` | GET /api/session/check | 7 | Is session file present & not expired? |
+| `clear_saved_session` | DELETE /api/session | 5 | D — deletes session state. |
+| `get_known_site_credentials` | GET /api/site-credentials | 6 | Credential hints from .env for pre-configured sites. |
+| `submit_verification_code` | POST /api/scrape/:id/verify | 7 | Inject 2FA code into stalled auth flow. |
+| `submit_scrape_credentials` | POST /api/scrape/:id/credentials | 7 | Provide user/pass to stalled login. |
+| `fill_form` | POST /api/fill-form | 8 | OW. Fill and submit arbitrary forms via Playwright. CSS selector targeting. |
+
+### Category 3: Content Extraction
+
+All read from saved scrape data (disk), except `extract_entities` and `crawl_sitemap` which make live network calls.
+
+| Tool | AI Use | Notes |
+|------|--------|-------|
+| `get_page_text` | 9 | Clean visible text. LLM-ready. |
+| `to_markdown` | 8 | HTML → structured Markdown. Heading hierarchy preserved. |
+| `extract_entities` | 9 | OW. Emails, phones, addresses, URLs. E.164 normalization, international phones. |
+| `extract_deals` | 8 | Price/discount/offer patterns. E-commerce focused. |
+| `extract_structured_data` | 9 | JSON-LD (schema.org), Open Graph, Twitter Card from saved page. |
+| `crawl_sitemap` | 7 | OW. Fetches sitemap.xml without browser. Handles sitemap index files. Falls back to `/sitemap.xml`. |
+| `list_links` | 7 | All hrefs with anchor text, internal/external classification. Paginated. |
+| `list_forms` | 7 | Form fields, types, action URLs. |
+| `list_images` | 5 | src, alt, dimensions. |
+| `list_internal_pages` | 8 | Deduped internal URL list. |
+| `find_site_issues` | 7 | Broken links, missing alts, console errors, mixed content. |
+
+### Category 4: API & Network Analysis
+
+| Tool | AI Use | Notes |
+|------|--------|-------|
+| `get_api_calls` | 10 | All XHR/fetch from a scrape: method, URL, headers, body, timing (dns/tcp/ssl/ttfb/transfer per call). |
+| `get_api_surface` | 9 | Aggregated unique endpoints from a save. |
+| `probe_endpoints` | 9 | OW. Hits endpoint list → status, headers, timing. |
+| `http_fetch` | 10 | OW. Direct HTTP GET/POST, custom headers, cookie jar from session. |
+| `preflight_url` | 7 | OW. HEAD + redirect chain before full scrape. |
+| `find_graphql_endpoints` | 8 | OW. Heuristic scan for /graphql, /api/graphql, etc. |
+| `introspect_graphql` | 9 | OW. Full schema introspection. Returns type/field map. |
+
+### Category 5: Data Management
+
+| Tool | REST endpoint | AI Use | Notes |
+|------|--------------|--------|-------|
+| `list_saves` | GET /api/saves | 8 | All saved sessions with metadata. |
+| `get_save_overview` | (reads save file) | 9 | Page count, links, API calls, top endpoints, size. |
+| `compare_scrapes` | POST /api/diff | 8 | Added/removed links, new endpoints, content changes, Jaccard similarity, price changes. |
+| `search_scrape_text` | (reads save files) | 9 | Full-text search across all pages in a save. |
+| `export_har` | (uses har-exporter.js) | 6 | HAR 1.2 export with real timings. |
+| `delete_save` | DELETE /api/saves/:id | 4 | D — removes saved scrape. |
+
+### Category 6: Code Generation
+
+| Tool | REST endpoint | AI Use | Notes |
+|------|--------------|--------|-------|
+| `generate_react` | POST /api/generate/react | 7 | React component from scraped data. Template-based. |
+| `generate_css` | POST /api/generate/css | 5 | Color palette → CSS variables. |
+| `to_markdown` | POST /api/generate/markdown | 8 | (also in Content Extraction above) |
+| `generate_sitemap` | POST /api/generate/sitemap | 7 | XML sitemap from internal pages. Standards-compliant. |
+| `infer_schema` | POST /api/schema | 8 | TypeScript / JSON Schema from GraphQL data. |
+
+### Category 7: Site Intelligence
+
+Compound tools — implemented in mcp-server.js handlers, reading save files directly.
+
+| Tool | AI Use | Notes |
+|------|--------|-------|
+| `get_tech_stack` | 8 | Frameworks, CDNs, analytics, CMS from headers + DOM. |
+| `get_store_context` | 7 | E-commerce platform, currency, product taxonomy. |
+| `map_site_for_goal` | 9 | OW. Goal-directed crawl ("find pricing page"). Most agentic tool. |
+| `research_url` | 9 | OW. All-in-one: tech stack, auth, API surface, data exposure. |
+| `scan_pii` | 8 | PII detection with risk ranking CRITICAL/HIGH/MEDIUM/LOW. |
+
+### Category 8: Scheduling & Monitoring
+
+| Tool | REST endpoint | AI Use | Notes |
+|------|--------------|--------|-------|
+| `schedule_scrape` | POST /api/schedules | 6 | OW. Cron job creation. Persisted to `data/schedules.json`. |
+| `list_schedules` | GET /api/schedules | 6 | Active cron jobs with `nextRunAt`. |
+| `delete_schedule` | DELETE /api/schedules/:id | 5 | D — cancels cron job. |
+| `monitor_page` | (in-process) | 10 | OW. Watch URL for changes. First call creates baseline; subsequent calls diff. Persisted to `data/monitors.json`. |
+| `delete_monitor` | (in-process) | 4 | D — removes monitor and its baseline. |
+
+### Category 9: Security Testing
+
+| Tool | AI Use | Notes |
+|------|--------|-------|
+| `test_oidc_security` | 9 | 8 test types: redirect_uri, state entropy, JWT alg:none, PKCE, token rotation/replay, BOLA/IDOR, scope escalation, header injection. Risk score output. |
+| `test_tls_fingerprint` | 7 | TLS cipher suite comparison vs Chrome-115 / Firefox-117 profiles. JA3 approximation. |
+
+### Category 10: Security Analysis (New)
+
+Direct module imports — no browser, instant results from any URL or saved session.
+
+| Tool | Input | AI Use | Notes |
+|------|-------|--------|-------|
+| `decode_jwt_tokens` | `sessionId` | 9 | Extracts JWTs from anywhere in a scrape result (headers, cookies, localStorage, response bodies). Flags: `ALG_NONE`, `EXPIRED`, `EXPIRING_SOON`, `MISSING_AUD/SUB/ISS`, `SENSITIVE_CLAIMS`. |
+| `inspect_ssl` | `url`, optional `port` | 8 | TLS cert: subject, issuer, SANs (subdomain discovery!), chain, cipher, key size, daysRemaining. Flags: `SELF_SIGNED`, `EXPIRED`, `EXPIRING_SOON`, `WEAK_KEY`, `WEAK_SIG_ALG`. |
+| `score_security_headers` | `sessionId` or `headers` | 9 | Grades security headers 0–100 / A+–F. Per-header analysis: CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy. Returns `recommendations[]` with priority. |
+| `lookup_dns` | `url` | 8 | OW. Full DNS: A/AAAA/MX/TXT/NS/CNAME/SOA + PTR reverse. Infers email provider (Google Workspace, M365, etc.), SPF/DKIM/DMARC status, service verifications (Stripe, Atlassian, Slack, etc.) from TXT records. Email security score 0–100. |
+
+### Category 11: Structured Data Extractors (New)
+
+Run on saved scrape pages — no browser needed.
+
+| Tool | Input | AI Use | Notes |
+|------|-------|--------|-------|
+| `extract_product_data` | `sessionId`, optional `pageIndex` | 9 | Structured e-commerce: name, price, currency, SKU, GTIN, MPN, brand, availability, rating, images[], variants[]. JSON-LD first, DOM heuristics fallback. Without `pageIndex` returns all detected product pages. |
+| `extract_job_listings` | `sessionId`, optional `pageIndex` | 8 | Structured job data: title, department, location, remote (bool), employmentType, salaryMin/Max, skills[] (60+ tech keywords), applyUrl. JSON-LD JobPosting + DOM fallback. |
+| `extract_company_info` | `sessionId`, optional `pageIndex` | 8 | Company profile: name, legalName, founded, employeeRange, address, registration (UK/US/EU), industry (20 categories), mission, socialProfiles (LinkedIn/Twitter/GitHub/etc.), techStack. Merges across all pages when no `pageIndex` given. |
+
+### Category 12: Site-Level Analysis (New)
+
+Algorithmic tools returning structured data for AI reasoning — no external API calls.
+
+| Tool | Input | AI Use | Notes |
+|------|-------|--------|-------|
+| `get_link_graph` | `sessionId` | 9 | Directed link graph: hub pages (high out-degree), authority pages (high in-degree), orphan pages (0 in-degree), dead ends (0 out-degree). Also returns redirect chains and subdomain discovery. |
+| `check_broken_links` | `sessionId`, optional `internalOnly`, `maxLinks` | 8 | OW. Concurrent HEAD requests (max 10 parallel, 5 req/s rate limit). Returns broken[], redirected[], ok count. |
+| `classify_pages` | `sessionId` | 9 | Labels every page: product / checkout / pricing / blog / about / contact / login / signup / dashboard / careers / landing / documentation / search-results / error. URL patterns + text signals. |
+| `flag_anomalies` | `sessionId` | 8 | Statistical anomaly detection: page size z-score ≥ 2.5, near-empty pages, excessive external domains (>20), high JS error count (>5), missing critical security headers. |
+| `find_patterns` | `sessionId` | 9 | Cross-page pattern recognition: URL structure groups (`:id`/`:uuid` normalization), H1 word frequency, shared nav items, API path patterns. |
+| `extract_business_intel` | `sessionId` | 9 | Business intelligence from all pages: pricing tiers (regex patterns), business metrics (users/revenue/customers), contact info aggregation, tech stack, company profiles. |
+
+---
+
+## Source Module → MCP Tool Mapping
+
+| Source module | Exported functions | Covered by MCP tool |
+|---------------|-------------------|---------------------|
+| `src/scraper.js` | `ScraperSession`, `clearSession` | `scrape_url`, `batch_scrape` / `clear_saved_session` |
+| `src/extractor.js` | `extractPageData` | Internal (called during scrape; results exposed via content tools) |
+| `src/auth.js` | `handleAuth` | Internal (called by scraper during login); agent interacts via `submit_verification_code`, `submit_scrape_credentials` |
+| `src/scheduler.js` | `createSchedule`, `deleteSchedule`, `listSchedules` | `schedule_scrape`, `delete_schedule`, `list_schedules` |
+| `src/diff.js` | `diffScrapes` | `compare_scrapes` |
+| `src/generators.js` | `generateReact`, `extractCSS`, `generateMarkdown`, `generateSitemap` | `generate_react`, `generate_css`, `to_markdown`, `generate_sitemap` |
+| `src/schema-inferrer.js` | `inferSchema` | `infer_schema` |
+| `src/entity-extractor.js` | `extractEntities` | `extract_entities` |
+| `src/har-exporter.js` | `exportHAR` | `export_har` |
+| `src/oidc-tester.js` | `performOidcSecurityTests`, `testTlsFingerprint` | `test_oidc_security`, `test_tls_fingerprint` |
+| `src/jwt-decoder.js` | `decodeJWT`, `extractJWTs` | `decode_jwt_tokens` |
+| `src/dns-lookup.js` | `lookupDNS` | `lookup_dns` |
+| `src/ssl-inspector.js` | `inspectSSL` | `inspect_ssl` |
+| `src/security-scorer.js` | `scoreSecurityHeaders` | `score_security_headers` |
+| `src/link-graph.js` | `buildLinkGraph`, `findRedirectChains`, `discoverSubdomains`, `checkBrokenLinks` | `get_link_graph`, `check_broken_links` |
+| `src/product-extractor.js` | `extractProductData` | `extract_product_data` |
+| `src/job-extractor.js` | `extractJobData` | `extract_job_listings` |
+| `src/company-extractor.js` | `extractCompanyInfo` | `extract_company_info` |
+
+**Coverage: 100%** — all exported source functions are reachable via MCP.
+
+**Inline tools (no source module — implemented directly in mcp-server.js handlers):**
+- `extract_structured_data` — reads `page.meta.jsonLD/ogTags/twitterTags` from save files
+- `crawl_sitemap` — HTTP fetch + XML `<loc>` parsing, no Playwright
+- `take_screenshot` — POST /api/screenshot (Playwright headless)
+- `fill_form` — POST /api/fill-form (Playwright headless)
+- `monitor_page` / `delete_monitor` — state in `data/monitors.json`, diff via `src/diff.js`
+- `classify_pages` — URL + text heuristics, 14 page types
+- `flag_anomalies` — z-score statistical analysis
+- `find_patterns` — URL normalization, frequency analysis
+- `extract_business_intel` — regex-based pricing/metrics extraction + company-extractor.js
+
+---
+
+## REST Endpoints Not Exposed via MCP
+
+| Endpoint | Reason |
+|----------|--------|
+| `GET /api/favicon` | UI-only utility |
+| `POST /api/ai/chat` | Frontend wrapper around `research_url` MCP tool — no new capability |
+
+---
+
+## New Capture Capabilities (scraper.js additions)
+
+These are flags on `scrape_url` / the scraper session — not separate tools, but new data available in scrape results:
+
+| Flag | What it captures |
+|------|-----------------|
+| `captureModals: true` | Clicks modal triggers, captures dialog innerHTML |
+| `captureAccordions: true` | Clicks accordion/tab triggers, captures revealed content |
+| `captureInfiniteScroll: true` | Scrolls N times (`infiniteScrollSteps`), diffs DOM after each |
+| `captureSearchSuggestions: true` | Types into search inputs, captures autocomplete results |
+| `capturePagination: true` | Follows `rel=next` up to `maxPaginationPages` pages |
+
+**Always-on new captures in scrape results:**
+- `captures.corsPreflights[]` — OPTIONS requests with all CORS headers
+- `captures.cspViolations[]` — Content Security Policy violation events
+- `captures.webrtcConnections[]` — ICE candidates, SDP signaling URLs
+- `captures.deviceApiCalls[]` — geolocation/camera/mic/notification permission requests
+- `result.httpVersion` — HTTP/1.1 vs HTTP/2 vs HTTP/3 per page
+- Per-request `timing: { dns, tcp, ssl, ttfb, transfer }` on all REST/GraphQL calls
+- `page.sourceMaps[]` — source map URLs from minified scripts
+- `page.feeds[]` — RSS/Atom/JSON Feed links
+- `page.pdfLinks[]` — PDF file links
+- `page.apiSpecLinks[]` — OpenAPI/Swagger spec links
+- `page.cookieConsent` — GDPR consent vendor + model (10 vendors detected)
+- `page.meta.language` + `page.meta.hreflang[]` — language detection
+- gRPC binary frame decoding (content-type: application/grpc)
+- Service worker strategy analysis (cache-first, network-first, Workbox, precache count)
+
+---
+
+## Rules for Adding New Tools
+
+1. **Define in TOOLS array** (mcp-server.js, near line 2885). Include `name`, `description`, `inputSchema`.
+2. **Classify** — add to one of: `READ_ONLY_TOOL_NAMES`, `DESTRUCTIVE_TOOL_NAMES`, `OPEN_WORLD_TOOL_NAMES` (can be in multiple). Never leave unclassified.
+3. **Add handler** in `handleTool()` switch. Follow existing pattern: validate inputs with `ensureNonEmptyString()`, call via `expectOk(await post(...))` for HTTP tools, or call imported function directly for analysis tools.
+4. **Add REST endpoint** in `src/server.js` if the tool needs new backend logic (browser, file I/O). Import the source module at the top of both server.js and mcp-server.js.
+5. **Update this file** — add the tool to its category table, update tool count, source mapping if new module.
+
+### Classification guide
+
+| Flag | When to use |
+|------|-------------|
+| `READ_ONLY_TOOL_NAMES` | Tool reads data only, never mutates state. Safe for AI to call freely. |
+| `DESTRUCTIVE_TOOL_NAMES` | Tool deletes or irreversibly changes state. Prompt user before calling. |
+| `OPEN_WORLD_TOOL_NAMES` | Tool makes outbound network calls to external URLs. Tells AI to be careful about scope. |
+
+A tool can be in multiple sets (e.g., `check_broken_links` is both RO and OW).
+
+---
+
+## Known Issues & Planned Improvements
+
+All 13 issues from the initial audit were fixed on 2026-04-18. Round 2 improvements (3 fixes + 5 new tools) added same day. Round 3 (13 new tools + 8 new modules) added 2026-04-30.
+
+| Status | Fix | Details |
+|--------|-----|---------|
+| ✅ | Classification flags | `pause_scrape`, `resume_scrape`, `submit_verification_code`, `submit_scrape_credentials` now have rich descriptions |
+| ✅ | openWorld flags | `find_graphql_endpoints`, `find_site_issues` added to OPEN_WORLD_TOOL_NAMES |
+| ✅ | Schedule persistence | `src/scheduler.js` saves to `data/schedules.json`, restores on startup |
+| ✅ | `http_fetch` cookie jar | Supports `method`, `body`, `sessionId` (reuses cookies from saved scrape session) |
+| ✅ | `export_har` real timings | `src/scraper.js` captures `requestMs`/`duration` on all API calls |
+| ✅ | `extract_entities` E.164 | International phone patterns; E.164 normalization; social platform handles |
+| ✅ | `batch_scrape` isolation | Each URL runs independently with concurrency cap; per-URL success/fail results |
+| ✅ | `get_api_calls` filters | Added `method`, `domain`, `statusMin`, `statusMax`, `urlContains` filter params |
+| ✅ | `map_site_for_goal` cap | Added `maxRounds` param — hard cap on follow-up crawl rounds |
+| ✅ | `compare_scrapes` semantic | Jaccard similarity, price change detection, changed-page list |
+| ✅ | `get_save_overview` top endpoints | `topActiveEndpoints` field — top-5 REST endpoints by call frequency |
+| ✅ | `test_oidc_security` replay | `auth_code_replay` test added |
+| ✅ | Round 3: 13 new tools | Categories 10–12 above (security analysis, structured extractors, site-level analysis) |
+| ✅ | Round 3: network capture | CORS preflights, CSP violations, WebRTC, device API, gRPC, per-request timing, HTTP version |
+| ✅ | Round 3: interaction modes | Modals, accordions, infinite scroll, search suggestions, pagination, dropdowns |
+| ✅ | Round 3: extractor additions | Language/hreflang, feeds, PDF links, OpenAPI specs, cookie consent, source maps |
+| ✅ | Round 3: SW strategy analysis | Cache-first/network-first/stale-while-revalidate detection, Workbox, precache count |
+
+---
+
+## Test Files
+
+| File | What it covers |
+|------|---------------|
+| `tests/security/oidc_lab.test.js` | All 8 OIDC test types against generic mock IdP |
+| `tests/security/mock_idp.js` | Generic mock OIDC/OAuth2 server |
+| `tests/security/pingfed_lab.test.js` | PingFederate-realistic scenario tests |
+| `tests/security/mock_pingfederate.js` | PingFed mock with PA_-prefixed clients, PingAccess headers |
+
+Run tests: `node tests/security/oidc_lab.test.js` or `node tests/security/pingfed_lab.test.js`
+
+---
+
+*Last updated: 2026-04-30. Tool count: 68.*

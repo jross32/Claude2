@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "web-scraper": {
+      "command": "node",
+      "args": ["./mcp-server.js"],
+      "env": {
+        "OLLAMA_FAST_MODEL": "llama3.2:1b",
+        "OLLAMA_DEEP_MODEL": "llama3.2:3b",
+        "OLLAMA_KEEP_ALIVE": "10m"
+      }
+    }
+  }
+}
