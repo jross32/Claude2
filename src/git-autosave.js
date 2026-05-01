@@ -60,10 +60,7 @@ async function autosave() {
 
     // Check if there's anything to commit
     const status = await git('status', '--porcelain');
-    if (!status) {
-      console.log('[git-autosave] Nothing to commit, working tree clean.');
-      return;
-    }
+    if (!status) return; // nothing to do — stay quiet
 
     const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
     await git('commit', '-m', `auto-save: ${timestamp}`);
@@ -72,7 +69,8 @@ async function autosave() {
     await git('push');
     console.log('[git-autosave] Pushed to remote.');
   } catch (err) {
-    console.error('[git-autosave] Error:', err.message);
+    // Non-fatal — log once and move on, will retry at next interval
+    console.warn('[git-autosave] Skipped this cycle:', err.message);
   } finally {
     _running = false;
   }
