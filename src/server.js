@@ -1530,6 +1530,147 @@ app.post('/api/extract-company', (req, res) => {
 const apiRouter = require('./apiRouter');
 app.use('/api/mcp', apiRouter);
 
+// ── MCP docs endpoints ────────────────────────────────────────────────────────
+app.get('/api/mcp-meta', (req, res) => {
+  res.json({ tools: MCP_TOOLS, prompts: MCP_PROMPTS, toolCount: MCP_TOOLS.length, promptCount: MCP_PROMPTS.length });
+});
+
+app.get('/docs', (req, res) => {
+  const RO_SET = new Set(['get_scrape_status','list_saves','get_save_overview','get_page_text','list_links','list_images','list_forms','list_internal_pages','get_tech_stack','get_api_calls','get_api_surface','find_graphql_endpoints','search_scrape_text','extract_entities','extract_structured_data','extract_product_data','extract_job_listings','extract_company_info','extract_business_intel','extract_deals','to_markdown','generate_react','generate_css','generate_sitemap','export_har','infer_schema','scan_pii','score_security_headers','check_broken_links','get_link_graph','find_site_issues','classify_pages','find_patterns','flag_anomalies','analyze_sentiment','detect_intent','normalize_across_sites','score_diff_significance','list_active_scrapes','list_schedules','check_saved_session','get_known_site_credentials','get_store_context','detect_site','preflight_url','lookup_dns','inspect_ssl','decode_jwt_tokens']);
+  const OW_SET = new Set(['scrape_url','batch_scrape','research_url','map_site_for_goal','http_fetch','probe_endpoints','introspect_graphql','fill_form','take_screenshot','crawl_sitemap','monitor_page','schedule_scrape','test_tls_fingerprint','check_broken_links','get_link_graph','lookup_dns','inspect_ssl']);
+  const D_SET  = new Set(['delete_save','delete_schedule','delete_monitor','clear_saved_session','stop_scrape']);
+
+  const CATS = {
+    'Scraping': ['scrape_url','batch_scrape','http_fetch','fill_form','take_screenshot'],
+    'Session Management': ['list_active_scrapes','get_scrape_status','stop_scrape','pause_scrape','resume_scrape','submit_scrape_credentials','submit_verification_code','list_saves','delete_save','check_saved_session','clear_saved_session','get_known_site_credentials'],
+    'Page Data': ['get_page_text','list_links','list_images','list_forms','list_internal_pages','search_scrape_text','to_markdown','get_save_overview'],
+    'Intelligence': ['extract_entities','extract_structured_data','extract_product_data','extract_job_listings','extract_company_info','extract_business_intel','extract_deals','get_tech_stack','get_store_context'],
+    'API Capture': ['get_api_calls','get_api_surface','find_graphql_endpoints','introspect_graphql','infer_schema','export_har'],
+    'Site Analysis': ['detect_site','preflight_url','find_site_issues','classify_pages','find_patterns','flag_anomalies','analyze_sentiment','detect_intent','map_site_for_goal','normalize_across_sites','research_url'],
+    'SEO & Links': ['get_link_graph','check_broken_links','generate_sitemap','crawl_sitemap'],
+    'Security': ['score_security_headers','test_tls_fingerprint','scan_pii','decode_jwt_tokens','inspect_ssl','lookup_dns','probe_endpoints'],
+    'Code Generation': ['generate_react','generate_css'],
+    'Scheduling & Monitoring': ['schedule_scrape','list_schedules','delete_schedule','monitor_page','delete_monitor','compare_scrapes','score_diff_significance'],
+  };
+
+  const byName = {};
+  MCP_TOOLS.forEach(t => { byName[t.name] = t; });
+  const categorized = new Set();
+  let toolsHtml = '';
+
+  for (const [cat, names] of Object.entries(CATS)) {
+    const catTools = names.map(n => byName[n]).filter(Boolean);
+    if (!catTools.length) continue;
+    catTools.forEach(t => categorized.add(t.name));
+    toolsHtml += `<div class="category" data-cat="${cat}"><div class="category-title">${cat} (${catTools.length})</div>`;
+    for (const tool of catTools) {
+      const badges = [];
+      if (RO_SET.has(tool.name)) badges.push('<span class="badge badge-ro">RO</span>');
+      if (OW_SET.has(tool.name)) badges.push('<span class="badge badge-ow">OW</span>');
+      if (D_SET.has(tool.name))  badges.push('<span class="badge badge-d">D</span>');
+      const props = tool.inputSchema?.properties || {};
+      const required = new Set(tool.inputSchema?.required || []);
+      const params = Object.entries(props).map(([k, v]) =>
+        `<div class="param"><span class="param-name">${k}${required.has(k) ? '<span class="req">*</span>' : ''}</span><span class="param-type">${v.type || 'any'}</span><span class="param-desc">${v.description || ''}</span></div>`
+      ).join('');
+      toolsHtml += `<div class="tool" data-search="${(tool.name + ' ' + (tool.description || '')).toLowerCase()}">
+        <div class="tool-header" onclick="toggle(this)">
+          <span class="tool-name">${tool.name}</span>
+          <span class="tool-desc">${tool.description || ''}</span>
+          <span class="badges">${badges.join('')}</span>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="tool-body">${params ? `<div class="param-list">${params}</div>` : '<p class="no-params">No parameters.</p>'}</div>
+      </div>`;
+    }
+    toolsHtml += '</div>';
+  }
+
+  const uncatTools = MCP_TOOLS.filter(t => !categorized.has(t.name));
+  if (uncatTools.length) {
+    toolsHtml += `<div class="category" data-cat="Other"><div class="category-title">Other (${uncatTools.length})</div>`;
+    for (const tool of uncatTools) {
+      toolsHtml += `<div class="tool" data-search="${(tool.name + ' ' + (tool.description || '')).toLowerCase()}">
+        <div class="tool-header" onclick="toggle(this)"><span class="tool-name">${tool.name}</span><span class="tool-desc">${tool.description || ''}</span><span class="chevron">▶</span></div>
+        <div class="tool-body"><p class="no-params">No parameters.</p></div>
+      </div>`;
+    }
+    toolsHtml += '</div>';
+  }
+
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Web Scraper MCP — Tool Reference</title>
+<style>
+:root{--bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--accent:#6c8ef5;--accent2:#4ade80;--text:#e2e8f0;--text2:#94a3b8;--border:#2d3148;--ro:#22c55e;--ow:#f59e0b;--d:#ef4444}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.6}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:15px;font-weight:600;white-space:nowrap}
+#search{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:13px;width:240px;outline:none}
+#search:focus{border-color:var(--accent)}
+.legend{display:flex;gap:12px;margin-left:auto}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.meta{color:var(--text2);font-size:12px;white-space:nowrap}
+main{max-width:1000px;margin:0 auto;padding:24px}
+.category{margin-bottom:28px}
+.category-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.tool{background:var(--surface);border:1px solid var(--border);border-radius:7px;margin-bottom:6px;overflow:hidden}
+.tool-header{padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none}
+.tool-header:hover{background:var(--surface2)}
+.tool-name{font-family:'JetBrains Mono','Fira Code',monospace;font-size:13px;font-weight:600;color:var(--accent);flex-shrink:0;min-width:200px}
+.tool-desc{color:var(--text2);font-size:12px;flex:1}
+.badges{display:flex;gap:4px;flex-shrink:0}
+.badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
+.badge-ro{background:rgba(34,197,94,.15);color:var(--ro);border:1px solid rgba(34,197,94,.3)}
+.badge-ow{background:rgba(245,158,11,.15);color:var(--ow);border:1px solid rgba(245,158,11,.3)}
+.badge-d{background:rgba(239,68,68,.15);color:var(--d);border:1px solid rgba(239,68,68,.3)}
+.chevron{color:var(--text2);font-size:10px;transition:transform .15s;flex-shrink:0}
+.tool-body{display:none;padding:0 14px 14px;border-top:1px solid var(--border)}
+.tool-body.open{display:block}
+.param-list{margin-top:10px}
+.param{display:grid;grid-template-columns:160px 70px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.param:last-child{border-bottom:none}
+.param-name{font-family:monospace;color:var(--accent2)}
+.req{color:var(--d);font-size:10px;margin-left:3px}
+.param-type{color:var(--text2)}
+.param-desc{color:var(--text2)}
+.no-params{color:var(--text2);font-size:12px;margin-top:8px}
+#no-results{text-align:center;color:var(--text2);padding:40px;display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Web Scraper MCP</h1>
+  <input id="search" type="text" placeholder="Search ${MCP_TOOLS.length} tools..." autocomplete="off">
+  <div class="legend">
+    <div class="legend-item"><span class="badge badge-ro">RO</span>Read-only</div>
+    <div class="legend-item"><span class="badge badge-ow">OW</span>Outbound</div>
+    <div class="legend-item"><span class="badge badge-d">D</span>Destructive</div>
+  </div>
+  <div class="meta">${MCP_TOOLS.length} tools · ${MCP_PROMPTS.length} prompts</div>
+</header>
+<main>
+  <div id="tool-list">${toolsHtml}</div>
+  <div id="no-results">No tools match your search.</div>
+</main>
+<script>
+function toggle(h){const b=h.nextElementSibling,c=h.querySelector('.chevron');b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(90deg)':'';}
+document.getElementById('search').addEventListener('input',function(){
+  const q=this.value.toLowerCase();
+  let vis=0;
+  document.querySelectorAll('.tool').forEach(el=>{const show=!q||el.dataset.search.includes(q);el.style.display=show?'':'none';if(show)vis++;});
+  document.querySelectorAll('.category').forEach(cat=>{cat.style.display=[...cat.querySelectorAll('.tool')].some(t=>t.style.display!=='none')?'':'none';});
+  document.getElementById('no-results').style.display=vis===0&&q?'':'none';
+});
+</script>
+</body>
+</html>`);
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
