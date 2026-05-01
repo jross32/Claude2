@@ -370,6 +370,41 @@ async function extractPageData(page, url, opts = {}) {
       id: el.id || null,
     }));
 
+    // ── THIRD-PARTY SCRIPT INVENTORY ──
+    const TP_DOMAINS = {
+      'google-analytics.com': 'analytics', 'googletagmanager.com': 'analytics',
+      'segment.com': 'analytics', 'mixpanel.com': 'analytics',
+      'amplitude.com': 'analytics', 'heap.io': 'analytics',
+      'hotjar.com': 'analytics', 'fullstory.com': 'analytics',
+      'posthog.com': 'analytics', 'clarity.ms': 'analytics',
+      'doubleclick.net': 'advertising', 'googlesyndication.com': 'advertising',
+      'facebook.net': 'advertising', 'connect.facebook.net': 'advertising',
+      'amazon-adsystem.com': 'advertising', 'outbrain.com': 'advertising',
+      'taboola.com': 'advertising', 'criteo.com': 'advertising',
+      'ads.twitter.com': 'advertising', 'ads.linkedin.com': 'advertising',
+      'sentry.io': 'error-monitoring', 'bugsnag.com': 'error-monitoring',
+      'rollbar.com': 'error-monitoring', 'raygun.io': 'error-monitoring',
+      'logrocket.com': 'error-monitoring',
+      'nr-data.net': 'monitoring', 'datadoghq.com': 'monitoring', 'newrelic.com': 'monitoring',
+      'optimizely.com': 'ab-testing', 'launchdarkly.com': 'ab-testing',
+      'split.io': 'ab-testing', 'statsig.com': 'ab-testing', 'growthbook.io': 'ab-testing',
+      'intercom.io': 'support', 'zdassets.com': 'support',
+      'freshworks.com': 'support', 'tawk.to': 'support', 'tidio.com': 'support',
+      'hs-scripts.com': 'marketing', 'hubspot.com': 'marketing', 'marketo.net': 'marketing',
+      'stripe.com': 'payment', 'paypal.com': 'payment', 'braintreepayments.com': 'payment',
+      'cdnjs.cloudflare.com': 'cdn', 'unpkg.com': 'cdn',
+      'jsdelivr.net': 'cdn', 'googleapis.com': 'cdn', 'bootstrapcdn.com': 'cdn',
+      'platform.twitter.com': 'social', 'platform.linkedin.com': 'social',
+    };
+    const _ownHost = (() => { try { return new URL(pageUrl).hostname.replace(/^www\./, ''); } catch { return ''; } })();
+    const thirdPartyScripts = scripts.filter(s => s.src).map(s => {
+      let domain = '';
+      try { domain = new URL(s.src).hostname.replace(/^www\./, ''); } catch { return null; }
+      if (!domain || domain === _ownHost || domain.endsWith('.' + _ownHost) || _ownHost.endsWith('.' + domain)) return null;
+      const catKey = Object.keys(TP_DOMAINS).find(k => domain === k || domain.endsWith('.' + k));
+      return { domain, url: s.src, category: catKey ? TP_DOMAINS[catKey] : 'unknown', async: s.async, defer: s.defer };
+    }).filter(Boolean);
+
     // ── STYLESHEETS ──
     const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(el => ({
       href: abs(el.href),
