@@ -1,0 +1,113 @@
+{
+  "timestamp": "2026-05-01T19:26:11.887Z",
+  "git_commit": "47cc31e",
+  "suite": "api",
+  "tests": [
+    {
+      "name": "POST /api/diff with two valid results → 200 + diff object",
+      "status": "pass",
+      "duration_ms": 70,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "keys": [
+          "pages",
+          "textContent",
+          "links",
+          "images",
+          "headings",
+          "semantic",
+          "apiCalls",
+          "assets",
+          "summary"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Diff result shows added page in resultB",
+      "status": "pass",
+      "duration_ms": 7,
+      "error": null,
+      "input": {},
+      "output": {
+        "addedPages": [
+          "http://example.com/new-page"
+        ]
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Diff result shows added text in resultB",
+      "status": "pass",
+      "duration_ms": 5,
+      "error": null,
+      "input": {},
+      "output": {
+        "addedTextCount": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/diff identical results → pages added/removed are empty",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "added": 0,
+        "removed": 0
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/diff with no body → 400",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/diff with empty results → does not 500",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/diff missing resultB → 400",
+      "status": "pass",
+      "duration_ms": 4,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 6980,
+    "avg_duration_ms": 997
+  }
+}
