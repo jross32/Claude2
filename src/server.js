@@ -1695,18 +1695,18 @@ main{max-width:1000px;margin:0 auto;padding:24px}
 <body>
 <header>
   <h1>Web Scraper MCP</h1>
-  <input id="search" type="text" placeholder="Search ${MCP_TOOLS.length} tools..." autocomplete="off">
-  <input id="prompt-search" type="text" placeholder="Search ${MCP_PROMPTS.length} prompts..." autocomplete="off">
+  <input id="search" type="text" placeholder="Search ${meta.counts.tools} tools..." autocomplete="off">
+  <input id="prompt-search" type="text" placeholder="Search ${meta.counts.prompts} prompts..." autocomplete="off">
   <div class="legend" id="tool-legend">
     <div class="legend-item"><span class="badge badge-ro">RO</span>Read-only</div>
     <div class="legend-item"><span class="badge badge-ow">OW</span>Outbound</div>
     <div class="legend-item"><span class="badge badge-d">D</span>Destructive</div>
   </div>
-  <div class="meta">${MCP_TOOLS.length} tools · ${MCP_PROMPTS.length} prompts</div>
+  <div class="meta">${meta.counts.tools} tools · ${meta.counts.prompts} prompts · ${meta.counts.fixedResources + meta.counts.resourceTemplates} resource definitions</div>
 </header>
 <div class="tabs">
-  <button class="tab active" data-tab="tools">Tools (${MCP_TOOLS.length})</button>
-  <button class="tab" data-tab="prompts">Prompts (${MCP_PROMPTS.length})</button>
+  <button class="tab active" data-tab="tools">Tools (${meta.counts.tools})</button>
+  <button class="tab" data-tab="prompts">Prompts (${meta.counts.prompts})</button>
 </div>
 <main>
   <div id="tab-tools" class="tab-panel active">
