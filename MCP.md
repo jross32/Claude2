@@ -46,7 +46,7 @@ Two patterns for tool implementation:
 
 ## Tool Count & Classification
 
-**Total: 68 tools · 22 prompts** (as of last update 2026-05-01)
+**Total: 70 tools · 22 prompts** (as of last update 2026-05-01)
 
 | Classification | Count |
 |----------------|-------|
@@ -200,6 +200,8 @@ Algorithmic tools returning structured data for AI reasoning — no external API
 | `flag_anomalies` | `sessionId` | 8 | Statistical anomaly detection: page size z-score ≥ 2.5, near-empty pages, excessive external domains (>20), high JS error count (>5), missing critical security headers. |
 | `find_patterns` | `sessionId` | 9 | Cross-page pattern recognition: URL structure groups (`:id`/`:uuid` normalization), H1 word frequency, shared nav items, API path patterns. |
 | `extract_business_intel` | `sessionId` | 9 | Business intelligence from all pages: pricing tiers (regex patterns), business metrics (users/revenue/customers), contact info aggregation, tech stack, company profiles. |
+| `extract_reviews` | `sessionId`, optional `pageIndex` | 8 | Review and rating data: aggregate rating, star score, review count, individual reviews. Sources: JSON-LD Review/AggregateRating, Open Graph product tags, text patterns. |
+| `get_robots_txt` | `url` | 8 | OW. Fetch and parse robots.txt from the site origin. Returns per-agent disallow/allow lists, crawl-delay, sitemap references, and `isFullyBlocked` flag. |
 
 ---
 
@@ -327,8 +329,10 @@ All 13 issues from the initial audit were fixed on 2026-04-18. Round 2 improveme
 | ✅ | Round 3: extractor additions | Language/hreflang, feeds, PDF links, OpenAPI specs, cookie consent, source maps |
 | ✅ | Round 3: SW strategy analysis | Cache-first/network-first/stale-while-revalidate detection, Workbox, precache count |
 | ✅ | Round 4: MCP Protocol upgrade | Sampling (AI via connected model), logging, progress notifications, resource subscriptions, argument completions, server instructions, toolset profiles, 14 new prompts (22 total), 4 docs resources, /docs HTML page, roots |
-| ✅ | Round 4: extractor additions | `headingOutline` (H1–H6 in doc order), `thirdPartyScripts` (categorized 3rd-party JS), `trackingPixels` (1×1 + known pixel patterns) |
+| ✅ | Round 4: extractor additions | `headingOutline` (H1–H6 in doc order), `thirdPartyScripts` (categorized 3rd-party JS), `trackingPixels` (1×1 + known pixel patterns), `csrfTokens` (hidden input + meta CSRF patterns) |
 | ✅ | Round 4: check_broken_links progress | `onProgress` callback added to `checkBrokenLinks` in link-graph.js; wired to MCP progress notifications |
+| ✅ | Round 4: new tools | `extract_reviews` (JSON-LD + OG + text patterns), `get_robots_txt` (full parse: groups, sitemaps, crawl-delay) |
+| ✅ | Round 4: /docs prompts tab | Tools/Prompts tab switcher; 22 prompts with arguments, usage examples, live search |
 
 ---
 
@@ -381,4 +385,4 @@ Run tests: `node tests/security/oidc_lab.test.js` or `node tests/security/pingfe
 
 ---
 
-*Last updated: 2026-05-01. Tool count: 68. Prompt count: 22.*
+*Last updated: 2026-05-01. Tool count: 70. Prompt count: 22. Version: 2.3.0.*

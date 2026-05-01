@@ -108,7 +108,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | PII scanning | ✅ | — | |
 | Cookie attributes (httpOnly, secure, SameSite) | ✅ | — | scraper.js cookies map lines 1676–1686 |
 | JWT token structure decode | ✅ | — | jwt-decoder.js — header/payload decode, security flags, expiry |
-| CSRF token patterns | ❌ | **7** | |
+| CSRF token patterns | ✅ | — | extractor.js csrfTokens — hidden inputs + meta tags matching 10 CSRF name patterns |
 | Tracking pixel inventory | ✅ | — | extractor.js trackingPixels — detects 1×1 images + 10 known pixel URL patterns + noscript fallback |
 | Fingerprinting script detection | ❌ | **7** | Canvas fingerprinting, AudioContext fingerprinting, etc. |
 | What the site sees about your browser | ❌ | **7** | User agent, IP, headers the server receives — reverse fingerprint |
@@ -227,7 +227,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | PWA manifest parsing | ❌ | **5** | |
 | Push notification setup detected | ❌ | **4** | |
 | OpenAPI / Swagger spec detection | ✅ | — | extractor.js apiSpecLinks — common spec paths and link detection |
-| robots.txt disallowed paths | ❌ | **7** | Intentionally excluded — scraper does not fetch robots.txt |
+| robots.txt disallowed paths | ✅ | — | get_robots_txt tool — parses all user-agent groups, sitemaps, crawl-delay, allow/disallow lists |
 | App store links detected | ❌ | **4** | |
 | QR codes detected in images | ❌ | **3** | |
 | Email newsletter signup detection | ❌ | **4** | |
@@ -263,7 +263,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | CSS generation from scraped page | ✅ | — | |
 | Markdown generation | ✅ | — | |
 | Product data (name, price, SKU, description) | ✅ | — | product-extractor.js — JSON-LD + DOM heuristics, variants |
-| Review / rating data | ❌ | **6** | |
+| Review / rating data | ✅ | — | extract_reviews tool + review-extractor.js — JSON-LD Review/AggregateRating, Open Graph, text patterns |
 | Event data (dates, locations, tickets) | ❌ | **6** | |
 | Job listing data | ✅ | — | job-extractor.js — title, dept, salary, skills, applyUrl |
 | Real estate listing data | ❌ | **5** | |

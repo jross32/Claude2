@@ -44,6 +44,7 @@ const { buildLinkGraph, findRedirectChains, discoverSubdomains, checkBrokenLinks
 const { extractProductData } = require('./src/product-extractor');
 const { extractJobData } = require('./src/job-extractor');
 const { extractCompanyInfo } = require('./src/company-extractor');
+const { extractReviews } = require('./src/review-extractor');
 
 const BASE_URL = process.env.SCRAPER_URL || 'http://localhost:3000';
 const WS_URL = BASE_URL.replace(/^http/, 'ws');
@@ -104,7 +105,7 @@ const TOOLSETS = {
   research:  ['scrape_url','research_url','get_page_text','extract_entities','to_markdown','list_links','list_images','get_tech_stack','detect_site','preflight_url','http_fetch'],
   security:  ['score_security_headers','test_oidc_security','test_tls_fingerprint','scan_pii','inspect_ssl','decode_jwt_tokens','get_api_calls','find_graphql_endpoints','probe_endpoints','lookup_dns'],
   ecommerce: ['scrape_url','extract_product_data','extract_deals','extract_structured_data','extract_entities','get_page_text','list_images','detect_site'],
-  seo:       ['scrape_url','get_link_graph','check_broken_links','generate_sitemap','crawl_sitemap','list_links','list_internal_pages','find_site_issues'],
+  seo:       ['scrape_url','get_link_graph','check_broken_links','generate_sitemap','crawl_sitemap','list_links','list_internal_pages','find_site_issues','get_robots_txt'],
   ops:       ['list_active_scrapes','get_scrape_status','stop_scrape','pause_scrape','resume_scrape','list_schedules','schedule_scrape','delete_schedule','monitor_page','delete_monitor','list_saves','delete_save','check_saved_session','clear_saved_session','get_save_overview'],
   full:      null, // null = all tools
 };
@@ -4008,6 +4009,29 @@ const TOOLS = [
       required: ['sessionId'],
     },
   },
+  {
+    name: 'extract_reviews',
+    description: 'Extract review and rating data from a scraped page: aggregate rating, star score, review count, and individual reviews. Sources: JSON-LD Review/AggregateRating, Open Graph, and text patterns.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string', description: 'Session ID of a completed scrape' },
+        pageIndex: { type: 'number', description: 'Page index (0-based). Omit to scan all pages and aggregate.' },
+      },
+      required: ['sessionId'],
+    },
+  },
+  {
+    name: 'get_robots_txt',
+    description: 'Fetch and parse robots.txt for a URL. Returns disallowed paths, allowed paths, crawl delay, and referenced sitemaps — all per user-agent. Reveals what the site intentionally hides from crawlers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Any URL on the target site — the origin\'s /robots.txt is fetched' },
+      },
+      required: ['url'],
+    },
+  },
 ];
 
 const READ_ONLY_TOOL_NAMES = new Set([
@@ -4062,6 +4086,8 @@ const READ_ONLY_TOOL_NAMES = new Set([
   'flag_anomalies',
   'find_patterns',
   'extract_business_intel',
+  'extract_reviews',
+  'get_robots_txt',
 ]);
 
 const DESTRUCTIVE_TOOL_NAMES = new Set([
@@ -4090,6 +4116,7 @@ const OPEN_WORLD_TOOL_NAMES = new Set([
   'take_screenshot',
   'fill_form',
   'monitor_page',
+  'get_robots_txt',
 ]);
 
 TOOLS.forEach((tool) => {
@@ -5928,6 +5955,94 @@ async function handleTool(name, args, progressToken = null) {
       };
     }
 
+    // ── extract_reviews ───────────────────────────────────────────────────────
+    case 'extract_reviews': {
+      const save = await loadSave(input.sessionId);
+      const pages = save.pages || [];
+      if (input.pageIndex !== undefined) {
+        const page = pages[input.pageIndex];
+        if (!page) throw new Error(`Page ${input.pageIndex} not found`);
+        return extractReviews(page);
+      }
+      // Scan all pages, aggregate
+      const allReviews = [];
+      let bestAggregate = null;
+      let reviewPages = 0;
+      for (const page of pages) {
+        const result = extractReviews(page);
+        if (result.isReviewPage) {
+          reviewPages++;
+          allReviews.push(...result.reviews);
+          if (!bestAggregate && result.aggregateRating) bestAggregate = result.aggregateRating;
+        }
+      }
+      return {
+        reviewPages,
+        aggregateRating: bestAggregate,
+        totalReviews: allReviews.length,
+        reviews: allReviews.slice(0, 50),
+      };
+    }
+
+    // ── get_robots_txt ────────────────────────────────────────────────────────
+    case 'get_robots_txt': {
+      const { url } = input;
+      let origin;
+      try { origin = new URL(url).origin; } catch { throw new Error('Invalid URL'); }
+      const robotsUrl = `${origin}/robots.txt`;
+      let raw;
+      try {
+        const res = await fetch(robotsUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WebScraper/2.2)' }, redirect: 'follow', signal: AbortSignal.timeout(10000) });
+        if (!res.ok) return { found: false, status: res.status, url: robotsUrl };
+        raw = await res.text();
+      } catch (err) {
+        return { found: false, error: err.message, url: robotsUrl };
+      }
+
+      // Parse
+      const lines = raw.split('\n').map(l => l.split('#')[0].trim()).filter(Boolean);
+      const groups = [];
+      let current = null;
+      const sitemaps = [];
+
+      for (const line of lines) {
+        const colon = line.indexOf(':');
+        if (colon === -1) continue;
+        const key = line.slice(0, colon).trim().toLowerCase();
+        const val = line.slice(colon + 1).trim();
+        if (key === 'user-agent') {
+          if (!current || current.disallow.length || current.allow.length) {
+            current = { userAgent: val, disallow: [], allow: [], crawlDelay: null };
+            groups.push(current);
+          } else {
+            current.userAgent += ', ' + val;
+          }
+        } else if (key === 'disallow' && current) {
+          if (val) current.disallow.push(val);
+        } else if (key === 'allow' && current) {
+          if (val) current.allow.push(val);
+        } else if (key === 'crawl-delay' && current) {
+          current.crawlDelay = parseFloat(val) || null;
+        } else if (key === 'sitemap') {
+          if (val) sitemaps.push(val);
+        }
+      }
+
+      const allBots = groups.find(g => g.userAgent === '*');
+      return {
+        found: true,
+        url: robotsUrl,
+        groups,
+        sitemaps,
+        allBotsDisallowed: allBots?.disallow || [],
+        allBotsAllowed: allBots?.allow || [],
+        isFullyBlocked: allBots?.disallow?.includes('/') || false,
+        crawlDelay: allBots?.crawlDelay || null,
+        groupCount: groups.length,
+        raw: raw.substring(0, 10000),
+      };
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -6957,7 +7072,7 @@ Report: JWT security assessment, CORS policy findings (wildcard exposure, creden
 // ── MCP server setup ────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'web-scraper', version: '2.2.0' },
+  { name: 'web-scraper', version: '2.3.0' },
   {
     capabilities: {
       tools:       {},
