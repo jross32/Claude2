@@ -231,7 +231,9 @@ async function main() {
 
       const quickstart = await client.readResource({ uri: 'scrape://docs/quickstart' });
       const quickstartText = quickstart.contents?.[0]?.text || '';
-      if (!/10-step onboarding/i.test(quickstartText)) throw new Error('Expected quickstart docs content');
+      if (!/(10-step onboarding|10-step getting started)/i.test(quickstartText)) {
+        throw new Error('Expected quickstart docs content');
+      }
 
       const overview = await client.readResource({ uri: `scrape://save/${fixtureId}/overview` });
       const overviewJson = parseResourceJson(overview);
@@ -285,11 +287,13 @@ async function main() {
     });
   } catch (err) {
     if (runner.tests.length === 0) {
-      runner.run('MCP protocol integration bootstraps successfully', async () => {
+      await runner.run('MCP protocol integration bootstraps successfully', async () => {
         throw new Error(`${err.message}${getStderr() ? `\n${getStderr()}` : ''}`);
       });
     } else {
-      console.error('Integration suite crashed:', err.message);
+      await runner.run('MCP protocol integration remains stable after setup', async () => {
+        throw new Error(`${err.message}${getStderr() ? `\n${getStderr()}` : ''}`);
+      });
     }
   } finally {
     for (const sessionId of fixtureIds) {
