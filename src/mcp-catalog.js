@@ -92,7 +92,6 @@ const TOOL_CATEGORY_GROUPS = [
       'flag_anomalies',
       'find_patterns',
       'crawl_sitemap',
-      'get_robots_txt',
       'get_cache_headers',
       'get_page_word_count',
     ],
