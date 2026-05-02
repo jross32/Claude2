@@ -2042,7 +2042,9 @@ document.getElementById('prompt-search').addEventListener('input',function(){
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
-  gitAutosave.start();
+  if (process.env.DISABLE_GIT_AUTOSAVE !== '1' && process.env.NODE_ENV !== 'test') {
+    gitAutosave.start();
+  }
 });
 
 async function shutdownBrowserSessions() {
