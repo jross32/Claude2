@@ -176,6 +176,7 @@ const TOOL_EXAMPLES = {
   get_robots_txt: { url: 'https://example.com/docs' },
   get_cache_headers: { sessionId: 'save-123' },
   lookup_ip_info: { hostname: 'example.com' },
+  get_page_word_count: { sessionId: 'save-123' },
   server_info: {},
 };
 
