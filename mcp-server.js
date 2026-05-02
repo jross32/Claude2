@@ -86,6 +86,8 @@ const RESEARCH_TOOL_MODES = new Set(['auto', 'fast', 'deep']);
 const SAVES_DIR = path.join(__dirname, 'scrape-saves');
 const DATA_DIR = path.join(__dirname, 'data');
 const LOGS_DIR = path.join(__dirname, 'logs');
+const BROWSER_SESSION_DIR = path.join(__dirname, '.browser-sessions');
+const BROWSER_SESSION_SAVES_DIR = path.join(BROWSER_SESSION_DIR, 'saves');
 const ORIENTATION_SCOPE_LEVELS = new Set([1, 2, 3]);
 const ORIENTATION_SEED_PAGE_COUNT = Number(process.env.ORIENTATION_SEED_PAGE_COUNT) || 1;
 const ORIENTATION_FOLLOWUP_BATCH_SIZE = Number(process.env.ORIENTATION_FOLLOWUP_BATCH_SIZE) || 6;
@@ -3050,8 +3052,11 @@ async function buildServerInfoSnapshot() {
     'AI_ANALYSIS_API_KEY',
     'API_KEY',
     'MCP_TOOLSET',
+    'MAX_ACTIVE_BROWSER_SESSIONS',
+    'MAX_ACTIVE_HEADFUL_BROWSER_SESSIONS',
+    'BROWSER_SESSION_IDLE_TTL_MS',
   ];
-  const directories = [SAVES_DIR, DATA_DIR, LOGS_DIR].map((dirPath) => ({
+  const directories = [SAVES_DIR, DATA_DIR, LOGS_DIR, BROWSER_SESSION_DIR, BROWSER_SESSION_SAVES_DIR].map((dirPath) => ({
     path: dirPath,
     exists: fs.existsSync(dirPath),
     writable: fs.existsSync(dirPath) ? canWriteDir(dirPath) : false,
@@ -3064,6 +3069,8 @@ async function buildServerInfoSnapshot() {
   };
   let saveCount = 0;
   let activeCount = 0;
+  let browserSaveCount = 0;
+  let activeBrowserCount = 0;
   try {
     const response = await get('/api/saves?includeHidden=1');
     restServer = {
@@ -3079,6 +3086,16 @@ async function buildServerInfoSnapshot() {
   try {
     const active = await fetchActiveScrapes();
     activeCount = Array.isArray(active) ? active.length : 0;
+  } catch {}
+
+  try {
+    const browserResponse = await get('/api/browser/saves');
+    browserSaveCount = Array.isArray(browserResponse.body) ? browserResponse.body.length : 0;
+  } catch {}
+
+  try {
+    const browserSessions = await get('/api/browser/sessions');
+    activeBrowserCount = Array.isArray(browserSessions.body) ? browserSessions.body.length : 0;
   } catch {}
 
   let playwrightInstalled = false;
@@ -3104,6 +3121,8 @@ async function buildServerInfoSnapshot() {
       fixedResources: FIXED_RESOURCES.length,
       dynamicResources: (saveCount * 7) + activeCount,
       resourceTemplates: RESOURCE_TEMPLATES.length,
+      browserSaves: browserSaveCount,
+      activeBrowserSessions: activeBrowserCount,
     },
     capabilities: {
       tools: true,
@@ -3124,6 +3143,9 @@ async function buildServerInfoSnapshot() {
     runtime: {
       playwrightInstalled,
       activeSubscriptions: activeSubscriptions.size,
+      browserAutomation: true,
+      activeBrowserSessions: activeBrowserCount,
+      browserSaves: browserSaveCount,
     },
     connectivity: {
       restServer,
@@ -3651,6 +3673,17 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_robots_txt',
+    description: 'Fetch and parse robots.txt for a URL. Returns disallowed paths, allowed paths, crawl delay, and referenced sitemaps — all per user-agent. Reveals what the site intentionally hides from crawlers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'URL of the site (any page URL — the origin robots.txt will be fetched)' },
+      },
+      required: ['url'],
+    },
+  },
+  {
     name: 'extract_deals',
     description: 'Extract likely deals, offers, coupons, or sale snippets from saved page content and captured API payloads.',
     inputSchema: {
@@ -3954,6 +3987,223 @@ const TOOLS = [
   },
 
   {
+    name: 'open_browser_session',
+    description: 'Open a persistent browser automation session for AI-guided interaction. Returns a browserSessionId plus an initial page snapshot with interactable elements and warnings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'URL to open in the browser session. Optional when restoreSaveId is provided.' },
+        viewMode: { type: 'string', enum: ['console', 'desktop', 'both'], description: 'How the browser should be shown: in-app live console, visible desktop browser, or both. Default: console.' },
+        persistenceMode: { type: 'string', enum: ['ephemeral', 'auth_state', 'full_session'], description: 'How much state should be saveable and restorable. Default: auth_state.' },
+        restoreSaveId: { type: 'string', description: 'Optional browserSaveId to restore into a new live session.' },
+      },
+    },
+  },
+  {
+    name: 'list_browser_sessions',
+    description: 'List all active browser automation sessions, including current URL, view mode, save linkage, and latest narration.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'list_browser_session_saves',
+    description: 'List saved browser automation states that can be restored later. Useful for reusing authenticated sessions or resuming multi-step flows.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_browser_session_state',
+    description: 'Get the current state of a live browser automation session, including the latest page snapshot, recent narration, interactables, logs, and network hints.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID returned by open_browser_session' },
+        refreshSnapshot: { type: 'boolean', description: 'Refresh the page snapshot before returning state (default: false)' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'navigate_browser_session',
+    description: 'Navigate an existing browser session to a new URL and return the updated page snapshot.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        url: { type: 'string', description: 'Destination URL' },
+        waitMs: { type: 'integer', description: 'Optional extra wait after navigation before inspection (default 0)' },
+      },
+      required: ['browserSessionId', 'url'],
+    },
+  },
+  {
+    name: 'inspect_browser_page',
+    description: 'Inspect the current browser page and return an AI-friendly snapshot: visible text summary, forms, interactables, warnings, and stable element IDs for follow-up actions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'click_browser_element',
+    description: 'Click an element in a live browser session. Prefer elementId from inspect_browser_page, but raw CSS selectors are accepted as a fallback.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        elementId: { type: 'string', description: 'Stable element ID returned by inspect_browser_page' },
+        selector: { type: 'string', description: 'Fallback CSS selector if elementId is unavailable' },
+        waitMs: { type: 'integer', description: 'Optional wait after the click before re-inspecting the page' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'type_into_browser_element',
+    description: 'Type text into an input, textarea, or editable control within a live browser session and return the updated page snapshot.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        elementId: { type: 'string', description: 'Stable element ID returned by inspect_browser_page' },
+        selector: { type: 'string', description: 'Fallback CSS selector if elementId is unavailable' },
+        value: { type: 'string', description: 'Text to type into the element' },
+        waitMs: { type: 'integer', description: 'Optional wait after typing before re-inspecting the page' },
+      },
+      required: ['browserSessionId', 'value'],
+    },
+  },
+  {
+    name: 'select_browser_option',
+    description: 'Select a new value in a dropdown within a live browser session and return the updated page snapshot.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        elementId: { type: 'string', description: 'Stable element ID returned by inspect_browser_page' },
+        selector: { type: 'string', description: 'Fallback CSS selector if elementId is unavailable' },
+        value: { type: 'string', description: 'Option value to select' },
+        label: { type: 'string', description: 'Fallback visible option label to select when value is unavailable' },
+        waitMs: { type: 'integer', description: 'Optional wait after selecting before re-inspecting the page' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'wait_for_browser_state',
+    description: 'Wait for a browser page to reach a target state such as a selector appearing, text showing up, or the URL changing, then return a fresh page snapshot.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        selector: { type: 'string', description: 'Optional CSS selector to wait for' },
+        state: { type: 'string', enum: ['attached', 'detached', 'visible', 'hidden'], description: 'Desired selector state when selector is provided (default: visible)' },
+        textIncludes: { type: 'string', description: 'Optional body text that must appear before returning' },
+        urlIncludes: { type: 'string', description: 'Optional URL fragment that must appear before returning' },
+        loadState: { type: 'string', enum: ['load', 'domcontentloaded', 'networkidle'], description: 'Optional Playwright load state to await' },
+        timeoutMs: { type: 'integer', description: 'Maximum wait time in milliseconds (default: 15000)' },
+        settleMs: { type: 'integer', description: 'Optional quiet period after the wait condition succeeds' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'browser_session_screenshot',
+    description: 'Capture a screenshot of the current page in a live browser session. The cursor and public narration overlay remain visible for easier debugging.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        fullPage: { type: 'boolean', description: 'Capture the full scrollable page instead of only the viewport (default false)' },
+        waitMs: { type: 'integer', description: 'Optional wait before capture in milliseconds' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'run_browser_steps',
+    description: 'Execute a compact multi-step browser automation workflow inside one live session. Step types supported in v1: navigate, inspect, click, type, select, wait, screenshot, and scrape.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        steps: {
+          type: 'array',
+          description: 'Ordered list of browser actions to run in sequence',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', description: 'Step type: navigate, inspect, click, type, select, wait, screenshot, or scrape' },
+            },
+            required: ['type'],
+          },
+        },
+      },
+      required: ['browserSessionId', 'steps'],
+    },
+  },
+  {
+    name: 'save_browser_session',
+    description: 'Save the current browser session state to disk for later restoration. Supports auth-state snapshots and fuller multi-tab session replays.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        name: { type: 'string', description: 'Optional human-readable label for the saved browser state' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'scrape_browser_session',
+    description: 'Hand the current live browser state off to the scraper so authenticated cookies and storage can be reused for a normal scrape capture.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+        url: { type: 'string', description: 'Optional URL override. Defaults to the current browser page.' },
+        maxPages: { type: 'integer', description: 'Max pages to capture in the scraper handoff (default: 3)' },
+        scrapeDepth: { type: 'integer', description: 'Depth to follow links during the scraper handoff (default: 1)' },
+        captureGraphQL: { type: 'boolean', description: 'Capture GraphQL during the scrape handoff (default: true)' },
+        captureREST: { type: 'boolean', description: 'Capture REST during the scrape handoff (default: true)' },
+        captureAssets: { type: 'boolean', description: 'Capture asset URLs during the scrape handoff (default: true)' },
+        autoScroll: { type: 'boolean', description: 'Auto-scroll pages during the scrape handoff (default: false)' },
+        fullCrawl: { type: 'boolean', description: 'Use full site crawl mode during the scrape handoff (default: false)' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'close_browser_session',
+    description: 'Close a live browser automation session and free its browser resources. Non-ephemeral sessions auto-save on close when possible.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSessionId: { type: 'string', description: 'Live browser session ID' },
+      },
+      required: ['browserSessionId'],
+    },
+  },
+  {
+    name: 'delete_browser_session_save',
+    description: 'Delete a saved browser session snapshot from disk. Use when an authenticated or replayable state is stale or no longer needed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        browserSaveId: { type: 'string', description: 'Saved browser state ID returned by save_browser_session' },
+      },
+      required: ['browserSaveId'],
+    },
+  },
+
+  {
     name: 'monitor_page',
     description: 'Watch a URL for changes. First call (no monitorId) scrapes and stores a baseline. Subsequent calls with the same monitorId scrape again, diff against baseline, and return what changed. Combines scheduling intent with automatic comparison.',
     inputSchema: {
@@ -4237,6 +4487,12 @@ const READ_ONLY_TOOL_NAMES = new Set([
   'test_tls_fingerprint',
   'extract_structured_data',
   'crawl_sitemap',
+  'list_browser_sessions',
+  'list_browser_session_saves',
+  'get_browser_session_state',
+  'inspect_browser_page',
+  'wait_for_browser_state',
+  'browser_session_screenshot',
   'decode_jwt_tokens',
   'lookup_dns',
   'inspect_ssl',
@@ -4254,6 +4510,7 @@ const READ_ONLY_TOOL_NAMES = new Set([
   'get_cache_headers',
   'lookup_ip_info',
   'get_page_word_count',
+  'get_robots_txt',
   'server_info',
 ]);
 
@@ -4263,6 +4520,8 @@ const DESTRUCTIVE_TOOL_NAMES = new Set([
   'delete_save',
   'delete_schedule',
   'delete_monitor',
+  'close_browser_session',
+  'delete_browser_session_save',
 ]);
 
 const OPEN_WORLD_TOOL_NAMES = new Set([
@@ -4284,6 +4543,23 @@ const OPEN_WORLD_TOOL_NAMES = new Set([
   'fill_form',
   'monitor_page',
   'lookup_ip_info',
+  'open_browser_session',
+  'navigate_browser_session',
+  'inspect_browser_page',
+  'click_browser_element',
+  'type_into_browser_element',
+  'select_browser_option',
+  'wait_for_browser_state',
+  'browser_session_screenshot',
+  'run_browser_steps',
+  'scrape_browser_session',
+  'get_robots_txt',
+  'lookup_dns',
+  'inspect_ssl',
+  'get_cache_headers',
+  'test_oidc_security',
+  'test_tls_fingerprint',
+  'check_broken_links',
 ]);
 
 TOOLS.forEach((tool) => {
@@ -4485,6 +4761,36 @@ async function handleTool(name, args, progressToken = null) {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
       const save = await loadSave(sessionId);
       return findSiteIssues(save);
+    }
+
+    // ── get_robots_txt ────────────────────────────────────────────────────────
+    case 'get_robots_txt': {
+      const url = ensureNonEmptyString(input.url, 'url');
+      const robots = await fetchAndParseRobots(url);
+      const groups = (robots.userAgents || []).map((entry) => ({
+        userAgent: entry.agent,
+        disallow: entry.disallow || [],
+        allow: entry.allow || [],
+        crawlDelay: entry.crawlDelay ?? null,
+      }));
+      const allBots = groups.find((group) => group.userAgent === '*');
+      return {
+        found: robots.status === 'ok',
+        status: robots.status,
+        url: robots.url,
+        groups,
+        sitemaps: robots.sitemaps || [],
+        allBotsDisallowed: allBots?.disallow || [],
+        allBotsAllowed: allBots?.allow || [],
+        isFullyBlocked: !!robots.hasFullBlock,
+        crawlDelay: allBots?.crawlDelay || null,
+        groupCount: groups.length,
+        raw: robots.rawText || null,
+        origin: robots.origin,
+        httpStatus: robots.httpStatus || null,
+        interestingDisallowed: robots.interestingDisallowed || [],
+        crawlDelays: robots.crawlDelays || [],
+      };
     }
 
     case 'extract_deals': {
@@ -5878,6 +6184,202 @@ async function handleTool(name, args, progressToken = null) {
       );
     }
 
+    // ── Browser automation session tools ─────────────────────────────────────
+    case 'open_browser_session': {
+      const url = input.url ? ensureNonEmptyString(input.url, 'url') : null;
+      const restoreSaveId = input.restoreSaveId ? ensureNonEmptyString(input.restoreSaveId, 'restoreSaveId') : null;
+      if (!url && !restoreSaveId) {
+        throw new Error('Either url or restoreSaveId is required');
+      }
+      return expectOk(
+        await post('/api/browser/sessions', {
+          url,
+          viewMode: input.viewMode || 'console',
+          persistenceMode: input.persistenceMode || 'auth_state',
+          restoreSaveId,
+        }),
+        'Browser session failed to open'
+      );
+    }
+
+    case 'list_browser_sessions': {
+      return expectOk(
+        await get('/api/browser/sessions'),
+        'Failed to list browser sessions'
+      );
+    }
+
+    case 'list_browser_session_saves': {
+      return expectOk(
+        await get('/api/browser/saves'),
+        'Failed to list browser session saves'
+      );
+    }
+
+    case 'get_browser_session_state': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      const refreshSnapshot = input.refreshSnapshot === true;
+      return expectOk(
+        await get(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}?refreshSnapshot=${refreshSnapshot ? '1' : '0'}`),
+        'Failed to fetch browser session state'
+      );
+    }
+
+    case 'navigate_browser_session': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      const url = ensureNonEmptyString(input.url, 'url');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/navigate`, {
+          url,
+          waitMs: normalizeInteger(input.waitMs, { defaultValue: 0, min: 0, max: 15000, name: 'waitMs' }),
+        }),
+        'Browser navigation failed'
+      );
+    }
+
+    case 'inspect_browser_page': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/inspect`, {}),
+        'Browser inspection failed'
+      );
+    }
+
+    case 'click_browser_element': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      const elementId = input.elementId ? ensureNonEmptyString(input.elementId, 'elementId') : null;
+      const selector = input.selector ? ensureNonEmptyString(input.selector, 'selector') : null;
+      if (!elementId && !selector) throw new Error('elementId or selector is required');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/click`, {
+          elementId,
+          selector,
+          waitMs: normalizeInteger(input.waitMs, { defaultValue: 0, min: 0, max: 15000, name: 'waitMs' }),
+        }),
+        'Browser click failed'
+      );
+    }
+
+    case 'type_into_browser_element': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      const elementId = input.elementId ? ensureNonEmptyString(input.elementId, 'elementId') : null;
+      const selector = input.selector ? ensureNonEmptyString(input.selector, 'selector') : null;
+      const value = ensureNonEmptyString(input.value, 'value');
+      if (!elementId && !selector) throw new Error('elementId or selector is required');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/type`, {
+          elementId,
+          selector,
+          value,
+          waitMs: normalizeInteger(input.waitMs, { defaultValue: 0, min: 0, max: 15000, name: 'waitMs' }),
+        }),
+        'Browser typing failed'
+      );
+    }
+
+    case 'select_browser_option': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      const elementId = input.elementId ? ensureNonEmptyString(input.elementId, 'elementId') : null;
+      const selector = input.selector ? ensureNonEmptyString(input.selector, 'selector') : null;
+      const value = input.value != null ? String(input.value) : null;
+      const label = input.label != null ? String(input.label) : null;
+      if (!elementId && !selector) throw new Error('elementId or selector is required');
+      if (!value && !label) throw new Error('value or label is required');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/select`, {
+          elementId,
+          selector,
+          value,
+          label,
+          waitMs: normalizeInteger(input.waitMs, { defaultValue: 0, min: 0, max: 15000, name: 'waitMs' }),
+        }),
+        'Browser select failed'
+      );
+    }
+
+    case 'wait_for_browser_state': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/wait`, {
+          selector: input.selector || null,
+          state: input.state || 'visible',
+          textIncludes: input.textIncludes || null,
+          urlIncludes: input.urlIncludes || null,
+          loadState: input.loadState || null,
+          timeoutMs: normalizeInteger(input.timeoutMs, { defaultValue: 15000, min: 1, max: 120000, name: 'timeoutMs' }),
+          settleMs: normalizeInteger(input.settleMs, { defaultValue: 0, min: 0, max: 15000, name: 'settleMs' }),
+        }),
+        'Browser wait failed'
+      );
+    }
+
+    case 'browser_session_screenshot': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/screenshot`, {
+          fullPage: !!input.fullPage,
+          waitMs: normalizeInteger(input.waitMs, { defaultValue: 0, min: 0, max: 15000, name: 'waitMs' }),
+        }),
+        'Browser session screenshot failed'
+      );
+    }
+
+    case 'run_browser_steps': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      if (!Array.isArray(input.steps) || input.steps.length === 0) {
+        throw new Error('steps must be a non-empty array');
+      }
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/steps`, {
+          steps: input.steps,
+        }),
+        'Browser step workflow failed'
+      );
+    }
+
+    case 'save_browser_session': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/save`, {
+          name: input.name || null,
+        }),
+        'Browser session save failed'
+      );
+    }
+
+    case 'scrape_browser_session': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      return expectOk(
+        await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/scrape`, {
+          url: input.url || null,
+          maxPages: input.maxPages == null ? undefined : normalizeInteger(input.maxPages, { defaultValue: 3, min: 1, max: 50, name: 'maxPages' }),
+          scrapeDepth: input.scrapeDepth == null ? undefined : normalizeInteger(input.scrapeDepth, { defaultValue: 1, min: 0, max: 5, name: 'scrapeDepth' }),
+          captureGraphQL: input.captureGraphQL !== false,
+          captureREST: input.captureREST !== false,
+          captureAssets: input.captureAssets !== false,
+          autoScroll: !!input.autoScroll,
+          fullCrawl: !!input.fullCrawl,
+        }),
+        'Browser session scrape handoff failed'
+      );
+    }
+
+    case 'close_browser_session': {
+      const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
+      return expectOk(
+        await del(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}`),
+        'Failed to close browser session'
+      );
+    }
+
+    case 'delete_browser_session_save': {
+      const browserSaveId = ensureNonEmptyString(input.browserSaveId, 'browserSaveId');
+      return expectOk(
+        await del(`/api/browser/saves/${encodeURIComponent(browserSaveId)}`),
+        'Failed to delete browser session save'
+      );
+    }
+
     // ── monitor_page ──────────────────────────────────────────────────────────
     case 'monitor_page': {
       const url = ensureNonEmptyString(input.url, 'url');
@@ -6904,6 +7406,24 @@ const PROMPTS = [
     ],
   },
   {
+    name: 'browser_interaction_workflow',
+    title: 'Browser Interaction Workflow',
+    description: 'Guide an AI through opening a live browser session, inspecting interactables, and completing a compact action sequence safely.',
+    arguments: [
+      { name: 'url', description: 'Target URL to open in a browser session', required: true },
+      { name: 'goal', description: 'What the browser interaction should accomplish', required: true },
+    ],
+  },
+  {
+    name: 'authenticated_browser_to_scrape_workflow',
+    title: 'Authenticated Browser To Scrape Workflow',
+    description: 'Guide an AI through reusing a live authenticated browser state as the starting point for a normal scrape capture.',
+    arguments: [
+      { name: 'browserSessionId', description: 'Active browser session ID to hand off to the scraper', required: true },
+      { name: 'goal', description: 'What data or outcome the final scrape should produce', required: true },
+    ],
+  },
+  {
     name: 'security_full_audit',
     title: 'Full Security Audit',
     description: 'Complete security posture: headers, TLS, JWT tokens, PII scan, and CORS in one guided workflow.',
@@ -7001,6 +7521,24 @@ const PROMPTS = [
     title: 'iFrame Content Map',
     description: 'Scrape a page and report all embedded iFrames — URL, title, text, and form presence — to uncover hidden embedded content.',
     arguments: [{ name: 'url', description: 'Page URL to inspect', required: true }],
+  },
+  {
+    name: 'robots_and_seo_audit',
+    title: 'Robots & SEO Audit',
+    description: 'Audit robots.txt rules, canonical tags, hreflang, structured data, and broken links in one workflow.',
+    arguments: [{ name: 'url', description: 'Target site URL', required: true }],
+  },
+  {
+    name: 'third_party_privacy_audit',
+    title: 'Third-Party Privacy Audit',
+    description: 'Audit third-party scripts, tracking pixels, cookie consent, CSP coverage, and PII exposure risk from a saved scrape.',
+    arguments: [{ name: 'sessionId', description: 'Saved scrape session ID', required: true }],
+  },
+  {
+    name: 'review_sentiment_analysis',
+    title: 'Review & Sentiment Analysis',
+    description: 'Extract reviews and ratings from a scraped page then score sentiment and summarize key themes.',
+    arguments: [{ name: 'sessionId', description: 'Saved scrape session ID', required: true }],
   },
 ];
 
@@ -7287,6 +7825,32 @@ function buildPromptText(name, args = {}) {
       const goal = ensureNonEmptyString(args.goal, 'goal');
       return `Start with scrape://save/${sessionId}/orientation, then inspect scrape://save/${sessionId}/overview and only follow the highest-priority recommendedScrapes that are still needed for the goal "${goal}". Use browser automation or manual UI inspection for live confirmation of tricky interactive flows. Avoid collapsing broad requests into a single page when sibling sections are relevant.`;
     }
+    case 'browser_interaction_workflow': {
+      const url = ensureNonEmptyString(args.url, 'url');
+      const goal = ensureNonEmptyString(args.goal, 'goal');
+      return `Work toward the goal "${goal}" on ${url} using the browser automation session tools.
+
+Step 1 - Open a session: call open_browser_session with url="${url}", viewMode="console", persistenceMode="auth_state".
+Step 2 - Inspect the page: call inspect_browser_page with the returned browserSessionId and study interactables, forms, warnings, and visible text summary.
+Step 3 - Act deliberately: prefer click_browser_element, type_into_browser_element, select_browser_option, and wait_for_browser_state using elementId values from the latest inspection. Re-inspect after meaningful page changes.
+Step 4 - Use run_browser_steps only when a short sequence is clearer than many single calls.
+Step 5 - Save or hand off: if the browser state is valuable for later reuse call save_browser_session. If the goal now needs a normal structured scrape, call scrape_browser_session.
+
+Keep the interaction compact, narrate only public action intent, and avoid relying on raw selectors unless inspect_browser_page did not surface a usable elementId.`;
+    }
+    case 'authenticated_browser_to_scrape_workflow': {
+      const browserSessionId = ensureNonEmptyString(args.browserSessionId, 'browserSessionId');
+      const goal = ensureNonEmptyString(args.goal, 'goal');
+      return `Use browser session ${browserSessionId} as the authenticated starting point for the goal "${goal}".
+
+Step 1 - Confirm state: call get_browser_session_state with browserSessionId="${browserSessionId}" and refreshSnapshot=true.
+Step 2 - If the target page or filter state is not ready, use inspect_browser_page plus click_browser_element / type_into_browser_element / select_browser_option / wait_for_browser_state until the browser is positioned correctly.
+Step 3 - Save the reusable state if it matters: call save_browser_session with browserSessionId="${browserSessionId}".
+Step 4 - Hand off to the scraper: call scrape_browser_session with browserSessionId="${browserSessionId}" and choose maxPages, scrapeDepth, and capture flags that match the goal.
+Step 5 - Read the returned scrapeSessionId via scrape://save/{id}/overview, then continue with saved-scrape tools like get_api_surface, extract_product_data, extract_company_info, or search_scrape_text depending on the goal.
+
+Prefer browser automation for login walls, filters, tabs, and SPA state. Prefer scraper tools for the final structured capture and downstream analysis.`;
+    }
     case 'security_full_audit': {
       const { url } = args;
       if (!url) throw new Error('url is required');
@@ -7483,6 +8047,40 @@ Step 4 — For any iFrame URL that looks like a payment, login, or third-party e
 
 Deliver: total iFrame count, list of iFrame URLs with their type classification (same-origin / cross-origin), captured text summaries for accessible iFrames, identification of high-value embedded content (payment flows, login forms, maps, video players), and CORS-blocked iFrame URLs that may hide significant page functionality.`;
     }
+    case 'robots_and_seo_audit': {
+      const url = ensureNonEmptyString(args.url, 'url');
+      return `Run a full robots.txt + SEO audit for ${url}.
+
+Step 1 — Call get_robots_txt with url="${url}" to see what paths are disallowed, which crawlers are targeted, and what sitemaps are referenced.
+Step 2 — Call scrape_url with url="${url}" maxPages=5 to capture meta tags, canonical URLs, hreflang, and structured data.
+Step 3 — Call check_broken_links with sessionId from the scrape to find broken internal and external links.
+Step 4 — Call get_link_graph with sessionId to identify orphan pages, dead-ends, and hub pages.
+Step 5 — Review the JSON-LD structured data from the save overview (scrape://save/{sessionId}/overview) for schema.org compliance.
+
+Deliver: robots.txt summary (blocked paths, crawl-delay, sitemap URLs), SEO meta assessment (canonical, hreflang, description completeness), structured data validity, broken links count and list, and a ranked SEO improvement list.`;
+    }
+    case 'third_party_privacy_audit': {
+      const sessionId = ensureNonEmptyString(args.sessionId, 'sessionId');
+      return `Audit third-party scripts and tracking for session ${sessionId}.
+
+Step 1 — Read scrape://save/${sessionId}/overview to get the thirdPartyScripts and trackingPixels fields.
+Step 2 — Call scan_pii with sessionId="${sessionId}" to identify any PII exposed in network calls.
+Step 3 — Call score_security_headers with sessionId="${sessionId}" to check if CSP restricts third-party script domains.
+Step 4 — Review the cookieConsent data from the overview: is there an opt-in/opt-out mechanism? Which vendor?
+
+Deliver: third-party script inventory (domain, category, async/defer status), tracking pixel inventory (Facebook, Google, TikTok, etc.), GDPR risk rating (Low/Medium/High), CSP coverage assessment, cookie consent mechanism summary, and recommended remediation steps.`;
+    }
+    case 'review_sentiment_analysis': {
+      const sessionId = ensureNonEmptyString(args.sessionId, 'sessionId');
+      return `Extract reviews and analyze sentiment for session ${sessionId}.
+
+Step 1 — Call extract_reviews with sessionId="${sessionId}" to get aggregate ratings and individual reviews.
+Step 2 — Analyze the reviews for sentiment: categorize as positive / neutral / negative, identify the most common praise themes and complaint themes.
+Step 3 — Read scrape://save/${sessionId}/overview to check the product/service name and overall rating context.
+Step 4 — Scan for additional review signals using search_scrape_text with sessionId="${sessionId}" for "review", "rating", "stars", "recommend".
+
+Deliver: aggregate rating summary, review count, sentiment breakdown (% positive / neutral / negative), top 3 praise themes with example quotes, top 3 complaint themes with example quotes, and overall sentiment verdict.`;
+    }
     default:
       throw new Error(`Unknown prompt: ${name}`);
   }
@@ -7584,6 +8182,28 @@ server.setRequestHandler(CompleteRequestSchema, async (request) => {
     }
   }
 
+  if (argument?.name === 'browserSessionId') {
+    try {
+      const response = await get('/api/browser/sessions');
+      const sessions = response.status >= 200 && response.status < 300 && Array.isArray(response.body) ? response.body : [];
+      const ids = sessions.map((session) => session.browserSessionId).filter((id) => id && id.startsWith(val)).slice(0, 10);
+      return { completion: { values: ids, hasMore: false } };
+    } catch {
+      return { completion: { values: [] } };
+    }
+  }
+
+  if (argument?.name === 'browserSaveId' || argument?.name === 'restoreSaveId') {
+    try {
+      const response = await get('/api/browser/saves');
+      const saves = response.status >= 200 && response.status < 300 && Array.isArray(response.body) ? response.body : [];
+      const ids = saves.map((save) => save.browserSaveId).filter((id) => id && id.startsWith(val)).slice(0, 10);
+      return { completion: { values: ids, hasMore: false } };
+    } catch {
+      return { completion: { values: [] } };
+    }
+  }
+
   // apiKind / kind
   if (argument?.name === 'apiKind' || argument?.name === 'kind') {
     return { completion: { values: ['graphql', 'rest', 'all'].filter(v => v.startsWith(val)) } };
@@ -7608,6 +8228,14 @@ server.setRequestHandler(CompleteRequestSchema, async (request) => {
     } catch {
       return { completion: { values: [] } };
     }
+  }
+
+  if (argument?.name === 'viewMode') {
+    return { completion: { values: ['console', 'desktop', 'both'].filter((value) => value.startsWith(val)) } };
+  }
+
+  if (argument?.name === 'persistenceMode') {
+    return { completion: { values: ['ephemeral', 'auth_state', 'full_session'].filter((value) => value.startsWith(val)) } };
   }
 
   return { completion: { values: [] } };

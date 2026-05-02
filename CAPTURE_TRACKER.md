@@ -129,7 +129,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | Twitter Card tags | ✅ | — | |
 | Canonical URL | ✅ | — | extractor.js line 70 meta.canonical |
 | hreflang (internationalization tags) | ✅ | — | extractor.js meta.hreflang array |
-| Robots.txt parsing | ❌ | **7** | Intentionally excluded — scraper does not fetch robots.txt |
+| Robots.txt parsing | ✅ | — | get_robots_txt MCP tool — disallowed paths, crawl-delay, sitemaps per user-agent |
 | Broken link detection | ✅ | — | link-graph.js checkBrokenLinks — concurrent HEAD checks, rate-limited |
 | Redirect chain map | ✅ | — | link-graph.js findRedirectChains |
 | Internal link graph | ✅ | — | link-graph.js buildLinkGraph — hubs, authorities, orphans, dead-ends |
