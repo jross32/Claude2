@@ -671,7 +671,7 @@ app.get('/api/site-credentials', (req, res) => {
 });
 
 // ---- Scrape ----
-app.post('/api/scrape', async (req, res) => {
+function launchScrapeJob(body = {}) {
   const {
     url,
     urls,
@@ -715,26 +715,19 @@ app.post('/api/scrape', async (req, res) => {
     ssoProvider,
     useTor,
     redisDedupe,
-  } = req.body;
+  } = body;
 
-  if (!url && (!urls || urls.length === 0)) {
-    return res.status(400).json({ error: 'URL is required' });
-  }
-  if (url && typeof url !== 'string') return res.status(400).json({ error: `'url' must be a string` });
-  if (urls && !Array.isArray(urls)) return res.status(400).json({ error: `'urls' must be an array` });
-  if (maxPages !== undefined && maxPages !== null && (!Number.isInteger(Number(maxPages)) || Number(maxPages) < 1)) {
-    return res.status(400).json({ error: `'maxPages' must be a positive integer` });
-  }
   if (sessions.size >= MAX_ACTIVE_SCRAPES) {
-    return res.status(429).json({
-      error: 'Too many active scrape jobs — wait for an existing scrape to finish before starting another',
+    const err = new Error('Too many active scrape jobs — wait for an existing scrape to finish before starting another');
+    err.statusCode = 429;
+    err.payload = {
       retryAfterSeconds: 60,
       activeScrapes: sessions.size,
       maxActiveScrapes: MAX_ACTIVE_SCRAPES,
-    });
+    };
+    throw err;
   }
 
-  // Auto-inject credentials from .env for known sites
   let resolvedUsername = username;
   let resolvedPassword = password;
   const targetUrl = url || (urls && urls[0]) || '';
@@ -746,9 +739,7 @@ app.post('/api/scrape', async (req, res) => {
     }
   }
 
-  const sessionId = uuidv4();
-  res.json({ sessionId, message: 'Scraping started' });
-
+  const sessionId = (typeof body.saveId === 'string' && body.saveId.trim()) ? body.saveId.trim() : uuidv4();
   const scraper = new ScraperSession(sessionId, broadcast);
   scraper.uiVisible = parseBooleanFlag(uiVisible, true);
   scraper.initiatedBy = typeof initiatedBy === 'string' && initiatedBy.trim()
@@ -756,82 +747,110 @@ app.post('/api/scrape', async (req, res) => {
     : (scraper.uiVisible ? 'ui' : 'mcp');
   sessions.set(sessionId, scraper);
 
-  // Auto-cleanup: remove session after 45 minutes to prevent memory/browser leaks
   const CLEANUP_MS = 45 * 60 * 1000;
   const cleanupTimer = setTimeout(() => {
     if (sessions.has(sessionId)) {
-      const s = sessions.get(sessionId);
-      try { s.stop(); } catch {}
+      const active = sessions.get(sessionId);
+      try { active.stop(); } catch {}
       broadcast(sessionId, { type: 'error', message: 'Session auto-cleaned after 45 minute timeout' });
     }
   }, CLEANUP_MS);
   cleanupTimer.unref?.();
 
-  scraper
-    .run({
-      url,
-      urls,
-      hasAuth,
-      username: resolvedUsername,
-      password: resolvedPassword,
-      verificationType,
-      verificationCode,
-      scrapeDepth: scrapeDepth || 1,
-      captureGraphQL: captureGraphQL !== false,
-      captureREST: captureREST !== false,
-      captureAssets: captureAssets !== false,
-      avoidTags: Array.isArray(avoidTags) ? avoidTags : [],
-      capturePageUrls: capturePageUrls !== false,
-      captureAllRequests: captureAllRequests || false,
-      captureImages: captureImages || false,
-      imageLimit: imageLimit !== undefined ? parseInt(imageLimit, 10) : 0,
-      captureIframeAPIs: captureIframeAPIs || false,
-      captureSSE: captureSSE || false,
-      captureBeacons: captureBeacons || false,
-      captureBinaryResponses: captureBinaryResponses || false,
-      captureServiceWorkers: captureServiceWorkers || false,
-      bypassServiceWorkers: bypassServiceWorkers || false,
-      clickSequence: clickSequence || [],
-      autoScroll: autoScroll || false,
-      captureDropdowns: captureDropdowns || false,
-      captureScreenshots: captureScreenshots || false,
-      workerCount: workerCount ? parseInt(workerCount, 10) : 0,
-      politeDelay: politeDelay ? parseInt(politeDelay, 10) : 0,
-      captureSpeed: captureSpeed || 1,
-      showBrowser: showBrowser || false,
-      liveView: liveView || false,
-      slowMotion: slowMotion || 0,
-      fullCrawl: fullCrawl || false,
-      maxPages: maxPages !== undefined && maxPages !== null ? parseInt(maxPages, 10) : 100,
-      saveId: sessionId,
-      resumeFrom: resumeFrom || null,
-      proxy: proxy || null,
-      uiVisible: scraper.uiVisible,
-      initiatedBy: scraper.initiatedBy,
-      totpSecret: totpSecret || null,
-      ssoProvider: ssoProvider || null,
-      useTor: parseBooleanFlag(useTor, false),
-      redisDedupe: parseBooleanFlag(redisDedupe, false),
-    })
-    .then((result) => {
-      clearTimeout(cleanupTimer);
-      // Auto-attach HAR to result
-      try { result.har = exportHAR(result); } catch {}
-      try { scraper.markComplete(result); } catch {}
-      broadcast(sessionId, { type: 'complete', data: result });
-      sessions.delete(sessionId);
-    })
-    .catch((err) => {
-      clearTimeout(cleanupTimer);
-      if (scraper.stopped) {
-        try { scraper.markStopped(); } catch {}
-        broadcast(sessionId, { type: 'stopped', message: 'Scrape stopped' });
-      } else {
-        try { scraper.markError(err); } catch {}
-        broadcast(sessionId, { type: 'error', message: err.message });
-      }
-      sessions.delete(sessionId);
+  const completionPromise = scraper.run({
+    url,
+    urls,
+    hasAuth,
+    username: resolvedUsername,
+    password: resolvedPassword,
+    verificationType,
+    verificationCode,
+    scrapeDepth: scrapeDepth || 1,
+    captureGraphQL: captureGraphQL !== false,
+    captureREST: captureREST !== false,
+    captureAssets: captureAssets !== false,
+    avoidTags: Array.isArray(avoidTags) ? avoidTags : [],
+    capturePageUrls: capturePageUrls !== false,
+    captureAllRequests: captureAllRequests || false,
+    captureImages: captureImages || false,
+    imageLimit: imageLimit !== undefined ? parseInt(imageLimit, 10) : 0,
+    captureIframeAPIs: captureIframeAPIs || false,
+    captureSSE: captureSSE || false,
+    captureBeacons: captureBeacons || false,
+    captureBinaryResponses: captureBinaryResponses || false,
+    captureServiceWorkers: captureServiceWorkers || false,
+    bypassServiceWorkers: bypassServiceWorkers || false,
+    clickSequence: clickSequence || [],
+    autoScroll: autoScroll || false,
+    captureDropdowns: captureDropdowns || false,
+    captureScreenshots: captureScreenshots || false,
+    workerCount: workerCount ? parseInt(workerCount, 10) : 0,
+    politeDelay: politeDelay ? parseInt(politeDelay, 10) : 0,
+    captureSpeed: captureSpeed || 1,
+    showBrowser: showBrowser || false,
+    liveView: liveView || false,
+    slowMotion: slowMotion || 0,
+    fullCrawl: fullCrawl || false,
+    maxPages: maxPages !== undefined && maxPages !== null ? parseInt(maxPages, 10) : 100,
+    saveId: sessionId,
+    resumeFrom: resumeFrom || null,
+    proxy: proxy || null,
+    uiVisible: scraper.uiVisible,
+    initiatedBy: scraper.initiatedBy,
+    totpSecret: totpSecret || null,
+    ssoProvider: ssoProvider || null,
+    useTor: parseBooleanFlag(useTor, false),
+    redisDedupe: parseBooleanFlag(redisDedupe, false),
+  }).then((result) => {
+    clearTimeout(cleanupTimer);
+    try { result.har = exportHAR(result); } catch {}
+    try { scraper.markComplete(result); } catch {}
+    broadcast(sessionId, { type: 'complete', data: result });
+    sessions.delete(sessionId);
+    return result;
+  }, (err) => {
+    clearTimeout(cleanupTimer);
+    if (scraper.stopped) {
+      try { scraper.markStopped(); } catch {}
+      broadcast(sessionId, { type: 'stopped', message: 'Scrape stopped' });
+    } else {
+      try { scraper.markError(err); } catch {}
+      broadcast(sessionId, { type: 'error', message: err.message });
+    }
+    sessions.delete(sessionId);
+    throw err;
+  });
+
+  return {
+    sessionId,
+    scraper,
+    completionPromise,
+  };
+}
+
+browserSessionManager.setScrapeJobStarter(launchScrapeJob);
+
+app.post('/api/scrape', async (req, res) => {
+  const { url, urls, maxPages } = req.body || {};
+  if (!url && (!urls || urls.length === 0)) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+  if (url && typeof url !== 'string') return res.status(400).json({ error: `'url' must be a string` });
+  if (urls && !Array.isArray(urls)) return res.status(400).json({ error: `'urls' must be an array` });
+  if (maxPages !== undefined && maxPages !== null && (!Number.isInteger(Number(maxPages)) || Number(maxPages) < 1)) {
+    return res.status(400).json({ error: `'maxPages' must be a positive integer` });
+  }
+
+  try {
+    const { sessionId, completionPromise } = launchScrapeJob(req.body || {});
+    completionPromise.catch(() => {});
+    res.json({ sessionId, message: 'Scraping started' });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({
+      error: err.message,
+      ...(err.payload || {}),
     });
+  }
 });
 
 app.get('/api/scrape/active', (req, res) => {
