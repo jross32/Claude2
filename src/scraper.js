@@ -1585,6 +1585,47 @@ class ScraperSession {
 
         // 5. Hide the automation driver property (belt-and-suspenders alongside stealth plugin)
         try { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); } catch {}
+
+        // 6. Mock plugins array — headless Chrome has zero plugins, real Chrome has 3+
+        try {
+          const _pluginData = [
+            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+            { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
+          ];
+          Object.defineProperty(navigator, 'plugins', {
+            get: () => {
+              const arr = _pluginData.map((p) => Object.assign(Object.create(Plugin.prototype), p));
+              Object.defineProperty(arr, 'length', { value: arr.length });
+              return arr;
+            },
+          });
+        } catch {}
+
+        // 7. Mock languages — headless Chrome can expose empty/single-entry array
+        try { Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] }); } catch {}
+
+        // 8. Restore window.chrome object that Chromium headless drops
+        try {
+          if (!window.chrome) window.chrome = {};
+          if (!window.chrome.runtime) {
+            window.chrome.runtime = {
+              connect: () => {},
+              sendMessage: () => {},
+              onConnect: { addListener: () => {} },
+              onMessage: { addListener: () => {} },
+            };
+          }
+        } catch {}
+
+        // 9. Permissions API — headless returns 'denied' for notifications; real Chrome returns 'default'
+        try {
+          const _origQuery = window.navigator.permissions.query.bind(window.navigator.permissions);
+          window.navigator.permissions.query = (p) =>
+            p.name === 'notifications'
+              ? Promise.resolve({ state: 'default', onchange: null })
+              : _origQuery(p);
+        } catch {}
       });
 
       // Native dialog dismissal only (alert/confirm/prompt boxes)
