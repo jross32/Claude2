@@ -1,22 +1,25 @@
 # Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-02T06:40:07.118Z
-**Commit:** `7b14bf0`
-**Duration:** 12405ms
+**Run:** 2026-05-02T06:40:29.720Z
+**Commit:** `f12cc13`
+**Duration:** 22062ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 3 | 3 | 0 | 0 |
+| 6 | 6 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | GET /api/mcp/tools exposes the live MCP tool catalog | pass | 51ms | |
-| ✅ | POST /api/mcp/tool/server_info invokes MCP tools through the HTTP bridge | pass | 5270ms | |
-| ✅ | GET /api/mcp-meta returns enriched live metadata | pass | 12ms | |
+| ✅ | GET /api/saves → 200 + array | pass | 4632ms | |
+| ✅ | GET /api/saves items have expected shape | pass | 4711ms | |
+| ✅ | GET /api/saves/:id with unknown id → 404 + error | pass | 11ms | |
+| ✅ | DELETE /api/saves/:id with unknown id → 200 + { ok: true } | pass | 12ms | |
+| ✅ | [chaos] GET /api/saves/:id with empty id segment → 404 | pass | 4516ms | |
+| ✅ | [chaos] DELETE /api/saves/:id with special chars in id | pass | 5ms | |
 
 
