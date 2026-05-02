@@ -59,7 +59,7 @@ Every time a new tool is added to `mcp-server.js`, **all 17 locations below must
 
 ### When adding a new PROMPT (not a tool)
 
-Also update `src/server.js` line 89 — the hardcoded "24 prompts" pill on the landing page.
+The prompts pill in `src/server.js` is now dynamic — no manual update needed.
 
 ### What is already dynamic (no manual update needed)
 
@@ -70,23 +70,7 @@ Test files do **not** hardcode tool names or counts — nothing to update in `te
 
 ## Do Not Implement — Blocked Tools and Prompts
 
-The following tools and prompts have been **explicitly removed** by Justin and must **never be re-added**, suggested, or referenced in any tool, prompt, or workflow text:
-
-### Blocked tools (do not create, restore, or reference)
-
-| Tool | Reason |
-|------|--------|
-| `get_robots_txt` | Removed by owner — do not expose robots.txt as an MCP tool |
-
-### Blocked prompts (do not create, restore, or reference)
-
-| Prompt | Reason |
-|--------|--------|
-| `robots_and_seo_audit` | Depends on blocked `get_robots_txt` |
-| `third_party_privacy_audit` | Removed by owner |
-| `review_sentiment_analysis` | Removed by owner |
-
-**Enforcement:** If a code suggestion, refactor, or "improvement" would restore any item from this list — stop and ask Justin before proceeding. These are intentional permanent removals, not accidental omissions.
+There are currently no permanently blocked tools or prompts. Previously removed items (`get_robots_txt`, `robots_and_seo_audit`, `third_party_privacy_audit`, `review_sentiment_analysis`) have been restored — they are analysis tools, not bot-compliance tools, and are active again as of v2.6.0.
 
 ---
 
@@ -117,7 +101,7 @@ APA-specific config lives in `.env` (gitignored) — not in `src/`.
 | `src/har-exporter.js` | HAR 1.2 format export | Stable |
 | `src/git-autosave.js` | Auto-commit & push on timer interval (starts with server, currently 6h) | Stable |
 | `src/oidc-tester.js` | OIDC/OAuth2 security test suite (8 test types) | Stable |
-| `mcp-server.js` | MCP server — 73 tools, 24 prompts, classification sets, handlers | Stable |
+| `mcp-server.js` | MCP server — 90 tools, 29 prompts, classification sets, handlers | Stable |
 | `MCP.md` | Living reference for all MCP tools — update when adding/changing tools | Stable |
 | `public/index.html` | Single-page frontend UI (large — edit carefully) | **Fragile** |
 | `public/js/app.js` | Frontend logic | **Fragile** |
