@@ -681,7 +681,7 @@ async function main() {
     if (!api.includes('get_api_surface') || !api.includes('scrape://save/save-9/api-surface')) {
       throw new Error('API-surface prompt missing expected references');
     }
-    if (!goal.includes('scrape://save/save-9/orientation') || !goal.includes('Playwright MCP')) {
+    if (!goal.includes('scrape://save/save-9/orientation') || !goal.includes('browser automation')) {
       throw new Error('Goal-planning prompt missing expected references');
     }
     setOutput({ leakage: leakage.slice(0, 60), deals: deals.slice(0, 60), api: api.slice(0, 60), goal: goal.slice(0, 60) });

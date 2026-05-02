@@ -52,7 +52,7 @@ async function start() {
   PORT = await findOpenPort(Number(process.env.TEST_SERVER_PORT || 3311));
   serverProcess = spawn('node', ['--max-old-space-size=4096', 'src/server.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), NODE_ENV: 'test', DISABLE_GIT_AUTOSAVE: '1' },
     stdio: 'pipe',
   });
   serverProcess.stderr.on('data', () => {}); // suppress noise
