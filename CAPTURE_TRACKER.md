@@ -227,7 +227,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | PWA manifest parsing | ❌ | **5** | |
 | Push notification setup detected | ❌ | **4** | |
 | OpenAPI / Swagger spec detection | ✅ | — | extractor.js apiSpecLinks — common spec paths and link detection |
-| robots.txt disallowed paths | ✅ | — | get_robots_txt tool — parses all user-agent groups, sitemaps, crawl-delay, allow/disallow lists |
+| robots.txt disallowed paths | ❌ | **5** | Not exposed as an MCP tool (intentionally removed) |
 | App store links detected | ❌ | **4** | |
 | QR codes detected in images | ❌ | **3** | |
 | Email newsletter signup detection | ❌ | **4** | |

@@ -59,12 +59,34 @@ Every time a new tool is added to `mcp-server.js`, **all 17 locations below must
 
 ### When adding a new PROMPT (not a tool)
 
-Also update `src/server.js` line 89 — the hardcoded "27 prompts" pill on the landing page.
+Also update `src/server.js` line 89 — the hardcoded "24 prompts" pill on the landing page.
 
 ### What is already dynamic (no manual update needed)
 
 `server_info` tool, `/docs` page, `/api/mcp-meta` endpoint — all use `TOOLS.length` / `PROMPTS.length` automatically.
 Test files do **not** hardcode tool names or counts — nothing to update in `tests/`.
+
+---
+
+## Do Not Implement — Blocked Tools and Prompts
+
+The following tools and prompts have been **explicitly removed** by Justin and must **never be re-added**, suggested, or referenced in any tool, prompt, or workflow text:
+
+### Blocked tools (do not create, restore, or reference)
+
+| Tool | Reason |
+|------|--------|
+| `get_robots_txt` | Removed by owner — do not expose robots.txt as an MCP tool |
+
+### Blocked prompts (do not create, restore, or reference)
+
+| Prompt | Reason |
+|--------|--------|
+| `robots_and_seo_audit` | Depends on blocked `get_robots_txt` |
+| `third_party_privacy_audit` | Removed by owner |
+| `review_sentiment_analysis` | Removed by owner |
+
+**Enforcement:** If a code suggestion, refactor, or "improvement" would restore any item from this list — stop and ask Justin before proceeding. These are intentional permanent removals, not accidental omissions.
 
 ---
 
@@ -96,7 +118,7 @@ APA-specific config lives in `.env` (gitignored) — not in `src/`.
 | `src/git-autosave.js` | Auto-commit & push on 10-min interval (starts with server) | Stable |
 | `src/oidc-tester.js` | OIDC/OAuth2 security test suite (8 test types) | Stable |
 | `src/tool-logger.js` | Per-call request logs + live usage counters in `logs/` | Stable |
-| `mcp-server.js` | MCP server — 74 tools, 27 prompts, classification sets, handlers | Stable |
+| `mcp-server.js` | MCP server — 73 tools, 24 prompts, classification sets, handlers | Stable |
 | `MCP.md` | Living reference for all MCP tools — update when adding/changing tools | Stable |
 | `public/index.html` | Single-page frontend UI (large — edit carefully) | **Fragile** |
 | `public/js/app.js` | Frontend logic | **Fragile** |

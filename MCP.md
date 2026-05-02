@@ -50,13 +50,13 @@ Two patterns for tool implementation:
 
 ## Tool Count & Classification
 
-**Total: 74 tools · 27 prompts** (as of last update 2026-05-02)
+**Total: 73 tools · 24 prompts** (as of last update 2026-05-02)
 
 | Classification | Count |
 |----------------|-------|
-| readOnly (RO) | 57 |
+| readOnly (RO) | 55 |
 | destructive (D) | 5 |
-| openWorld (OW) | 19 |
+| openWorld (OW) | 18 |
 
 All tools are classified. These badge counts overlap; they are not meant to sum to the total tool count.
 
@@ -64,7 +64,7 @@ Classification sets defined in mcp-server.js (search for `READ_ONLY_TOOL_NAMES`)
 
 ---
 
-## All 74 Tools — Quick Reference
+## All 73 Tools — Quick Reference
 
 ### Category 1: Core Scraping
 
@@ -205,7 +205,6 @@ Algorithmic tools returning structured data for AI reasoning — no external API
 | `find_patterns` | `sessionId` | 9 | Cross-page pattern recognition: URL structure groups (`:id`/`:uuid` normalization), H1 word frequency, shared nav items, API path patterns. |
 | `extract_business_intel` | `sessionId` | 9 | Business intelligence from all pages: pricing tiers (regex patterns), business metrics (users/revenue/customers), contact info aggregation, tech stack, company profiles. |
 | `extract_reviews` | `sessionId`, optional `pageIndex` | 8 | Review and rating data: aggregate rating, star score, review count, individual reviews. Sources: JSON-LD Review/AggregateRating, Open Graph product tags, text patterns. |
-| `get_robots_txt` | `url` | 8 | OW. Fetch and parse robots.txt from the site origin. Returns per-agent disallow/allow lists, crawl-delay, sitemap references, and `isFullyBlocked` flag. |
 | `get_cache_headers` | `sessionId` | 7 | Extract Cache-Control, ETag, Last-Modified, Expires, and Vary from the document + all REST/GraphQL API calls in a session. |
 | `lookup_ip_info` | `hostname` | 7 | OW. Resolve a hostname or URL to IP, country, city, ISP, ASN, and hosting provider via ip-api.com. |
 | `get_page_word_count` | `sessionId` | 6 | RO. Count words, sentences, and paragraphs in a saved page's extracted text. Returns wordCount, sentenceCount, paragraphCount, avgWordsPerSentence, characterCount. |
@@ -243,7 +242,6 @@ Server-level introspection and trust surfaces.
 | `src/job-extractor.js` | `extractJobData` | `extract_job_listings` |
 | `src/company-extractor.js` | `extractCompanyInfo` | `extract_company_info` |
 | `src/review-extractor.js` | `extractReviews` | `extract_reviews` |
-| `src/robots-parser.js` | `fetchAndParseRobots` | `get_robots_txt` |
 | `src/ip-lookup.js` | `lookupIpInfo` | `lookup_ip_info` |
 
 **Coverage: 100%** — all exported source functions are reachable via MCP.
@@ -371,7 +369,7 @@ As of Round 4 (`mcp-server.js` v2.1.0), the server declares the following MCP pr
 
 | Capability | Status | Notes |
 |-----------|--------|-------|
-| `tools` | ✅ | 74 tools |
+| `tools` | ✅ | 73 tools |
 | `prompts` | ✅ | 27 prompts — workflow guides for AI |
 | `resources` | ✅ | `subscribe: true, listChanged: true` — subscribe to `scrape://saves` for live updates |
 | `logging` | ✅ | `SetLevelRequestSchema` handler; `sendLog()` wraps every tool call |
@@ -414,4 +412,4 @@ Run tests: `node tests/security/oidc_lab.test.js` or `node tests/security/pingfe
 
 ---
 
-*Last updated: 2026-05-02. Tool count: 74. Prompt count: 27. Version: 2.5.1.*
+*Last updated: 2026-05-02. Tool count: 73. Prompt count: 24. Version: 2.5.3.*

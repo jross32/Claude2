@@ -116,7 +116,7 @@ const TOOLSETS = {
   research:  ['scrape_url','research_url','get_page_text','extract_entities','to_markdown','list_links','list_images','get_tech_stack','detect_site','preflight_url','http_fetch'],
   security:  ['score_security_headers','test_oidc_security','test_tls_fingerprint','scan_pii','inspect_ssl','decode_jwt_tokens','get_api_calls','find_graphql_endpoints','probe_endpoints','lookup_dns'],
   ecommerce: ['scrape_url','extract_product_data','extract_deals','extract_structured_data','extract_entities','get_page_text','list_images','detect_site'],
-  seo:       ['scrape_url','get_link_graph','check_broken_links','generate_sitemap','crawl_sitemap','list_links','list_internal_pages','find_site_issues','get_robots_txt'],
+  seo:       ['scrape_url','get_link_graph','check_broken_links','generate_sitemap','crawl_sitemap','list_links','list_internal_pages','find_site_issues'],
   ops:       ['list_active_scrapes','get_scrape_status','stop_scrape','pause_scrape','resume_scrape','list_schedules','schedule_scrape','delete_schedule','monitor_page','delete_monitor','list_saves','delete_save','check_saved_session','clear_saved_session','get_save_overview'],
   full:      null, // null = all tools
 };
@@ -4156,17 +4156,6 @@ const TOOLS = [
     },
   },
   {
-    name: 'get_robots_txt',
-    description: 'Fetch and parse robots.txt for a URL. Returns disallowed paths, allowed paths, crawl delay, and referenced sitemaps — all per user-agent. Reveals what the site intentionally hides from crawlers.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        url: { type: 'string', description: 'Any URL on the target site — the origin\'s /robots.txt is fetched' },
-      },
-      required: ['url'],
-    },
-  },
-  {
     name: 'get_cache_headers',
     description: 'Extract Cache-Control, ETag, Last-Modified, Expires, and Vary headers from a scraped session. Returns the document-level cache policy plus per-request cache headers from REST and GraphQL API calls — useful for CDN analysis and performance audits.',
     inputSchema: {
@@ -4262,7 +4251,6 @@ const READ_ONLY_TOOL_NAMES = new Set([
   'find_patterns',
   'extract_business_intel',
   'extract_reviews',
-  'get_robots_txt',
   'get_cache_headers',
   'lookup_ip_info',
   'get_page_word_count',
@@ -4295,7 +4283,6 @@ const OPEN_WORLD_TOOL_NAMES = new Set([
   'take_screenshot',
   'fill_form',
   'monitor_page',
-  'get_robots_txt',
   'lookup_ip_info',
 ]);
 
@@ -6363,36 +6350,6 @@ async function handleTool(name, args, progressToken = null) {
       };
     }
 
-    // ── get_robots_txt ────────────────────────────────────────────────────────
-    case 'get_robots_txt': {
-      const url = ensureNonEmptyString(input.url, 'url');
-      const robots = await fetchAndParseRobots(url);
-      const groups = (robots.userAgents || []).map((entry) => ({
-        userAgent: entry.agent,
-        disallow: entry.disallow || [],
-        allow: entry.allow || [],
-        crawlDelay: entry.crawlDelay ?? null,
-      }));
-      const allBots = groups.find((group) => group.userAgent === '*');
-      return {
-        found: robots.status === 'ok',
-        status: robots.status,
-        url: robots.url,
-        groups,
-        sitemaps: robots.sitemaps || [],
-        allBotsDisallowed: allBots?.disallow || [],
-        allBotsAllowed: allBots?.allow || [],
-        isFullyBlocked: !!robots.hasFullBlock,
-        crawlDelay: allBots?.crawlDelay || null,
-        groupCount: groups.length,
-        raw: robots.rawText || null,
-        origin: robots.origin,
-        httpStatus: robots.httpStatus || null,
-        interestingDisallowed: robots.interestingDisallowed || [],
-        crawlDelays: robots.crawlDelays || [],
-      };
-    }
-
     // ── get_cache_headers ────────────────────────────────────────────────────
     case 'get_cache_headers': {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
@@ -7034,24 +6991,6 @@ const PROMPTS = [
     arguments: [{ name: 'sessionId', description: 'Saved scrape session ID', required: true }],
   },
   {
-    name: 'robots_and_seo_audit',
-    title: 'Robots & SEO Audit',
-    description: 'Audit robots.txt rules, canonical tags, hreflang, structured data, and broken links in one workflow.',
-    arguments: [{ name: 'url', description: 'Target site URL', required: true }],
-  },
-  {
-    name: 'review_sentiment_analysis',
-    title: 'Review & Sentiment Analysis',
-    description: 'Extract reviews and ratings from a scraped page then score sentiment and summarize key themes.',
-    arguments: [{ name: 'sessionId', description: 'Saved scrape session ID', required: true }],
-  },
-  {
-    name: 'third_party_privacy_audit',
-    title: 'Third-Party Privacy Audit',
-    description: 'Identify all third-party scripts, tracking pixels, and cookie consent signals. Flag GDPR-risk trackers.',
-    arguments: [{ name: 'sessionId', description: 'Saved scrape session ID', required: true }],
-  },
-  {
     name: 'infrastructure_fingerprint',
     title: 'Infrastructure Fingerprint',
     description: 'Build a full infrastructure picture: IP, ASN, hosting provider, CDN, DNS records, SSL cert, and server headers.',
@@ -7521,41 +7460,6 @@ Step 5 — Look for sensitive endpoints: search_scrape_text with sessionId="${se
 
 Report: JWT security assessment, CORS policy findings (wildcard exposure, credentialed requests), most sensitive endpoints discovered, CSP policy gaps, and ranked remediation list.`;
     }
-    case 'robots_and_seo_audit': {
-      const url = ensureNonEmptyString(args.url, 'url');
-      return `Run a full robots.txt + SEO audit for ${url}.
-
-Step 1 — Call get_robots_txt with url="${url}" to see what paths are disallowed, which crawlers are targeted, and what sitemaps are referenced.
-Step 2 — Call scrape_url with url="${url}" maxPages=5 to capture meta tags, canonical URLs, hreflang, and structured data.
-Step 3 — Call check_broken_links with sessionId from the scrape to find broken internal and external links.
-Step 4 — Call get_link_graph with sessionId to identify orphan pages, dead-ends, and hub pages.
-Step 5 — Review the JSON-LD structured data from the save overview (scrape://save/{sessionId}/overview) for schema.org compliance.
-
-Deliver: robots.txt summary (blocked paths, crawl-delay, sitemap URLs), SEO meta assessment (canonical, hreflang, description completeness), structured data validity, broken links count and list, and a ranked SEO improvement list.`;
-    }
-    case 'review_sentiment_analysis': {
-      const sessionId = ensureNonEmptyString(args.sessionId, 'sessionId');
-      return `Extract reviews and analyze sentiment for session ${sessionId}.
-
-Step 1 — Call extract_reviews with sessionId="${sessionId}" to get aggregate ratings and individual reviews.
-Step 2 — Analyze the reviews for sentiment: categorize as positive / neutral / negative, identify the most common praise themes and complaint themes.
-Step 3 — Read scrape://save/${sessionId}/overview to check the product/service name and overall rating context.
-Step 4 — Scan for additional review signals using search_scrape_text with sessionId="${sessionId}" for "review", "rating", "stars", "recommend".
-
-Deliver: aggregate rating summary, review count, sentiment breakdown (% positive / neutral / negative), top 3 praise themes with example quotes, top 3 complaint themes with example quotes, and overall sentiment verdict.`;
-    }
-    case 'third_party_privacy_audit': {
-      const sessionId = ensureNonEmptyString(args.sessionId, 'sessionId');
-      return `Audit third-party scripts and tracking for session ${sessionId}.
-
-Step 1 — Read scrape://save/${sessionId}/overview to get the thirdPartyScripts and trackingPixels fields.
-Step 2 — Call scan_pii with sessionId="${sessionId}" to identify any PII exposed in network calls.
-Step 3 — Call score_security_headers with sessionId="${sessionId}" to check if CSP restricts third-party script domains.
-Step 4 — Review the cookieConsent data from the overview: is there an opt-in/opt-out mechanism? Which vendor?
-Step 5 — Cross-reference trackers against known high-risk categories: advertising networks, fingerprinting tools, data brokers.
-
-Deliver: third-party script inventory (domain, category, async/defer status), tracking pixel inventory (Facebook, Google, TikTok, etc.), GDPR risk rating (Low/Medium/High), CSP coverage assessment, cookie consent mechanism summary, and recommended remediation steps.`;
-    }
     case 'infrastructure_fingerprint': {
       const url = ensureNonEmptyString(args.url, 'url');
       return `Build a full infrastructure fingerprint for ${url}.
@@ -7564,7 +7468,7 @@ Step 1 — Call lookup_ip_info with hostname="${url}" to get the IP address, cou
 Step 2 — Call lookup_dns with url="${url}" to get A, MX, TXT, NS, and CNAME records.
 Step 3 — Call inspect_ssl with url="${url}" to check the SSL certificate chain, expiry, SANs, and cipher strength.
 Step 4 — Call get_tech_stack via scrape_url or from an existing session (detect_site with url="${url}") to identify CDN, server software, and frameworks.
-Step 5 — Call get_robots_txt with url="${url}" and cross-reference with DNS to spot subdomains.
+Step 5 — Call probe_endpoints with url="${url}" to surface any exposed admin panels, debug paths, or version endpoints that reveal additional infrastructure detail.
 
 Deliver: IP address and hosting summary (provider, ASN, country), DNS record map, SSL certificate health (expiry date, issuer, SAN coverage), CDN and WAF identification, server software and framework stack, and a risk assessment for exposed infrastructure information.`;
     }
