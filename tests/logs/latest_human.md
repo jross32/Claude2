@@ -1,9 +1,9 @@
 # Test Results — smoke
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-01T19:31:27.153Z
-**Commit:** `a009c9f`
-**Duration:** 12598ms
+**Run:** 2026-05-01T19:31:40.297Z
+**Commit:** `c1f71c5`
+**Duration:** 12741ms
 
 ## Summary
 
@@ -15,14 +15,14 @@
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | Chromium launches in headless mode | pass | 1326ms | |
-| ✅ | Browser can open a new page | pass | 209ms | |
-| ✅ | Browser reports correct version string | pass | 0ms | |
-| ✅ | Multiple pages open and close independently | pass | 245ms | |
-| ✅ | Browser closes cleanly | pass | 225ms | |
-| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 4301ms | |
-| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 1941ms | |
-| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 2056ms | |
-| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 2287ms | |
+| ✅ | Server starts without crashing | pass | 7814ms | |
+| ✅ | GET /api/saves → 200 + JSON array | pass | 4178ms | |
+| ✅ | GET /api/schedules → 200 + JSON array | pass | 42ms | |
+| ✅ | GET /api/session/check → 200 + { exists: boolean } | pass | 10ms | |
+| ✅ | GET /api/site-credentials → 200 + { found: boolean } | pass | 6ms | |
+| ✅ | GET / serves HTML frontend | pass | 4ms | |
+| ✅ | [chaos] POST /api/scrape with no URL → 400 | pass | 48ms | |
+| ✅ | [chaos] GET unknown endpoint → 404 | pass | 11ms | |
+| ✅ | [chaos] GET /api/saves/:id with fake ID → 404 | pass | 6ms | |
 
 
