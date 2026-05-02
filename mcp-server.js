@@ -3326,7 +3326,7 @@ const TOOLS = [
   },
   {
     name: 'stop_scrape',
-    description: 'Stop a currently running scrape session.',
+    description: 'Stop a currently running scrape session. Preserves all partial results collected so far. Returns a summary of pages and links found before stopping — use list_saves to access the partial data.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -3489,7 +3489,7 @@ const TOOLS = [
   },
   {
     name: 'delete_save',
-    description: 'Delete a previously saved scrape result by session ID.',
+    description: 'Permanently delete a saved scrape result and all associated data. Returns the save metadata (URL, page count, timestamps) captured before deletion so you have a record of what was removed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -3523,11 +3523,12 @@ const TOOLS = [
   },
   {
     name: 'export_har',
-    description: 'Export a saved scrape result as a HAR 1.2 file (HTTP Archive). HAR files can be imported into browser DevTools, Charles Proxy, or Postman to replay and inspect all captured network requests.',
+    description: 'Export network traffic from a saved scrape as HAR 1.2 format. Returns a summary (entry count, status code breakdown, top domains, average timing) by default. Pass includeRaw: true to get the full HAR object for import into browser DevTools, Charles Proxy, or Postman.',
     inputSchema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', description: 'Session ID from scrape_url' },
+        sessionId:  { type: 'string', description: 'Session ID from scrape_url' },
+        includeRaw: { type: 'boolean', description: 'Include the full HAR object in the response (default: false — summary only)' },
       },
       required: ['sessionId'],
     },
@@ -3561,7 +3562,7 @@ const TOOLS = [
   },
   {
     name: 'delete_schedule',
-    description: 'Delete a scheduled scrape job by ID.',
+    description: 'Permanently cancel and remove a scheduled scrape job. Returns the deleted schedule\'s details (URL, cron expression, last run time) so you have a record of what was removed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -3587,7 +3588,7 @@ const TOOLS = [
   },
   {
     name: 'generate_css',
-    description: 'Generate starter CSS from a scraped page, including discovered CSS variables and basic layout styles.',
+    description: 'Generate starter CSS from a scraped page, including discovered CSS variables, color palette, and layout styles. Returns the CSS string plus a list of extracted CSS custom properties for quick inspection.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -3610,7 +3611,7 @@ const TOOLS = [
   },
   {
     name: 'list_active_scrapes',
-    description: 'List active scrape sessions with compact live status snapshots.',
+    description: 'List all currently running and paused scrape sessions with their live status, page counts, elapsed time, and any errors. Use this before calling stop_scrape or pause_scrape to confirm the session is still active.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -3739,7 +3740,7 @@ const TOOLS = [
   },
   {
     name: 'list_images',
-    description: 'List image assets captured in a saved scrape, including downloaded image metadata when available.',
+    description: 'List image assets captured in a saved scrape. Returns per-image alt text, dimensions, and download status, plus a summary of alt-text coverage (total, missing, descriptive) useful for SEO and accessibility audits.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -3968,7 +3969,7 @@ const TOOLS = [
 
   {
     name: 'delete_monitor',
-    description: 'Delete a page monitor and its stored baseline. Use when monitoring is no longer needed.',
+    description: 'Permanently delete a page monitor and its stored baseline. Returns the monitor details (URL, creation date, last check time) captured before deletion so you have a record of what was removed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -4708,14 +4709,27 @@ async function handleTool(name, args, progressToken = null) {
         });
       }
 
+      const dedupedImages = dedupeBy(
+        images.filter((image) => image.src),
+        (image) => `${image.src}|${image.downloaded}|${image.sourcePageIndex}`
+      );
+      const missingAlt = dedupedImages.filter((img) => !img.alt || img.alt.trim() === '').length;
+      const withAlt = dedupedImages.filter((img) => img.alt && img.alt.trim() !== '').length;
       return {
         sessionId,
         pageIndex: requestedPageIndex,
-        count: Math.min(limit, images.length),
-        images: dedupeBy(
-          images.filter((image) => image.src),
-          (image) => `${image.src}|${image.downloaded}|${image.sourcePageIndex}`
-        ).slice(0, limit),
+        count: Math.min(limit, dedupedImages.length),
+        summary: {
+          total: dedupedImages.length,
+          missingAlt,
+          withAlt,
+          downloaded: dedupedImages.filter((img) => img.downloaded).length,
+          backgroundImages: dedupedImages.filter((img) => img.isBackgroundImage).length,
+          altCoveragePercent: dedupedImages.length > 0
+            ? Math.round((withAlt / dedupedImages.length) * 100)
+            : 0,
+        },
+        images: dedupedImages.slice(0, limit),
       };
     }
 
@@ -5117,11 +5131,25 @@ async function handleTool(name, args, progressToken = null) {
     // ── stop_scrape ──────────────────────────────────────────────────────────
     case 'stop_scrape': {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
+      let partialStatus = null;
+      try { partialStatus = await fetchScrapeStatus(sessionId); } catch {}
       await expectOk(
         await post(`/api/scrape/${encodeURIComponent(sessionId)}/stop`, {}),
         'Session not found — may have already completed or timed out'
       );
-      return { stopped: true, sessionId };
+      return {
+        stopped: true,
+        sessionId,
+        stoppedAt: new Date().toISOString(),
+        partialResults: partialStatus
+          ? {
+              pagesCompleted: partialStatus.pages?.length ?? partialStatus.pagesCompleted ?? 0,
+              linksFound: partialStatus.linksFound ?? 0,
+              status: partialStatus.status ?? 'stopped',
+            }
+          : null,
+        note: 'Partial results are preserved. Use list_saves or get_save_overview to inspect collected data.',
+      };
     }
 
     case 'pause_scrape': {
@@ -5135,7 +5163,8 @@ async function handleTool(name, args, progressToken = null) {
       return {
         paused: true,
         sessionId,
-        note: 'Scrape will finish its current page then pause. Call get_scrape_status to confirm.',
+        pausedAt: new Date().toISOString(),
+        note: 'Scrape will finish its current page then pause. Call get_scrape_status to confirm the paused state.',
         statusAfter,
       };
     }
@@ -5151,7 +5180,8 @@ async function handleTool(name, args, progressToken = null) {
       return {
         resumed: true,
         sessionId,
-        note: 'Scrape is resuming. Poll get_scrape_status to watch progress.',
+        resumedAt: new Date().toISOString(),
+        note: 'Scrape is resuming from where it paused. Poll get_scrape_status to watch progress.',
         statusAfter,
       };
     }
@@ -5457,12 +5487,22 @@ async function handleTool(name, args, progressToken = null) {
 
     case 'delete_save': {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
+      let summary = null;
+      try {
+        const save = await loadSave(sessionId);
+        summary = {
+          url: save.startUrl || save.pages?.[0]?.meta?.url || null,
+          pageCount: save.pages?.length || 0,
+          startedAt: save.startedAt || null,
+          completedAt: save.completedAt || null,
+        };
+      } catch {}
       await expectOk(
         await del(`/api/saves/${encodeURIComponent(sessionId)}`),
         'Failed to delete save'
       );
       clearCachedSave(sessionId);
-      return { deleted: true, sessionId };
+      return { deleted: true, sessionId, deletedAt: new Date().toISOString(), summary };
     }
 
     // ── compare_scrapes ───────────────────────────────────────────────────────
@@ -5494,17 +5534,45 @@ async function handleTool(name, args, progressToken = null) {
     // ── export_har ────────────────────────────────────────────────────────────
     case 'export_har': {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
+      const includeRaw = input.includeRaw === true;
       const save = await loadSave(sessionId);
       const har = save.har;
       if (!har) return { message: 'No HAR data in this save. Re-scrape to generate HAR.', har: null };
-      const entryCount = har.log?.entries?.length || 0;
-      return {
+      const entries = har.log?.entries || [];
+      const entryCount = entries.length;
+      const statusCodes = {};
+      const domains = {};
+      let totalBytes = 0;
+      let totalMs = 0;
+      for (const entry of entries) {
+        const status = entry.response?.status;
+        if (status) statusCodes[String(status)] = (statusCodes[String(status)] || 0) + 1;
+        try {
+          const host = new URL(entry.request?.url || '').hostname;
+          if (host) domains[host] = (domains[host] || 0) + 1;
+        } catch {}
+        if (entry.response?.bodySize > 0) totalBytes += entry.response.bodySize;
+        if (entry.time > 0) totalMs += entry.time;
+      }
+      const topDomains = Object.entries(domains)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([domain, count]) => ({ domain, count }));
+      const result = {
+        sessionId,
         entryCount,
-        har,
+        summary: {
+          totalBodyBytes: totalBytes,
+          avgTimeMs: entryCount > 0 ? Math.round(totalMs / entryCount) : 0,
+          statusCodes,
+          topDomains,
+        },
         note: entryCount > 0
-          ? `HAR contains ${entryCount} entries. Import into browser DevTools > Network > Import HAR.`
+          ? `HAR contains ${entryCount} entries. Pass includeRaw: true to get the full HAR object for DevTools / Postman import.`
           : 'HAR generated but contains no network entries.',
       };
+      if (includeRaw) result.har = har;
+      return result;
     }
 
     // ── schedule_scrape ───────────────────────────────────────────────────────
@@ -5534,13 +5602,20 @@ async function handleTool(name, args, progressToken = null) {
         }),
         'Failed to create schedule'
       );
+      let nextRunAt = null;
+      try {
+        const all = await expectOk(await get('/api/schedules'), 'Failed to fetch schedule list');
+        const match = (all || []).find((s) => s.id === body.id);
+        if (match) nextRunAt = match.nextRunAt || null;
+      } catch {}
       return {
         scheduleId: body.id,
         label: label || null,
         cronExpr,
         url,
+        nextRunAt,
         message: body.message,
-        note: 'Use list_schedules to see status. Results will be saved automatically after each run.',
+        note: 'Use list_schedules to see full status and history. Results will be saved automatically after each run.',
       };
     }
 
@@ -5553,11 +5628,26 @@ async function handleTool(name, args, progressToken = null) {
     // ── delete_schedule ───────────────────────────────────────────────────────
     case 'delete_schedule': {
       const scheduleId = ensureNonEmptyString(input.scheduleId, 'scheduleId');
+      let scheduleSummary = null;
+      try {
+        const all = await expectOk(await get('/api/schedules'), 'Failed to list schedules');
+        const match = (all || []).find((s) => s.id === scheduleId);
+        if (match) {
+          scheduleSummary = {
+            label: match.label || null,
+            cronExpr: match.cronExpr,
+            url: match.scrapeOptions?.url || null,
+            createdAt: match.createdAt || null,
+            lastRun: match.lastRun || null,
+            nextRunAt: match.nextRunAt || null,
+          };
+        }
+      } catch {}
       await expectOk(
         await del(`/api/schedules/${encodeURIComponent(scheduleId)}`),
         `Schedule ${scheduleId} not found`
       );
-      return { deleted: true, scheduleId };
+      return { deleted: true, scheduleId, deletedAt: new Date().toISOString(), schedule: scheduleSummary };
     }
 
     // ── generate_react ────────────────────────────────────────────────────────
@@ -5578,7 +5668,15 @@ async function handleTool(name, args, progressToken = null) {
         await post('/api/generate/css', { pageData: page }),
         'Failed to generate CSS'
       );
-      return { sessionId, pageIndex, css: body.css };
+      const css = body.css || '';
+      const cssVarNames = [...new Set((css.match(/--[\w-]+/g) || []))];
+      return {
+        sessionId,
+        pageIndex,
+        css,
+        cssVariableCount: cssVarNames.length,
+        cssVariables: cssVarNames.slice(0, 40),
+      };
     }
 
     case 'generate_sitemap': {
@@ -5836,9 +5934,20 @@ async function handleTool(name, args, progressToken = null) {
       const monitorId = ensureNonEmptyString(input.monitorId, 'monitorId');
       const monitors = loadMonitors();
       if (!monitors[monitorId]) throw new Error(`Monitor not found: ${monitorId}`);
+      const monitor = monitors[monitorId];
       delete monitors[monitorId];
       saveMonitors(monitors);
-      return { deleted: true, monitorId };
+      return {
+        deleted: true,
+        monitorId,
+        deletedAt: new Date().toISOString(),
+        summary: {
+          url: monitor.url || null,
+          createdAt: monitor.createdAt || null,
+          lastCheckedAt: monitor.lastCheckedAt || null,
+          baselineSessionId: monitor.baselineSessionId || null,
+        },
+      };
     }
 
     // ── decode_jwt_tokens ─────────────────────────────────────────────────────
