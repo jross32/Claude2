@@ -4188,6 +4188,17 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_page_word_count',
+    description: 'Count words, sentences, and paragraphs in a saved page\'s extracted text. Useful for content analysis, SEO density checks, and readability scoring.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string', description: 'Session ID of a completed scrape' },
+      },
+      required: ['sessionId'],
+    },
+  },
+  {
     name: 'server_info',
     description: 'Report MCP server diagnostics: version, exposed toolset, protocol capabilities, local directories, environment flags, and local REST server readiness. Helpful for health checks and debugging client integrations.',
     inputSchema: {
@@ -4253,6 +4264,7 @@ const READ_ONLY_TOOL_NAMES = new Set([
   'get_robots_txt',
   'get_cache_headers',
   'lookup_ip_info',
+  'get_page_word_count',
   'server_info',
 ]);
 
@@ -6324,6 +6336,26 @@ async function handleTool(name, args, progressToken = null) {
       return info;
     }
 
+    // ── get_page_word_count ───────────────────────────────────────────────────
+    case 'get_page_word_count': {
+      const { sessionId } = input;
+      if (!sessionId) throw new Error('sessionId is required');
+      const save = await loadSave(sessionId);
+      if (!save) throw new Error(`No save found for sessionId: ${sessionId}`);
+      const text = (save.pageText || save.extractedText || '').trim();
+      const words = text ? text.split(/\s+/).filter(Boolean) : [];
+      const sentences = text ? text.split(/[.!?]+/).filter((s) => s.trim().length > 0) : [];
+      const paragraphs = text ? text.split(/\n\s*\n/).filter((p) => p.trim().length > 0) : [];
+      return {
+        sessionId,
+        wordCount: words.length,
+        characterCount: text.length,
+        sentenceCount: sentences.length,
+        paragraphCount: paragraphs.length,
+        avgWordsPerSentence: sentences.length > 0 ? Math.round(words.length / sentences.length) : 0,
+      };
+    }
+
     // ── server_info ───────────────────────────────────────────────────────────
     case 'server_info': {
       return buildServerInfoSnapshot();
@@ -7205,7 +7237,7 @@ function buildPromptText(name, args = {}) {
     case 'plan_site_extraction_for_goal': {
       const sessionId = ensureNonEmptyString(args.sessionId, 'sessionId');
       const goal = ensureNonEmptyString(args.goal, 'goal');
-      return `Start with scrape://save/${sessionId}/orientation, then inspect scrape://save/${sessionId}/overview and only follow the highest-priority recommendedScrapes that are still needed for the goal "${goal}". Use Playwright MCP, browser automation, or manual UI inspection for live confirmation of tricky interactive flows. Avoid collapsing broad requests into a single page when sibling sections are relevant.`;
+      return `Start with scrape://save/${sessionId}/orientation, then inspect scrape://save/${sessionId}/overview and only follow the highest-priority recommendedScrapes that are still needed for the goal "${goal}". Use browser automation or manual UI inspection for live confirmation of tricky interactive flows. Avoid collapsing broad requests into a single page when sibling sections are relevant.`;
     }
     case 'security_full_audit': {
       const { url } = args;

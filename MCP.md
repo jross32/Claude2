@@ -50,11 +50,11 @@ Two patterns for tool implementation:
 
 ## Tool Count & Classification
 
-**Total: 73 tools · 27 prompts** (as of last update 2026-05-01)
+**Total: 74 tools · 27 prompts** (as of last update 2026-05-02)
 
 | Classification | Count |
 |----------------|-------|
-| readOnly (RO) | 56 |
+| readOnly (RO) | 57 |
 | destructive (D) | 5 |
 | openWorld (OW) | 19 |
 
@@ -64,7 +64,7 @@ Classification sets defined in mcp-server.js (search for `READ_ONLY_TOOL_NAMES`)
 
 ---
 
-## All 71 Tools — Quick Reference
+## All 74 Tools — Quick Reference
 
 ### Category 1: Core Scraping
 
@@ -208,6 +208,7 @@ Algorithmic tools returning structured data for AI reasoning — no external API
 | `get_robots_txt` | `url` | 8 | OW. Fetch and parse robots.txt from the site origin. Returns per-agent disallow/allow lists, crawl-delay, sitemap references, and `isFullyBlocked` flag. |
 | `get_cache_headers` | `sessionId` | 7 | Extract Cache-Control, ETag, Last-Modified, Expires, and Vary from the document + all REST/GraphQL API calls in a session. |
 | `lookup_ip_info` | `hostname` | 7 | OW. Resolve a hostname or URL to IP, country, city, ISP, ASN, and hosting provider via ip-api.com. |
+| `get_page_word_count` | `sessionId` | 6 | RO. Count words, sentences, and paragraphs in a saved page's extracted text. Returns wordCount, sentenceCount, paragraphCount, avgWordsPerSentence, characterCount. |
 
 ### Category 13: Diagnostics
 
@@ -358,6 +359,9 @@ All 13 issues from the initial audit were fixed on 2026-04-18. Round 2 improveme
 | ✅ | Round 5 (v2.5.0): 5 new prompts (27 total) | `robots_and_seo_audit`, `review_sentiment_analysis`, `third_party_privacy_audit`, `infrastructure_fingerprint`, `iframe_content_map` |
 | ✅ | Round 5 (v2.5.0): landing page | GET / now serves dark-themed landing page; WSP moved to /wsp |
 | ✅ | Round 5 (v2.5.0): research_url docs fix | Removed stale Ollama references; description now references connected AI model |
+| ✅ | Round 6 (v2.5.1): new tool addition workflow | 17-step checklist added to CLAUDE.md + .github/copilot-instructions.md; all AIs now have explicit guidance |
+| ✅ | Round 6 (v2.5.1): get_page_word_count | New RO tool — word/sentence/paragraph/character counts from saved page text |
+| ✅ | Round 6 (v2.5.1): bug fixes | MCP.md line 67 count was stale (71→74); plan_site_extraction_for_goal prompt still referenced non-existent "Playwright MCP" |
 
 ---
 
@@ -367,7 +371,7 @@ As of Round 4 (`mcp-server.js` v2.1.0), the server declares the following MCP pr
 
 | Capability | Status | Notes |
 |-----------|--------|-------|
-| `tools` | ✅ | 73 tools |
+| `tools` | ✅ | 74 tools |
 | `prompts` | ✅ | 27 prompts — workflow guides for AI |
 | `resources` | ✅ | `subscribe: true, listChanged: true` — subscribe to `scrape://saves` for live updates |
 | `logging` | ✅ | `SetLevelRequestSchema` handler; `sendLog()` wraps every tool call |
@@ -410,4 +414,4 @@ Run tests: `node tests/security/oidc_lab.test.js` or `node tests/security/pingfe
 
 ---
 
-*Last updated: 2026-05-01. Tool count: 73. Prompt count: 27. Version: 2.5.0.*
+*Last updated: 2026-05-02. Tool count: 74. Prompt count: 27. Version: 2.5.1.*

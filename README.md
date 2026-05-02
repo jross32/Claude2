@@ -4,7 +4,7 @@ Local web scraping platform with three surfaces that work together:
 
 - A browser UI for exploratory scraping and saved-session review
 - A REST API for automation and wrappers
-- An MCP server with 73 tools, 27 prompts, live resources, completions, logging, and subscriptions
+- An MCP server with 74 tools, 27 prompts, live resources, completions, logging, and subscriptions
 
 This project is strongest when you use it as a power-user site analysis workbench rather than just a one-shot page scraper. It can discover site structure, capture REST and GraphQL traffic, inspect auth flows, extract structured business data, analyze security/privacy posture, generate code artifacts, and schedule or monitor recurring work.
 

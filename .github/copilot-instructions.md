@@ -18,6 +18,56 @@ For the full MCP tool catalog, classification details, source-module mapping, an
 
 ---
 
+## Adding a New MCP Tool
+
+Every time a new tool is added to `mcp-server.js`, **all 17 locations below must be updated**. Do not skip any. After adding tools, run `node --check mcp-server.js` and `node tests/run.js smoke` to verify.
+
+### Required (every tool)
+
+| # | File | What to do |
+|---|------|-----------|
+| 1 | `mcp-server.js` | Add tool object to `TOOLS` array: `{ name, description, inputSchema }` |
+| 2 | `mcp-server.js` | Add to `READ_ONLY_TOOL_NAMES` (~line 4200) if tool only reads data |
+| 3 | `mcp-server.js` | Add to `OPEN_WORLD_TOOL_NAMES` (~line 4267) if tool makes **any** outbound HTTP/network call |
+| 4 | `mcp-server.js` | Add `case 'tool_name':` handler inside `handleTool()` |
+| 5 | `src/mcp-catalog.js` | Add tool name to the correct category in `TOOL_CATEGORY_GROUPS` |
+| 6 | `src/mcp-catalog.js` | Add to `TOOL_MATURITY` if beta/experimental (omit entry if stable) |
+| 7 | `src/mcp-catalog.js` | Add to `TOOL_EXAMPLES` with a sample input object (use `{}` if no params) |
+| 8 | `src/server.js` | Update hardcoded tool count in landing page `<p>` description (~line 86) |
+| 9 | `src/server.js` | Update hardcoded tool count in landing page pill `<strong>` (~line 88) |
+| 10 | `MCP.md` | Update total count line (~line 53): `**Total: N tools · M prompts**` |
+| 11 | `MCP.md` | Update section header (~line 67): `## All N Tools — Quick Reference` |
+| 12 | `MCP.md` | Add tool row to the correct category table: `\| \`tool_name\` \| REST endpoint or — \| AI Use 1–10 \| Notes. RO/OW/D badge if applicable. \|` |
+| 13 | `MCP.md` | Update footer (~line 413): version, date, tool count, prompt count |
+| 14 | `README.md` | Update tool count in the first bullet (~line 7) |
+| 15 | `CLAUDE.md` | Update `mcp-server.js` row in Key File Map (tool + prompt counts) |
+| 16 | `.github/copilot-instructions.md` | Update `mcp-server.js` row in Key File Map (tool + prompt counts) |
+
+### Classification rules
+
+- **OPEN_WORLD** — add if the tool makes ANY outbound HTTP/network call (page fetches, DNS, SSL, IP lookups, API calls to external URLs, etc.). Network calls are extremely common in this codebase — when in doubt, add it as OW.
+- **READ_ONLY** — add if the tool only reads data and never writes, deletes, or modifies state. A tool CAN be both RO and OW simultaneously (e.g., `lookup_dns` reads via network).
+- **DESTRUCTIVE** (`DESTRUCTIVE_TOOL_NAMES`, ~line 4259) — only for tools that permanently delete or halt something. Mutually exclusive with READ_ONLY.
+- If a tool is none of the above: it is implicitly write/stateful (e.g., `schedule_scrape`). Do not add it to any set.
+- Annotations (`readOnlyHint`, `openWorldHint`, etc.) are applied **automatically** via the `TOOLS.forEach()` loop — do not set them manually on the tool object.
+
+### Conditional (only when applicable)
+
+- `CAPTURE_TRACKER.md` — only if the tool captures a new data type not previously tracked
+- `package.json` version — only on a named patch/minor release
+- New `src/*.js` module — if the tool needs a new source file, also add it to the Key File Map and to the source module mapping table in `MCP.md`
+
+### When adding a new PROMPT (not a tool)
+
+Also update `src/server.js` line 89 — the hardcoded "27 prompts" pill on the landing page.
+
+### What is already dynamic (no manual update needed)
+
+`server_info` tool, `/docs` page, `/api/mcp-meta` endpoint — all use `TOOLS.length` / `PROMPTS.length` automatically.
+Test files do **not** hardcode tool names or counts — nothing to update in `tests/`.
+
+---
+
 ## Project Overview
 
 This is a **general-purpose web scraper** (Node.js + Express + Playwright).
@@ -46,7 +96,7 @@ APA-specific config lives in `.env` (gitignored) — not in `src/`.
 | `src/git-autosave.js` | Auto-commit & push on 10-min interval (starts with server) | Stable |
 | `src/oidc-tester.js` | OIDC/OAuth2 security test suite (8 test types) | Stable |
 | `src/tool-logger.js` | Per-call request logs + live usage counters in `logs/` | Stable |
-| `mcp-server.js` | MCP server — 73 tools, 27 prompts, classification sets, handlers | Stable |
+| `mcp-server.js` | MCP server — 74 tools, 27 prompts, classification sets, handlers | Stable |
 | `MCP.md` | Living reference for all MCP tools — update when adding/changing tools | Stable |
 | `public/index.html` | Single-page frontend UI (large — edit carefully) | **Fragile** |
 | `public/js/app.js` | Frontend logic | **Fragile** |
