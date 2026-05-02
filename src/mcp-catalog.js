@@ -152,6 +152,7 @@ const TOOL_MATURITY = {
   get_robots_txt: 'beta',
   get_cache_headers: 'beta',
   lookup_ip_info: 'beta',
+  get_page_word_count: 'beta',
   server_info: 'beta',
 };
 
