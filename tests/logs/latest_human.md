@@ -1,9 +1,9 @@
-# Test Results — smoke
+# Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-02T04:10:27.326Z
-**Commit:** `290cf66`
-**Duration:** 13961ms
+**Run:** 2026-05-02T04:10:44.215Z
+**Commit:** `8ab29c9`
+**Duration:** 8035ms
 
 ## Summary
 
@@ -15,14 +15,14 @@
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | Server starts without crashing | pass | 8359ms | |
-| ✅ | GET /api/saves → 200 + JSON array | pass | 4904ms | |
-| ✅ | GET /api/schedules → 200 + JSON array | pass | 19ms | |
-| ✅ | GET /api/session/check → 200 + { exists: boolean } | pass | 8ms | |
-| ✅ | GET /api/site-credentials → 200 + { found: boolean } | pass | 5ms | |
-| ✅ | GET / serves HTML frontend | pass | 4ms | |
-| ✅ | [chaos] POST /api/scrape with no URL → 400 | pass | 34ms | |
-| ✅ | [chaos] GET unknown endpoint → 404 | pass | 8ms | |
-| ✅ | [chaos] GET /api/saves/:id with fake ID → 404 | pass | 5ms | |
+| ✅ | POST /api/generate/react → 200 + { jsx: string } | pass | 75ms | |
+| ✅ | [chaos] POST /api/generate/react with no pageData → 400 | pass | 7ms | |
+| ✅ | POST /api/generate/css → 200 + { css: string } | pass | 7ms | |
+| ✅ | [chaos] POST /api/generate/css with no pageData → 400 | pass | 5ms | |
+| ✅ | POST /api/generate/markdown → 200 + { markdown: string } | pass | 6ms | |
+| ✅ | [chaos] POST /api/generate/markdown with no pageData → 400 | pass | 4ms | |
+| ✅ | POST /api/generate/sitemap → 200 + XML string | pass | 5ms | |
+| ✅ | [chaos] POST /api/generate/sitemap with no pages → 400 | pass | 4ms | |
+| ✅ | [chaos] POST /api/generate/react with empty pageData → does not 500 | pass | 7ms | |
 
 
