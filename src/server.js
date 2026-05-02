@@ -81,7 +81,7 @@ h1 span{color:#4f8ef7}
 </head>
 <body>
 <div class="card">
-  <div class="badge">WEB SCRAPER MCP &nbsp;·&nbsp; v2.5.0</div>
+  <div class="badge">WEB SCRAPER MCP &nbsp;·&nbsp; v2.5.1</div>
   <h1>Web Scraper <span>MCP</span></h1>
   <p class="sub">A production-grade web scraping platform with 74 tools, MCP protocol support, and deep browser automation.</p>
   <div class="pills">
