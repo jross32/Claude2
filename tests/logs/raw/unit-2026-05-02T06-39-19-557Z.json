@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-05-02T06:39:19.555Z",
+  "git_commit": "302c776",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "TOTP verification auto-generates a code when a secret is provided",
+      "status": "pass",
+      "duration_ms": 3,
+      "error": null,
+      "input": {},
+      "output": {
+        "code": "205840"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Manual verification codes are submitted without auto-generation",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "submitted": "123456"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "Missing verification codes log a warning and skip submission gracefully",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "warnings": 1
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 12,
+    "avg_duration_ms": 4
+  }
+}

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browser Automation Fixture</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 32px;
+      background: #f4f7fb;
+      color: #142032;
+    }
+    .card {
+      max-width: 880px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 16px 40px rgba(20, 32, 50, 0.12);
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    input, select, button {
+      font: inherit;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #c9d4e5;
+    }
+    button {
+      cursor: pointer;
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #fff;
+    }
+    #details {
+      display: none;
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+    }
+    #result {
+      margin-top: 18px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Browser Automation Fixture</h1>
+    <p>This page exists to test browser automation, stable interactables, and scraper handoff.</p>
+
+    <label for="search-box">Search Query</label>
+    <div class="actions">
+      <input id="search-box" name="search" placeholder="Type a query" />
+      <button id="search-btn" type="button">Run Search</button>
+    </div>
+
+    <div class="actions">
+      <label for="plan-select">Plan</label>
+      <select id="plan-select" name="plan">
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+      <button id="details-btn" type="button">Toggle Details</button>
+    </div>
+
+    <div id="result">Results for: none</div>
+    <div id="plan-output">Selected plan: starter</div>
+    <div id="details">Detailed automation content is now visible.</div>
+  </div>
+
+  <script>
+    const searchBox = document.getElementById('search-box');
+    const searchBtn = document.getElementById('search-btn');
+    const result = document.getElementById('result');
+    const planSelect = document.getElementById('plan-select');
+    const planOutput = document.getElementById('plan-output');
+    const detailsBtn = document.getElementById('details-btn');
+    const details = document.getElementById('details');
+
+    searchBtn.addEventListener('click', () => {
+      result.textContent = `Results for: ${searchBox.value || 'none'}`;
+    });
+
+    planSelect.addEventListener('change', () => {
+      planOutput.textContent = `Selected plan: ${planSelect.value}`;
+    });
+
+    detailsBtn.addEventListener('click', () => {
+      const isOpen = details.style.display === 'block';
+      details.style.display = isOpen ? 'none' : 'block';
+      detailsBtn.textContent = isOpen ? 'Toggle Details' : 'Hide Details';
+    });
+  </script>
+</body>
+</html>

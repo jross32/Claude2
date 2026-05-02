@@ -1,28 +1,32 @@
-# Test Results — smoke
+# Test Results — unit
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-02T06:04:56.077Z
-**Commit:** `ec0b368`
-**Duration:** 14520ms
+**Run:** 2026-05-02T06:39:20.319Z
+**Commit:** `302c776`
+**Duration:** 16ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 9 | 9 | 0 | 0 |
+| 13 | 13 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | Server starts without crashing | pass | 8756ms | |
-| ✅ | GET /api/saves → 200 + JSON array | pass | 4978ms | |
-| ✅ | GET /api/schedules → 200 + JSON array | pass | 30ms | |
-| ✅ | GET /api/session/check → 200 + { exists: boolean } | pass | 62ms | |
-| ✅ | GET /api/site-credentials → 200 + { found: boolean } | pass | 7ms | |
-| ✅ | GET / serves HTML frontend | pass | 6ms | |
-| ✅ | [chaos] POST /api/scrape with no URL → 400 | pass | 51ms | |
-| ✅ | [chaos] GET unknown endpoint → 404 | pass | 13ms | |
-| ✅ | [chaos] GET /api/saves/:id with fake ID → 404 | pass | 6ms | |
+| ✅ | returns pages, apiCalls, assets, summary | pass | 4ms | |
+| ✅ | detects added page in B | pass | 0ms | |
+| ✅ | detects removed page from A | pass | 0ms | |
+| ✅ | identical results → pages added/removed are empty | pass | 1ms | |
+| ✅ | detects added text block | pass | 0ms | |
+| ✅ | detects added link | pass | 0ms | |
+| ✅ | detects added image | pass | 1ms | |
+| ✅ | detects title change | pass | 1ms | |
+| ✅ | summary.pages counts match actual arrays | pass | 2ms | |
+| ✅ | [chaos] empty pages arrays → no crash, empty diffs | pass | 0ms | |
+| ✅ | [chaos] missing pages key → no crash | pass | 0ms | |
+| ✅ | [chaos] page with no meta → no crash | pass | 1ms | |
+| ✅ | [chaos] apiCalls missing in inputs → no crash | pass | 1ms | |
 
 

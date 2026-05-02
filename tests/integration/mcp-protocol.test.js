@@ -11,6 +11,7 @@ const { start: startApi, stop: stopApi, getPort } = require('../api/_server');
 
 const ROOT = path.join(__dirname, '../..');
 const SAVES_DIR = path.join(ROOT, 'scrape-saves');
+const BROWSER_FIXTURE_HTML = fs.readFileSync(path.join(__dirname, '../fixtures/browser-automation.html'), 'utf8');
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,6 +111,23 @@ function writeSaveFixture(sessionId, overrides) {
   return file;
 }
 
+function startBrowserFixtureServer() {
+  return new Promise((resolve, reject) => {
+    const server = require('http').createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(BROWSER_FIXTURE_HTML);
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      resolve({
+        server,
+        url: `http://127.0.0.1:${address.port}/`,
+      });
+    });
+    server.on('error', reject);
+  });
+}
+
 async function startMcpClient() {
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -161,9 +179,13 @@ async function main() {
   let client = null;
   let transport = null;
   let getStderr = () => '';
+  let browserFixture = null;
+  let browserSaveId = null;
+  let browserSessionId = null;
 
   try {
     await startApi();
+    browserFixture = await startBrowserFixtureServer();
 
     const fixtureId = `mcp-integration-${Date.now()}`;
     fixtureIds.push(fixtureId);
@@ -213,6 +235,71 @@ async function main() {
       if (!/pricing section/i.test(promptText)) throw new Error('Expected prompt to interpolate the requested goal');
 
       setOutput({ promptCount: prompts.prompts.length });
+    });
+
+    await runner.run('MCP browser automation tools can drive a live session end-to-end', async ({ setOutput }) => {
+      const opened = await client.callTool({
+        name: 'open_browser_session',
+        arguments: {
+          url: browserFixture.url,
+          viewMode: 'console',
+          persistenceMode: 'auth_state',
+        },
+      });
+      const openData = parseToolData(opened);
+      browserSessionId = openData.browserSessionId;
+      if (!browserSessionId) throw new Error('Expected browserSessionId from open_browser_session');
+      if (!Array.isArray(openData.snapshot?.interactables) || openData.snapshot.interactables.length === 0) {
+        throw new Error('Expected initial browser interactables');
+      }
+
+      const inspect = await client.callTool({
+        name: 'inspect_browser_page',
+        arguments: { browserSessionId },
+      });
+      const inspectData = parseToolData(inspect);
+      const searchInput = inspectData.interactables.find((element) =>
+        element.preferredSelector === '#search-box' || /search/i.test(element.label || '')
+      );
+      if (!searchInput?.elementId) throw new Error('Expected a search input elementId');
+
+      const stepsResult = await client.callTool({
+        name: 'run_browser_steps',
+        arguments: {
+          browserSessionId,
+          steps: [
+            { type: 'type', elementId: searchInput.elementId, value: 'pricing' },
+            { type: 'click', selector: '#search-btn' },
+            { type: 'wait', textIncludes: 'Results for: pricing', timeoutMs: 8000 },
+          ],
+        },
+      });
+      const stepsData = parseToolData(stepsResult);
+      if (!stepsData.finalSnapshot || !/Results for: pricing/.test(stepsData.finalSnapshot.visibleTextSummary || '')) {
+        throw new Error('Expected the browser workflow to update the fixture page');
+      }
+
+      const saved = await client.callTool({
+        name: 'save_browser_session',
+        arguments: {
+          browserSessionId,
+          name: 'Integration Browser Save',
+        },
+      });
+      const saveData = parseToolData(saved);
+      browserSaveId = saveData.browserSaveId;
+      if (!browserSaveId) throw new Error('Expected browserSaveId from save_browser_session');
+
+      await client.callTool({
+        name: 'close_browser_session',
+        arguments: { browserSessionId },
+      });
+      browserSessionId = null;
+
+      setOutput({
+        browserSaveId,
+        steps: stepsData.steps.length,
+      });
     });
 
     await runner.run('MCP resources/list, resources/templates/list, and resources/read expose saved scrape context', async ({ setOutput }) => {
@@ -300,6 +387,13 @@ async function main() {
       const file = path.join(SAVES_DIR, `${sessionId}.json`);
       try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
     }
+    if (browserSessionId) {
+      try { await client?.callTool?.({ name: 'close_browser_session', arguments: { browserSessionId } }); } catch {}
+    }
+    if (browserSaveId) {
+      try { await client?.callTool?.({ name: 'delete_browser_session_save', arguments: { browserSaveId } }); } catch {}
+    }
+    try { browserFixture?.server?.close?.(); } catch {}
     try { await client?.close?.(); } catch {}
     try { await transport?.close?.(); } catch {}
     stopApi();

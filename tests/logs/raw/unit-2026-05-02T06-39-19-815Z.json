@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-05-02T06:39:19.812Z",
+  "git_commit": "302c776",
+  "suite": "unit",
+  "tests": [
+    {
+      "name": "browser inspector hashes are stable and compact",
+      "status": "pass",
+      "duration_ms": 2,
+      "error": null,
+      "input": {},
+      "output": {
+        "token": "d70b83ec27feb029"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "browser inspector element IDs derive deterministically from element metadata",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "first": "el_3976bbcfe1727042",
+        "changed": "el_a49d95191ce34112"
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "browser inspector text summaries clip without losing short strings",
+      "status": "pass",
+      "duration_ms": 1,
+      "error": null,
+      "input": {},
+      "output": {
+        "short": "short text",
+        "long": "aaaaaaaaaaaaaaaaaaaaa..."
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 9,
+    "avg_duration_ms": 3
+  }
+}
