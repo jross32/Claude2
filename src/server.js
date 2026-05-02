@@ -16,7 +16,9 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { version: PACKAGE_VERSION } = require('../package.json');
 const ScraperSession = require('./scraper');
+const BrowserSessionManager = require('./browser-session-manager');
 
 const SAVES_DIR = path.join(__dirname, '../scrape-saves');
 const { clearSession } = require('./scraper');
@@ -53,8 +55,9 @@ const MAX_ACTIVE_SCRAPES = Number(process.env.MAX_ACTIVE_SCRAPES) || 4;
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 
-// ── Landing page (must come before express.static so it intercepts GET /) ───
-const _LANDING_HTML = `<!DOCTYPE html>
+function buildLandingHtml() {
+  const meta = getMcpMeta();
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -81,12 +84,12 @@ h1 span{color:#4f8ef7}
 </head>
 <body>
 <div class="card">
-  <div class="badge">WEB SCRAPER MCP &nbsp;·&nbsp; v2.5.3</div>
+  <div class="badge">WEB SCRAPER MCP &nbsp;·&nbsp; v${PACKAGE_VERSION}</div>
   <h1>Web Scraper <span>MCP</span></h1>
-  <p class="sub">A production-grade web scraping platform with 73 tools, MCP protocol support, and deep browser automation.</p>
+  <p class="sub">A production-grade web scraping platform with ${meta.counts.tools} tools, MCP protocol support, deep browser automation, and live AI-first session workflows.</p>
   <div class="pills">
-    <div class="pill"><strong>73</strong>&nbsp;tools</div>
-    <div class="pill"><strong>24</strong>&nbsp;prompts</div>
+    <div class="pill"><strong>${meta.counts.tools}</strong>&nbsp;tools</div>
+    <div class="pill"><strong>${meta.counts.prompts}</strong>&nbsp;prompts</div>
     <div class="pill"><strong>MCP 2.x</strong> protocol</div>
     <div class="pill"><strong>Playwright</strong> automation</div>
   </div>
@@ -98,8 +101,9 @@ h1 span{color:#4f8ef7}
 </div>
 </body>
 </html>`;
+}
 
-app.get('/', (_req, res) => res.type('html').send(_LANDING_HTML));
+app.get('/', (_req, res) => res.type('html').send(buildLandingHtml()));
 app.get('/wsp', (_req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 app.use(express.static(path.join(__dirname, '../public')));
@@ -125,7 +129,7 @@ setInterval(() => {
 app.use((req, res, next) => {
   const ip = req.ip || 'local';
   let limit = 120;
-  if (/^\/api\/(scrape|fill-form|screenshot|oidc-test|tls-fingerprint)/.test(req.path)) limit = 30;
+  if (/^\/api\/(scrape|browser|fill-form|screenshot|oidc-test|tls-fingerprint)/.test(req.path)) limit = 30;
   else if (/^\/api\/(generate|schema|diff|schedules|monitor)/.test(req.path)) limit = 60;
   if (_checkRateLimit(`${ip}:${req.method}:${req.path.split('/').slice(0, 4).join('/')}`, limit)) {
     return res.status(429).json({ error: 'Rate limit exceeded — slow down requests', retryAfterSeconds: 60 });
@@ -198,6 +202,8 @@ function broadcast(sessionId, data) {
     }
   });
 }
+
+const browserSessionManager = new BrowserSessionManager({ broadcast });
 
 // Known site credentials from .env — keyed by hostname fragment
 const KNOWN_SITES = [
