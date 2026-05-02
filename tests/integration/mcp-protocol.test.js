@@ -175,7 +175,7 @@ async function main() {
       const result = await client.listTools();
       if (!Array.isArray(result.tools) || !result.tools.length) throw new Error('Expected non-empty tool list');
       if (!result.tools.some((tool) => tool.name === 'server_info')) throw new Error('Expected server_info in MCP tool list');
-      if (!result.tools.some((tool) => tool.name === 'get_robots_txt')) throw new Error('Expected get_robots_txt in MCP tool list');
+      if (!result.tools.some((tool) => tool.name === 'get_page_word_count')) throw new Error('Expected get_page_word_count in MCP tool list');
 
       setOutput({ toolCount: result.tools.length });
     });
@@ -209,7 +209,7 @@ async function main() {
         },
       });
       const promptText = getTextBlockText(prompt.messages?.[0]?.content ? [prompt.messages[0].content] : []);
-      if (!/Playwright MCP/i.test(promptText)) throw new Error('Expected prompt guidance to mention Playwright MCP');
+      if (!/browser automation/i.test(promptText)) throw new Error('Expected prompt guidance to mention browser automation');
       if (!/pricing section/i.test(promptText)) throw new Error('Expected prompt to interpolate the requested goal');
 
       setOutput({ promptCount: prompts.prompts.length });
