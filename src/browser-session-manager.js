@@ -916,7 +916,11 @@ class BrowserSessionManager {
 
   getSession(sessionId) {
     const session = this.sessions.get(String(sessionId));
-    if (!session) throw new Error(`Unknown browserSessionId: ${sessionId}`);
+    if (!session) {
+      const err = new Error(`Unknown browserSessionId: ${sessionId}`);
+      err.statusCode = 404;
+      throw err;
+    }
     return session;
   }
 
@@ -1063,13 +1067,21 @@ class BrowserSessionManager {
 
   getSave(browserSaveId) {
     const file = path.join(BROWSER_SAVES_DIR, `${browserSaveId}.json`);
-    if (!fs.existsSync(file)) throw new Error(`Unknown browserSaveId: ${browserSaveId}`);
+    if (!fs.existsSync(file)) {
+      const err = new Error(`Unknown browserSaveId: ${browserSaveId}`);
+      err.statusCode = 404;
+      throw err;
+    }
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   }
 
   deleteSave(browserSaveId) {
     const file = path.join(BROWSER_SAVES_DIR, `${browserSaveId}.json`);
-    if (!fs.existsSync(file)) throw new Error(`Unknown browserSaveId: ${browserSaveId}`);
+    if (!fs.existsSync(file)) {
+      const err = new Error(`Unknown browserSaveId: ${browserSaveId}`);
+      err.statusCode = 404;
+      throw err;
+    }
     const save = JSON.parse(fs.readFileSync(file, 'utf8'));
     fs.unlinkSync(file);
     return {
