@@ -19,7 +19,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | Tables and list data | ✅ | — | |
 | 50+ DOM data types via extractor.js | ✅ | — | headings, buttons, inputs, embeds, data attributes, etc. |
 | Shadow DOM content | ✅ | — | extractor.js lines 17–55 |
-| iFrame content | ❌ | **7** | Tons of sites embed key content in iframes |
+| iFrame content | ✅ | — | scraper.js iFrame eval — text, links, form presence per child frame (cross-origin skipped) |
 | Accessibility tree (ARIA roles, labels) | ✅ | — | extractor.js lines 436–446 |
 | CSS computed styles per element | ❌ | **4** | Mostly useful for design tooling |
 | Design tokens / CSS variables | ✅ | — | extractor.js lines 349–366 |
@@ -92,8 +92,8 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | Largest Contentful Paint (LCP) | ✅ | — | extractor.js lines 779–815 |
 | Cumulative Layout Shift (CLS) | ✅ | — | extractor.js lines 779–815 |
 | Total Blocking Time | ✅ | — | extractor.js lines 779–815 |
-| Resource size per asset | ❌ | **6** | AI can flag bloated bundles |
-| Number of requests per page | ❌ | **6** | |
+| Resource size per asset | ✅ | — | extractor.js resourceTimings — transferSize + encodedBodySize per asset, capped at 100 |
+| Number of requests per page | ✅ | — | extractor.js resourceTimings.length |
 | Unused CSS/JS ratio | ❌ | **5** | |
 
 ---
@@ -204,7 +204,7 @@ Update this file as features are added — flip ❌ to ✅ and note the date.
 | Error tracking tools detected | ✅ | — | extractor.js tech section |
 | Payment processors detected | ✅ | — | extractor.js tech section |
 | Chat / support tools detected | ✅ | — | extractor.js tech section |
-| IP address / hosting provider | ❌ | **6** | |
+| IP address / hosting provider | ✅ | — | src/ip-lookup.js — lookup_ip_info tool via ip-api.com: IP, country, ISP, ASN, hosting flag |
 | DNS records (A, MX, TXT, NS) | ✅ | — | dns-lookup.js — A/AAAA/MX/TXT/NS/CNAME/SOA + tech inference |
 | SSL certificate details | ✅ | — | ssl-inspector.js — chain, SANs, cipher, expiry flags |
 | WHOIS / domain registration info | ❌ | **4** | |

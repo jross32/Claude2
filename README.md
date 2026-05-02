@@ -1,62 +1,55 @@
-# WebScraper Pro
+# Web Scraper MCP
 
-A full-featured web scraper with a browser-based UI. Intercepts GraphQL and REST API calls, handles authentication (including 2FA), and exports all scraped data as structured JSON.
+Local web scraping platform with three surfaces that work together:
 
-## Features
+- A browser UI for exploratory scraping and saved-session review
+- A REST API for automation and wrappers
+- An MCP server with 73 tools, 27 prompts, live resources, completions, logging, and subscriptions
 
-- **GraphQL interception** — captures queries, mutations, variables, and responses
-- **REST API interception** — captures all `/api/`, `/v1/`, `/v2/` calls
-- **Authentication** — auto-fills login forms (username + password)
-- **2FA / Verification** — supports TOTP, email code, SMS code (enter live during scrape)
-- **CAPTCHA detection** — flags CAPTCHA-protected pages
-- **Deep scraping** — follow internal links up to 3 levels
-- **Asset capture** — collect image, script, font, and stylesheet URLs
-- **JSON export** — download all scraped data as a formatted JSON file
-- **Refactor scaffold** — generate a clean HTML scaffold from scraped data
+This project is strongest when you use it as a power-user site analysis workbench rather than just a one-shot page scraper. It can discover site structure, capture REST and GraphQL traffic, inspect auth flows, extract structured business data, analyze security/privacy posture, generate code artifacts, and schedule or monitor recurring work.
 
-## Install & Run
+## Quick Start
 
 ```bash
 npm install
 npm start
+node mcp-server.js
 ```
 
-Then open [http://localhost:3000](http://localhost:3000)
+Open:
 
-## Usage
+- Landing: [http://localhost:3000](http://localhost:3000)
+- Web Scraper Panel: [http://localhost:3000/wsp](http://localhost:3000/wsp)
+- Live docs: [http://localhost:3000/docs](http://localhost:3000/docs)
+- MCP architecture reference: [MCP.md](./MCP.md)
 
-1. Enter the target URL
-2. Configure capture options (GraphQL, REST, assets)
-3. Enable authentication if the site requires login
-4. Select verification type if 2FA is used
-5. Click **Start Scraping**
-6. View results in the **Results**, **API Calls**, and **Assets** tabs
-7. Download JSON or generate an HTML scaffold in the **Refactor** tab
+By default the MCP server talks to the local REST app at `http://localhost:3000`. Override with `SCRAPER_URL` if needed.
 
-## Output Structure
+## What It Can Do
 
-```json
-{
-  "meta": { "scrapedAt": "...", "targetUrl": "...", ... },
-  "siteInfo": { "title": "...", "logoUrl": "...", "hasLoginForm": true, ... },
-  "pages": [
-    {
-      "meta": { ... },
-      "headings": { "h1": [...], "h2": [...] },
-      "textBlocks": [...],
-      "links": [...],
-      "images": [...],
-      "forms": [...],
-      "tables": [...],
-      "cssVariables": { "--primary": "#...", ... },
-      "layoutTree": { ... },
-      ...
-    }
-  ],
-  "apiCalls": {
-    "graphql": [ { "url": "...", "body": { "query": "..." }, "response": { ... } } ],
-    "rest": [ { "url": "...", "method": "GET", "response": { ... } } ]
-  },
-  "assets": [...]
-}
+- Detect site type, auth requirements, tech stack, and likely scrape strategy before crawling
+- Capture rendered pages, forms, links, images, assets, cookies, console logs, and REST/GraphQL traffic
+- Extract products, deals, jobs, company info, reviews, entities, and higher-level business intelligence
+- Analyze JWTs, DNS, TLS, security headers, broken links, robots.txt, sitemap coverage, and API surface area
+- Generate React, CSS, Markdown, and sitemap output from saved scrapes
+- Schedule recurring scrapes and monitor specific pages for changes
+
+## Best Workflows
+
+- Start with `detect_site` or `preflight_url` before a new scrape target
+- Use `scrape_url` or `batch_scrape` to capture data, then read `scrape://save/{id}/overview`
+- Use prompts such as `site_health_check`, `competitive_intel`, `security_full_audit`, and `plan_site_extraction_for_goal` when the task spans multiple tools
+- Use `/docs` or `scrape://docs/tool-list` when choosing among the larger tool surface
+- Call `server_info` to confirm runtime health, exposed toolset, writable directories, and environment readiness
+
+## Testing
+
+```bash
+node tests/run.js smoke api integration unit
+```
+
+Security labs remain available separately:
+
+```bash
+node tests/run.js security
 ```

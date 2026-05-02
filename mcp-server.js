@@ -30,6 +30,7 @@ const http = require('http');
 const https = require('https');
 const path = require('path');
 const WebSocket = require('ws');
+const { version: PACKAGE_VERSION } = require('./package.json');
 
 // Direct module imports (tools that don't need the REST API)
 const toolLogger = require('./src/tool-logger');
@@ -45,9 +46,17 @@ const { extractProductData } = require('./src/product-extractor');
 const { extractJobData } = require('./src/job-extractor');
 const { extractCompanyInfo } = require('./src/company-extractor');
 const { extractReviews } = require('./src/review-extractor');
+const { fetchAndParseRobots } = require('./src/robots-parser');
+const { lookupIpInfo } = require('./src/ip-lookup');
+const {
+  STARTER_WORKFLOWS,
+  buildPromptCatalog,
+  buildToolCatalog,
+} = require('./src/mcp-catalog');
 
 const BASE_URL = process.env.SCRAPER_URL || 'http://localhost:3000';
 const WS_URL = BASE_URL.replace(/^http/, 'ws');
+const SERVER_VERSION = PACKAGE_VERSION || '0.0.0';
 const REQUEST_TIMEOUT_MS = 30 * 1000;
 const SCRAPE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 const SAVE_POLL_INTERVAL_MS = 1500;
@@ -75,6 +84,8 @@ const RESEARCH_FAST_MAX_HEADINGS = Number(process.env.RESEARCH_FAST_MAX_HEADINGS
 const RESEARCH_DEEP_MAX_HEADINGS = Number(process.env.RESEARCH_DEEP_MAX_HEADINGS) || 14;
 const RESEARCH_TOOL_MODES = new Set(['auto', 'fast', 'deep']);
 const SAVES_DIR = path.join(__dirname, 'scrape-saves');
+const DATA_DIR = path.join(__dirname, 'data');
+const LOGS_DIR = path.join(__dirname, 'logs');
 const ORIENTATION_SCOPE_LEVELS = new Set([1, 2, 3]);
 const ORIENTATION_SEED_PAGE_COUNT = Number(process.env.ORIENTATION_SEED_PAGE_COUNT) || 1;
 const ORIENTATION_FOLLOWUP_BATCH_SIZE = Number(process.env.ORIENTATION_FOLLOWUP_BATCH_SIZE) || 6;
@@ -1352,6 +1363,7 @@ async function mapSiteForGoal({
   password = undefined,
   totpSecret = undefined,
   ssoProvider = undefined,
+  _onProgress = null,
 }) {
   const normalizedUrl = ensureNonEmptyString(url, 'url');
   const normalizedGoal = ensureNonEmptyString(goal, 'goal');
@@ -1475,6 +1487,7 @@ async function mapSiteForGoal({
     relatedSessionIds.push(followUpSessionId);
     additionalSaves.push(followUpResult);
     stopReason = `Expanded to ${nextUrls.length} follow-up page(s) in round ${round}.`;
+    if (_onProgress) _onProgress(round, roundLimit, `Round ${round}/${roundLimit}: explored ${nextUrls.length} page(s)`);
     previousOrientation = orientation;
   }
 
@@ -3019,42 +3032,162 @@ async function notifyResourceListChanged() {
   } catch {}
 }
 
+function canWriteDir(dirPath) {
+  try {
+    fs.accessSync(dirPath, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function buildServerInfoSnapshot() {
+  const requiredEnv = [];
+  const recommendedEnv = [
+    'SCRAPER_URL',
+    'AI_ANALYSIS_URL',
+    'AI_ANALYSIS_MODEL',
+    'AI_ANALYSIS_API_KEY',
+    'API_KEY',
+    'MCP_TOOLSET',
+  ];
+  const directories = [SAVES_DIR, DATA_DIR, LOGS_DIR].map((dirPath) => ({
+    path: dirPath,
+    exists: fs.existsSync(dirPath),
+    writable: fs.existsSync(dirPath) ? canWriteDir(dirPath) : false,
+  }));
+
+  let restServer = {
+    reachable: false,
+    status: null,
+    error: null,
+  };
+  let saveCount = 0;
+  let activeCount = 0;
+  try {
+    const response = await get('/api/saves?includeHidden=1');
+    restServer = {
+      reachable: response.status >= 200 && response.status < 500,
+      status: response.status,
+      error: null,
+    };
+    saveCount = Array.isArray(response.body) ? response.body.length : 0;
+  } catch (err) {
+    restServer.error = err.message;
+  }
+
+  try {
+    const active = await fetchActiveScrapes();
+    activeCount = Array.isArray(active) ? active.length : 0;
+  } catch {}
+
+  let playwrightInstalled = false;
+  try {
+    require.resolve('playwright');
+    playwrightInstalled = true;
+  } catch {}
+
+  return {
+    server: {
+      name: 'web-scraper',
+      version: SERVER_VERSION,
+      activeToolset,
+      baseUrl: BASE_URL,
+      pid: process.pid,
+      node: process.version,
+      platform: process.platform,
+    },
+    counts: {
+      toolsExposed: listToolsForCurrentToolset().length,
+      toolsTotal: TOOLS.length,
+      prompts: PROMPTS.length,
+      fixedResources: FIXED_RESOURCES.length,
+      dynamicResources: (saveCount * 7) + activeCount,
+      resourceTemplates: RESOURCE_TEMPLATES.length,
+    },
+    capabilities: {
+      tools: true,
+      prompts: true,
+      resources: { subscribe: true, listChanged: true },
+      logging: true,
+      completions: true,
+      sampling: true,
+      roots: true,
+    },
+    environment: {
+      required: requiredEnv,
+      recommended: recommendedEnv,
+      present: recommendedEnv.filter((key) => !!process.env[key]),
+      missingRecommended: recommendedEnv.filter((key) => !process.env[key]),
+    },
+    directories,
+    runtime: {
+      playwrightInstalled,
+      activeSubscriptions: activeSubscriptions.size,
+    },
+    connectivity: {
+      restServer,
+    },
+    workflows: STARTER_WORKFLOWS,
+  };
+}
+
 function buildDocsToolList() {
+  const catalog = getToolCatalog();
+  const grouped = new Map();
+  for (const tool of catalog) {
+    if (!grouped.has(tool.category)) grouped.set(tool.category, []);
+    grouped.get(tool.category).push(tool);
+  }
+
   const lines = [
     '# Web Scraper MCP — Tool Reference',
-    `Generated: ${new Date().toISOString().slice(0, 10)} | ${TOOLS.length} tools`,
+    `Generated: ${new Date().toISOString().slice(0, 10)} | ${catalog.length} tools`,
     '',
     '## Classification Key',
     '- **RO** — Read-only. Safe to call freely.',
     '- **OW** — Open-world. Makes outbound network calls.',
     '- **D** — Destructive. Deletes or irreversibly changes state.',
+    '- **stable** — Mature and used in common workflows.',
+    '- **beta** — Supported, but still evolving.',
+    '- **experimental** — Powerful, but more agent/operator guidance may be needed.',
     '',
-    '## Tool Index',
+    '## Starter Workflows',
     '',
   ];
 
-  for (const tool of TOOLS) {
-    const badges = [];
-    if (READ_ONLY_TOOL_NAMES.has(tool.name)) badges.push('RO');
-    if (OPEN_WORLD_TOOL_NAMES.has(tool.name)) badges.push('OW');
-    if (DESTRUCTIVE_TOOL_NAMES.has(tool.name)) badges.push('D');
-    const badgeStr = badges.length ? ` \`[${badges.join('|')}]\`` : '';
-    lines.push(`- [\`${tool.name}\`](#${tool.name})${badgeStr} — ${tool.description.split('.')[0]}`);
+  for (const workflow of STARTER_WORKFLOWS) {
+    lines.push(`- **${workflow.title}** — ${workflow.summary}`);
+    lines.push(`  Tools: ${workflow.tools.map((tool) => `\`${tool}\``).join(' → ')}`);
   }
 
-  lines.push('', '---', '');
+  lines.push('', '## Tool Index', '');
 
-  for (const tool of TOOLS) {
-    const badges = [];
-    if (READ_ONLY_TOOL_NAMES.has(tool.name)) badges.push('RO');
-    if (OPEN_WORLD_TOOL_NAMES.has(tool.name)) badges.push('OW');
-    if (DESTRUCTIVE_TOOL_NAMES.has(tool.name)) badges.push('D');
-    const badgeStr = badges.length ? ` \`[${badges.join('|')}]\`` : '';
+  for (const [category, tools] of grouped.entries()) {
+    lines.push(`### ${category}`, '');
+    for (const tool of tools) {
+      const badgeStr = tool.badges.length ? ` \`[${tool.badges.join('|')}]\`` : '';
+      lines.push(`- [\`${tool.name}\`](#${tool.name})${badgeStr} — ${tool.description.split('.')[0]}`);
+    }
+    lines.push('');
+  }
+
+  lines.push('---', '');
+
+  for (const tool of catalog) {
+    const badgeStr = tool.badges.length ? ` \`[${tool.badges.join('|')}]\`` : '';
 
     lines.push(`### \`${tool.name}\`${badgeStr}`);
     lines.push('');
+    lines.push(`**Category:** ${tool.category}`);
+    lines.push(`**Maturity:** ${tool.maturity}`);
+    lines.push('');
     lines.push(tool.description);
     lines.push('');
+    if (tool.exampleCall) {
+      lines.push(`**Example:** \`${tool.exampleCall}\``);
+      lines.push('');
+    }
 
     const props = tool.inputSchema?.properties || {};
     const required = new Set(tool.inputSchema?.required || []);
@@ -3672,7 +3805,7 @@ const TOOLS = [
   },
   {
     name: 'research_url',
-    description: 'Scrape a URL with a real browser then use local AI (Ollama) to analyze the content and directly answer your question. One call replaces scrape_url → get_page_text → manual reading. Works for any site and any question: finding deals, upcoming releases, product comparisons, news summaries, job listings, menu items, changelog diffs, competitive research, or anything else. Falls back to keyword extraction if Ollama is not running.',
+    description: 'Scrape a URL with a real browser then use the connected AI model to analyze the content and directly answer your question. One call replaces scrape_url → get_page_text → manual reading. Works for any site and any question: finding deals, upcoming releases, product comparisons, news summaries, job listings, menu items, changelog diffs, competitive research, or anything else. Falls back to keyword extraction if no AI model is connected.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -3681,7 +3814,7 @@ const TOOLS = [
         maxPages:    { type: 'number',  description: 'Max pages to scrape before analyzing (default: 3)' },
         scrapeDepth: { type: 'number',  description: 'Link depth to follow (default: 1)' },
         autoScroll:  { type: 'boolean', description: 'Auto-scroll pages to trigger lazy loading (default: false)' },
-        mode:        { type: 'string',  enum: ['auto', 'fast', 'deep'], description: 'Analysis mode. auto skips Ollama for extractive questions, fast uses the fast local model, deep uses the deeper local model.' },
+        mode:        { type: 'string',  enum: ['auto', 'fast', 'deep'], description: 'Analysis mode. auto lets the AI choose the approach, fast is optimized for speed, deep is more thorough.' },
         includeEvidence: { type: 'boolean', description: 'Include ranked evidence snippets and links in the response (default: false)' },
         username:    { type: 'string',  description: 'Optional username/email if the site requires login before analysis' },
         password:    { type: 'string',  description: 'Optional password for login' },
@@ -4032,6 +4165,36 @@ const TOOLS = [
       required: ['url'],
     },
   },
+  {
+    name: 'get_cache_headers',
+    description: 'Extract Cache-Control, ETag, Last-Modified, Expires, and Vary headers from a scraped session. Returns the document-level cache policy plus per-request cache headers from REST and GraphQL API calls — useful for CDN analysis and performance audits.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string', description: 'Session ID from a previous scrape' },
+      },
+      required: ['sessionId'],
+    },
+  },
+  {
+    name: 'lookup_ip_info',
+    description: 'Resolve a hostname or URL to its IP address, geolocation (country, city, timezone), ISP, ASN, and hosting provider via ip-api.com. Useful for infrastructure fingerprinting and CDN/host identification.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hostname: { type: 'string', description: 'Hostname or full URL to look up (e.g. "example.com" or "https://example.com/path")' },
+      },
+      required: ['hostname'],
+    },
+  },
+  {
+    name: 'server_info',
+    description: 'Report MCP server diagnostics: version, exposed toolset, protocol capabilities, local directories, environment flags, and local REST server readiness. Helpful for health checks and debugging client integrations.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 const READ_ONLY_TOOL_NAMES = new Set([
@@ -4088,6 +4251,9 @@ const READ_ONLY_TOOL_NAMES = new Set([
   'extract_business_intel',
   'extract_reviews',
   'get_robots_txt',
+  'get_cache_headers',
+  'lookup_ip_info',
+  'server_info',
 ]);
 
 const DESTRUCTIVE_TOOL_NAMES = new Set([
@@ -4117,6 +4283,7 @@ const OPEN_WORLD_TOOL_NAMES = new Set([
   'fill_form',
   'monitor_page',
   'get_robots_txt',
+  'lookup_ip_info',
 ]);
 
 TOOLS.forEach((tool) => {
@@ -4128,6 +4295,62 @@ TOOLS.forEach((tool) => {
     openWorldHint: OPEN_WORLD_TOOL_NAMES.has(tool.name),
   };
 });
+
+function listToolsForCurrentToolset() {
+  const allowed = TOOLSETS[activeToolset] ?? null;
+  return allowed ? TOOLS.filter((tool) => allowed.includes(tool.name)) : TOOLS;
+}
+
+function getToolCatalog(tools = listToolsForCurrentToolset()) {
+  return buildToolCatalog(tools, {
+    readOnlyNames: READ_ONLY_TOOL_NAMES,
+    openWorldNames: OPEN_WORLD_TOOL_NAMES,
+    destructiveNames: DESTRUCTIVE_TOOL_NAMES,
+  });
+}
+
+function getPromptCatalog() {
+  return buildPromptCatalog(PROMPTS);
+}
+
+function getMcpMeta() {
+  const tools = getToolCatalog();
+  const prompts = getPromptCatalog();
+  return {
+    server: {
+      name: 'web-scraper',
+      version: SERVER_VERSION,
+      activeToolset,
+      baseUrl: BASE_URL,
+    },
+    counts: {
+      tools: tools.length,
+      prompts: prompts.length,
+      fixedResources: FIXED_RESOURCES.length,
+      resourceTemplates: RESOURCE_TEMPLATES.length,
+      workflows: STARTER_WORKFLOWS.length,
+    },
+    tools,
+    prompts,
+    resourceTemplates: RESOURCE_TEMPLATES,
+    fixedResources: FIXED_RESOURCES,
+    workflows: STARTER_WORKFLOWS,
+  };
+}
+
+function isToolExposed(name) {
+  return listToolsForCurrentToolset().some((tool) => tool.name === name);
+}
+
+async function callTool(name, args = {}, progressToken = null) {
+  if (!TOOLS.some((tool) => tool.name === name)) {
+    throw new Error(`Unknown tool: ${name}`);
+  }
+  if (!isToolExposed(name)) {
+    throw new Error(`Tool "${name}" is not exposed by the active toolset profile "${activeToolset}"`);
+  }
+  return handleTool(name, args, progressToken);
+}
 
 // ── Helpers for tool handlers ───────────────────────────────────────────────
 
@@ -4575,6 +4798,9 @@ async function handleTool(name, args, progressToken = null) {
         password:        input.password || undefined,
         totpSecret:      input.totpSecret || undefined,
         ssoProvider:     input.ssoProvider || undefined,
+        _onProgress:     progressToken
+          ? (done, total, msg) => sendProgress(progressToken, done, total, msg)
+          : null,
       });
     }
 
@@ -5450,18 +5676,48 @@ async function handleTool(name, args, progressToken = null) {
         return { xml, urls };
       }
 
-      // Discover sitemap URL
-      let sitemapUrl;
       let parsedBase;
       try { parsedBase = new URL(rawUrl); } catch { throw new Error('Invalid URL'); }
 
-      if (rawUrl.endsWith('.xml') || rawUrl.includes('sitemap')) {
-        sitemapUrl = rawUrl;
+      const robots = await fetchAndParseRobots(parsedBase.origin).catch(() => null);
+      const candidateSitemaps = [];
+      const addCandidate = (candidate) => {
+        if (!candidate || candidateSitemaps.includes(candidate)) return;
+        candidateSitemaps.push(candidate);
+      };
+
+      if (rawUrl.endsWith('.xml') || /sitemap/i.test(rawUrl)) {
+        addCandidate(rawUrl);
       } else {
-        sitemapUrl = `${parsedBase.origin}/sitemap.xml`;
+        for (const sitemap of robots?.sitemaps || []) addCandidate(sitemap);
+        addCandidate(`${parsedBase.origin}/sitemap.xml`);
       }
 
-      const { xml, urls: firstUrls } = await parseSitemap(sitemapUrl);
+      let sitemapUrl = null;
+      let xml = null;
+      let firstUrls = [];
+      let discoverySource = 'default';
+      let lastError = null;
+      for (const candidate of candidateSitemaps) {
+        try {
+          const parsed = await parseSitemap(candidate);
+          sitemapUrl = candidate;
+          xml = parsed.xml;
+          firstUrls = parsed.urls;
+          discoverySource = candidate === rawUrl
+            ? 'direct-url'
+            : (robots?.sitemaps || []).includes(candidate)
+              ? 'robots.txt'
+              : 'default';
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (!sitemapUrl || xml === null) {
+        throw new Error(`Unable to fetch sitemap. ${lastError?.message || 'No sitemap candidates succeeded.'}`);
+      }
+
       const isSitemapIndex = /<sitemapindex/i.test(xml);
 
       let allUrls = [];
@@ -5486,6 +5742,8 @@ async function handleTool(name, args, progressToken = null) {
       const truncated = allUrls.length > maxUrls;
       return {
         sitemapUrl,
+        discoverySource,
+        robots,
         isSitemapIndex,
         childSitemaps,
         totalUrls: allUrls.length,
@@ -5986,61 +6244,89 @@ async function handleTool(name, args, progressToken = null) {
 
     // ── get_robots_txt ────────────────────────────────────────────────────────
     case 'get_robots_txt': {
-      const { url } = input;
-      let origin;
-      try { origin = new URL(url).origin; } catch { throw new Error('Invalid URL'); }
-      const robotsUrl = `${origin}/robots.txt`;
-      let raw;
-      try {
-        const res = await fetch(robotsUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WebScraper/2.2)' }, redirect: 'follow', signal: AbortSignal.timeout(10000) });
-        if (!res.ok) return { found: false, status: res.status, url: robotsUrl };
-        raw = await res.text();
-      } catch (err) {
-        return { found: false, error: err.message, url: robotsUrl };
-      }
-
-      // Parse
-      const lines = raw.split('\n').map(l => l.split('#')[0].trim()).filter(Boolean);
-      const groups = [];
-      let current = null;
-      const sitemaps = [];
-
-      for (const line of lines) {
-        const colon = line.indexOf(':');
-        if (colon === -1) continue;
-        const key = line.slice(0, colon).trim().toLowerCase();
-        const val = line.slice(colon + 1).trim();
-        if (key === 'user-agent') {
-          if (!current || current.disallow.length || current.allow.length) {
-            current = { userAgent: val, disallow: [], allow: [], crawlDelay: null };
-            groups.push(current);
-          } else {
-            current.userAgent += ', ' + val;
-          }
-        } else if (key === 'disallow' && current) {
-          if (val) current.disallow.push(val);
-        } else if (key === 'allow' && current) {
-          if (val) current.allow.push(val);
-        } else if (key === 'crawl-delay' && current) {
-          current.crawlDelay = parseFloat(val) || null;
-        } else if (key === 'sitemap') {
-          if (val) sitemaps.push(val);
-        }
-      }
-
-      const allBots = groups.find(g => g.userAgent === '*');
+      const url = ensureNonEmptyString(input.url, 'url');
+      const robots = await fetchAndParseRobots(url);
+      const groups = (robots.userAgents || []).map((entry) => ({
+        userAgent: entry.agent,
+        disallow: entry.disallow || [],
+        allow: entry.allow || [],
+        crawlDelay: entry.crawlDelay ?? null,
+      }));
+      const allBots = groups.find((group) => group.userAgent === '*');
       return {
-        found: true,
-        url: robotsUrl,
+        found: robots.status === 'ok',
+        status: robots.status,
+        url: robots.url,
         groups,
-        sitemaps,
+        sitemaps: robots.sitemaps || [],
         allBotsDisallowed: allBots?.disallow || [],
         allBotsAllowed: allBots?.allow || [],
-        isFullyBlocked: allBots?.disallow?.includes('/') || false,
+        isFullyBlocked: !!robots.hasFullBlock,
         crawlDelay: allBots?.crawlDelay || null,
         groupCount: groups.length,
-        raw: raw.substring(0, 10000),
+        raw: robots.rawText || null,
+        origin: robots.origin,
+        httpStatus: robots.httpStatus || null,
+        interestingDisallowed: robots.interestingDisallowed || [],
+        crawlDelays: robots.crawlDelays || [],
       };
+    }
+
+    // ── get_cache_headers ────────────────────────────────────────────────────
+    case 'get_cache_headers': {
+      const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
+      const save = await loadSave(sessionId);
+
+      const CACHE_FIELDS = ['cache-control', 'etag', 'last-modified', 'expires', 'vary', 'age', 'pragma'];
+
+      // Document-level headers from security header scan
+      const docHeaders = {};
+      for (const field of CACHE_FIELDS) {
+        const val = save.securityHeaders?.[field] ?? save.securityHeaders?.[field.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+        if (val != null) docHeaders[field] = val;
+      }
+
+      // Per-request cache headers from REST + GraphQL
+      const requestHeaders = [];
+      const collectFromCalls = (calls) => {
+        if (!Array.isArray(calls)) return;
+        for (const call of calls) {
+          const headers = call.response?.headers || {};
+          const cacheInfo = {};
+          for (const field of CACHE_FIELDS) {
+            if (headers[field]) cacheInfo[field] = headers[field];
+          }
+          if (Object.keys(cacheInfo).length > 0) {
+            requestHeaders.push({ url: call.url || call.endpoint || null, method: call.method || null, ...cacheInfo });
+          }
+        }
+      };
+      collectFromCalls(save.apiCalls?.rest);
+      collectFromCalls(save.apiCalls?.graphql);
+
+      const summary = requestHeaders.length === 0 && Object.keys(docHeaders).length === 0
+        ? 'No cache headers found in this session.'
+        : `Found cache headers on document${requestHeaders.length > 0 ? ` and ${requestHeaders.length} request(s)` : ''}.`;
+
+      return {
+        sessionId,
+        summary,
+        documentCacheHeaders: docHeaders,
+        requestCount: requestHeaders.length,
+        requestCacheHeaders: requestHeaders.slice(0, 50),
+      };
+    }
+
+    // ── lookup_ip_info ────────────────────────────────────────────────────────
+    case 'lookup_ip_info': {
+      const hostnameInput = ensureNonEmptyString(input.hostname, 'hostname');
+      const info = await lookupIpInfo(hostnameInput);
+      return info;
+    }
+
+    // ── server_info ───────────────────────────────────────────────────────────
+    case 'server_info': {
+      return buildServerInfoSnapshot();
     }
 
     default:
@@ -6606,6 +6892,36 @@ const PROMPTS = [
     description: 'Review JWT tokens, CORS policy, CSP effectiveness, and sensitive endpoint exposure from a scrape.',
     arguments: [{ name: 'sessionId', description: 'Saved scrape session ID', required: true }],
   },
+  {
+    name: 'robots_and_seo_audit',
+    title: 'Robots & SEO Audit',
+    description: 'Audit robots.txt rules, canonical tags, hreflang, structured data, and broken links in one workflow.',
+    arguments: [{ name: 'url', description: 'Target site URL', required: true }],
+  },
+  {
+    name: 'review_sentiment_analysis',
+    title: 'Review & Sentiment Analysis',
+    description: 'Extract reviews and ratings from a scraped page then score sentiment and summarize key themes.',
+    arguments: [{ name: 'sessionId', description: 'Saved scrape session ID', required: true }],
+  },
+  {
+    name: 'third_party_privacy_audit',
+    title: 'Third-Party Privacy Audit',
+    description: 'Identify all third-party scripts, tracking pixels, and cookie consent signals. Flag GDPR-risk trackers.',
+    arguments: [{ name: 'sessionId', description: 'Saved scrape session ID', required: true }],
+  },
+  {
+    name: 'infrastructure_fingerprint',
+    title: 'Infrastructure Fingerprint',
+    description: 'Build a full infrastructure picture: IP, ASN, hosting provider, CDN, DNS records, SSL cert, and server headers.',
+    arguments: [{ name: 'url', description: 'Target site URL', required: true }],
+  },
+  {
+    name: 'iframe_content_map',
+    title: 'iFrame Content Map',
+    description: 'Scrape a page and report all embedded iFrames — URL, title, text, and form presence — to uncover hidden embedded content.',
+    arguments: [{ name: 'url', description: 'Page URL to inspect', required: true }],
+  },
 ];
 
 async function listResources() {
@@ -6889,7 +7205,7 @@ function buildPromptText(name, args = {}) {
     case 'plan_site_extraction_for_goal': {
       const sessionId = ensureNonEmptyString(args.sessionId, 'sessionId');
       const goal = ensureNonEmptyString(args.goal, 'goal');
-      return `Start with scrape://save/${sessionId}/orientation, then inspect scrape://save/${sessionId}/overview and only follow the highest-priority recommendedScrapes that are still needed for the goal "${goal}". Use browser automation or manual UI inspection for live confirmation of tricky interactive flows. Avoid collapsing broad requests into a single page when sibling sections are relevant.`;
+      return `Start with scrape://save/${sessionId}/orientation, then inspect scrape://save/${sessionId}/overview and only follow the highest-priority recommendedScrapes that are still needed for the goal "${goal}". Use Playwright MCP, browser automation, or manual UI inspection for live confirmation of tricky interactive flows. Avoid collapsing broad requests into a single page when sibling sections are relevant.`;
     }
     case 'security_full_audit': {
       const { url } = args;
@@ -7064,6 +7380,64 @@ Step 5 — Look for sensitive endpoints: search_scrape_text with sessionId="${se
 
 Report: JWT security assessment, CORS policy findings (wildcard exposure, credentialed requests), most sensitive endpoints discovered, CSP policy gaps, and ranked remediation list.`;
     }
+    case 'robots_and_seo_audit': {
+      const url = ensureNonEmptyString(args.url, 'url');
+      return `Run a full robots.txt + SEO audit for ${url}.
+
+Step 1 — Call get_robots_txt with url="${url}" to see what paths are disallowed, which crawlers are targeted, and what sitemaps are referenced.
+Step 2 — Call scrape_url with url="${url}" maxPages=5 to capture meta tags, canonical URLs, hreflang, and structured data.
+Step 3 — Call check_broken_links with sessionId from the scrape to find broken internal and external links.
+Step 4 — Call get_link_graph with sessionId to identify orphan pages, dead-ends, and hub pages.
+Step 5 — Review the JSON-LD structured data from the save overview (scrape://save/{sessionId}/overview) for schema.org compliance.
+
+Deliver: robots.txt summary (blocked paths, crawl-delay, sitemap URLs), SEO meta assessment (canonical, hreflang, description completeness), structured data validity, broken links count and list, and a ranked SEO improvement list.`;
+    }
+    case 'review_sentiment_analysis': {
+      const sessionId = ensureNonEmptyString(args.sessionId, 'sessionId');
+      return `Extract reviews and analyze sentiment for session ${sessionId}.
+
+Step 1 — Call extract_reviews with sessionId="${sessionId}" to get aggregate ratings and individual reviews.
+Step 2 — Analyze the reviews for sentiment: categorize as positive / neutral / negative, identify the most common praise themes and complaint themes.
+Step 3 — Read scrape://save/${sessionId}/overview to check the product/service name and overall rating context.
+Step 4 — Scan for additional review signals using search_scrape_text with sessionId="${sessionId}" for "review", "rating", "stars", "recommend".
+
+Deliver: aggregate rating summary, review count, sentiment breakdown (% positive / neutral / negative), top 3 praise themes with example quotes, top 3 complaint themes with example quotes, and overall sentiment verdict.`;
+    }
+    case 'third_party_privacy_audit': {
+      const sessionId = ensureNonEmptyString(args.sessionId, 'sessionId');
+      return `Audit third-party scripts and tracking for session ${sessionId}.
+
+Step 1 — Read scrape://save/${sessionId}/overview to get the thirdPartyScripts and trackingPixels fields.
+Step 2 — Call scan_pii with sessionId="${sessionId}" to identify any PII exposed in network calls.
+Step 3 — Call score_security_headers with sessionId="${sessionId}" to check if CSP restricts third-party script domains.
+Step 4 — Review the cookieConsent data from the overview: is there an opt-in/opt-out mechanism? Which vendor?
+Step 5 — Cross-reference trackers against known high-risk categories: advertising networks, fingerprinting tools, data brokers.
+
+Deliver: third-party script inventory (domain, category, async/defer status), tracking pixel inventory (Facebook, Google, TikTok, etc.), GDPR risk rating (Low/Medium/High), CSP coverage assessment, cookie consent mechanism summary, and recommended remediation steps.`;
+    }
+    case 'infrastructure_fingerprint': {
+      const url = ensureNonEmptyString(args.url, 'url');
+      return `Build a full infrastructure fingerprint for ${url}.
+
+Step 1 — Call lookup_ip_info with hostname="${url}" to get the IP address, country, ISP, ASN, and hosting provider.
+Step 2 — Call lookup_dns with url="${url}" to get A, MX, TXT, NS, and CNAME records.
+Step 3 — Call inspect_ssl with url="${url}" to check the SSL certificate chain, expiry, SANs, and cipher strength.
+Step 4 — Call get_tech_stack via scrape_url or from an existing session (detect_site with url="${url}") to identify CDN, server software, and frameworks.
+Step 5 — Call get_robots_txt with url="${url}" and cross-reference with DNS to spot subdomains.
+
+Deliver: IP address and hosting summary (provider, ASN, country), DNS record map, SSL certificate health (expiry date, issuer, SAN coverage), CDN and WAF identification, server software and framework stack, and a risk assessment for exposed infrastructure information.`;
+    }
+    case 'iframe_content_map': {
+      const url = ensureNonEmptyString(args.url, 'url');
+      return `Map all embedded iFrames on ${url}.
+
+Step 1 — Call scrape_url with url="${url}" to capture the page including iFrame content. The scraper will automatically extract same-origin iFrame text, links, and form presence.
+Step 2 — Read scrape://save/{sessionId}/overview and look for the iframeContents field to see what was captured from iFrames.
+Step 3 — Review the raw iframes list (from the overview) to cross-reference embedded iFrame URLs with the captured content.
+Step 4 — For any iFrame URL that looks like a payment, login, or third-party embed (Stripe, PayPal, YouTube, Google Maps, Salesforce), note whether it is same-origin (content accessible) or cross-origin (content blocked by CORS).
+
+Deliver: total iFrame count, list of iFrame URLs with their type classification (same-origin / cross-origin), captured text summaries for accessible iFrames, identification of high-value embedded content (payment flows, login forms, maps, video players), and CORS-blocked iFrame URLs that may hide significant page functionality.`;
+    }
     default:
       throw new Error(`Unknown prompt: ${name}`);
   }
@@ -7072,7 +7446,7 @@ Report: JWT security assessment, CORS policy findings (wildcard exposure, creden
 // ── MCP server setup ────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'web-scraper', version: '2.3.0' },
+  { name: 'web-scraper', version: SERVER_VERSION },
   {
     capabilities: {
       tools:       {},
@@ -7101,9 +7475,7 @@ const server = new Server(
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  const allowed = TOOLSETS[activeToolset] ?? null;
-  const tools = allowed ? TOOLS.filter(t => allowed.includes(t.name)) : TOOLS;
-  return { tools };
+  return { tools: listToolsForCurrentToolset() };
 });
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
@@ -7203,7 +7575,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const startedAt = Date.now();
   await sendLog('info', 'tool', { tool: name, status: 'start', args: Object.keys(callArgs) });
   try {
-    const result = await handleTool(name, callArgs, progressToken);
+    const result = await callTool(name, callArgs, progressToken);
     const ms = Date.now() - startedAt;
     toolLogger.record(name, callArgs, result, ms, null);
     await sendLog('info', 'tool', { tool: name, status: 'done', ms });
@@ -7246,7 +7618,7 @@ async function queryClientRoots() {
 }
 
 async function main() {
-  toolLogger.init();
+  toolLogger.init(TOOLS.map((tool) => tool.name));
   const transport = new StdioServerTransport();
   await server.connect(transport);
   startSubscriptionPoller();
@@ -7258,7 +7630,12 @@ module.exports = {
   FIXED_RESOURCES,
   PROMPTS,
   RESOURCE_TEMPLATES,
+  SERVER_VERSION,
   handleTool,
+  callTool,
+  listTools: listToolsForCurrentToolset,
+  listPrompts: getPromptCatalog,
+  getMcpMeta,
   __private__: {
     analyzeResearchQuestion,
     buildApiSurface,

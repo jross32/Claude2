@@ -43,9 +43,9 @@ APA-specific config lives in `.env` (gitignored) — not in `src/`.
 | `src/schema-inferrer.js` | TypeScript / JSON Schema inference from GraphQL | Stable |
 | `src/entity-extractor.js` | Email, phone, URL, address pattern extraction | Stable |
 | `src/har-exporter.js` | HAR 1.2 format export | Stable |
-| `src/git-autosave.js` | Auto-commit & push on 10-min interval (starts with server) | Stable |
+| `src/git-autosave.js` | Auto-commit & push on timer interval (starts with server, currently 6h) | Stable |
 | `src/oidc-tester.js` | OIDC/OAuth2 security test suite (8 test types) | Stable |
-| `mcp-server.js` | MCP server — 49 tools, classification sets, handlers | Stable |
+| `mcp-server.js` | MCP server — 73 tools, 27 prompts, classification sets, handlers | Stable |
 | `MCP.md` | Living reference for all MCP tools — update when adding/changing tools | Stable |
 | `public/index.html` | Single-page frontend UI (large — edit carefully) | **Fragile** |
 | `public/js/app.js` | Frontend logic | **Fragile** |
@@ -107,16 +107,44 @@ const FRONTEND = {
 
 - Always commit to the **current branch** — never switch or create branches without being asked.
 - Use `node autosave.js "message"` (or `npm run save`) for commits. One command, saves tokens vs raw git.
-- **Only commit when explicitly asked.**
+- **Commit automatically after any meaningful code change** — any edit to a repo file (source, config, docs) should be committed. Do NOT commit when only answering questions or doing read-only planning.
+- Commit as `jross32` — git is configured with `user.name = "jross32"` and `user.email = justinwross32@gmail.com`. Never change these.
 - Never force push, `reset --hard`, or touch the remote without confirmation.
 
 ```js
 // ── GIT BEHAVIOR (edit me) ────────────────────────────────────────────────
 const GIT = {
-  useAutosaveScript:   true,   // true = node autosave.js | false = raw git commands
-  alwaysCurrentBranch: true,   // true = never switch branches automatically
-  commitOnlyWhenAsked: true,   // true = never auto-commit mid-task
+  useAutosaveScript:    true,   // true = node autosave.js | false = raw git commands
+  alwaysCurrentBranch:  true,   // true = never switch branches automatically
+  commitAfterAnyEdit:   true,   // true = commit automatically after any file edits (not just when asked)
+  commitAuthor:         'jross32 <justinwross32@gmail.com>',
 };
+```
+
+### Commit Message Format
+
+Every commit message must include:
+1. **Subject line**: `v{version}: {short description}` — or just the short description for non-version commits
+2. **Changed files**: bullet list of what was added/changed/fixed
+3. **Bugs fixed** (if any): explicit list
+4. **Version bump** (if applicable): from → to
+
+Example format:
+```
+v2.5.0: Tier 3 features — iFrames, resource timings, IP lookup, new prompts, landing page
+
+Changed:
+- src/scraper.js: iFrame content extraction (text, links, forms per child frame)
+- src/extractor.js: resourceTimings field (transferSize, duration per asset)
+- src/ip-lookup.js: new module — IP geolocation via ip-api.com
+- mcp-server.js: get_cache_headers + lookup_ip_info tools, 5 new prompts, v2.5.0
+- src/server.js: landing page at GET /, WSP moved to /wsp
+
+Bugs fixed:
+- research_url description still said "local AI (Ollama)" — updated to "connected AI model"
+- get_cache_headers + lookup_ip_info missing from mcp-catalog.js categories
+- /api/status dead link in landing page footer
+- Stale tool/prompt counts in README.md and MCP.md
 ```
 
 ### Secret Check (runs before every autosave / commit)
@@ -389,13 +417,13 @@ When asked, treat everything inside as read-only — never modify it, never impo
 ## Auto-Save Behavior
 
 `src/git-autosave.js` runs automatically when the server starts and commits + pushes
-every 10 minutes. Change the interval in the file if needed:
+on a timer. Change the interval in the file if needed:
 
 ```js
 // In src/git-autosave.js — edit INTERVAL_MS to change frequency
 // Examples:
-//   5 * 60 * 1000  →  every 5 minutes
-//  10 * 60 * 1000  →  every 10 minutes (default)
-//  30 * 60 * 1000  →  every 30 minutes
-const INTERVAL_MS = 10 * 60 * 1000;
+//   5 * 60 * 1000    →  every 5 minutes
+//  30 * 60 * 1000    →  every 30 minutes
+//   6 * 60 * 60 * 1000  →  every 6 hours (current default)
+const INTERVAL_MS = 6 * 60 * 60 * 1000;
 ```

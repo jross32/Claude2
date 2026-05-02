@@ -35,32 +35,36 @@ mcp-server.js          ← tool definitions, handlers, classification sets
             ├── src/link-graph.js      (link graph, redirect chains, broken links, subdomains)
             ├── src/product-extractor.js (structured e-commerce data)
             ├── src/job-extractor.js   (structured job listing data)
-            └── src/company-extractor.js (company info from About/Contact pages)
+            ├── src/company-extractor.js (company info from About/Contact pages)
+            ├── src/review-extractor.js (review and rating extraction)
+            ├── src/robots-parser.js   (robots.txt fetch + parse helpers)
+            └── src/ip-lookup.js       (IP geolocation, ISP, ASN via ip-api.com)
 ```
 
 Two patterns for tool implementation:
 - **HTTP tools** — call `server.js` via internal `get()` / `post()` / `del()` helpers. All scraping and browser tools use this pattern.
 - **Direct import tools** — import source module directly in `mcp-server.js` and call functions in the handler. Used for pure analysis tools that don't need a browser (JWT decode, DNS, SSL, security scoring, link graph, structured extractors, AI analysis tools).
+- **Shared metadata** — `src/mcp-catalog.js` is the source of truth for tool categories, maturity, examples, starter workflows, `/docs`, and `/api/mcp-meta`.
 
 ---
 
 ## Tool Count & Classification
 
-**Total: 70 tools · 22 prompts** (as of last update 2026-05-01)
+**Total: 73 tools · 27 prompts** (as of last update 2026-05-01)
 
 | Classification | Count |
 |----------------|-------|
-| readOnly (RO) | 51 |
+| readOnly (RO) | 56 |
 | destructive (D) | 5 |
-| openWorld (OW) | 17 |
+| openWorld (OW) | 19 |
 
-All tools are classified. No unclassified tools.
+All tools are classified. These badge counts overlap; they are not meant to sum to the total tool count.
 
 Classification sets defined in mcp-server.js (search for `READ_ONLY_TOOL_NAMES`).
 
 ---
 
-## All 68 Tools — Quick Reference
+## All 71 Tools — Quick Reference
 
 ### Category 1: Core Scraping
 
@@ -98,7 +102,7 @@ All read from saved scrape data (disk), except `extract_entities` and `crawl_sit
 | `extract_entities` | 9 | OW. Emails, phones, addresses, URLs. E.164 normalization, international phones. |
 | `extract_deals` | 8 | Price/discount/offer patterns. E-commerce focused. |
 | `extract_structured_data` | 9 | JSON-LD (schema.org), Open Graph, Twitter Card from saved page. |
-| `crawl_sitemap` | 7 | OW. Fetches sitemap.xml without browser. Handles sitemap index files. Falls back to `/sitemap.xml`. |
+| `crawl_sitemap` | 7 | OW. Uses robots.txt sitemap hints first, then falls back to `/sitemap.xml`. Handles sitemap index files. |
 | `list_links` | 7 | All hrefs with anchor text, internal/external classification. Paginated. |
 | `list_forms` | 7 | Form fields, types, action URLs. |
 | `list_images` | 5 | src, alt, dimensions. |
@@ -202,6 +206,16 @@ Algorithmic tools returning structured data for AI reasoning — no external API
 | `extract_business_intel` | `sessionId` | 9 | Business intelligence from all pages: pricing tiers (regex patterns), business metrics (users/revenue/customers), contact info aggregation, tech stack, company profiles. |
 | `extract_reviews` | `sessionId`, optional `pageIndex` | 8 | Review and rating data: aggregate rating, star score, review count, individual reviews. Sources: JSON-LD Review/AggregateRating, Open Graph product tags, text patterns. |
 | `get_robots_txt` | `url` | 8 | OW. Fetch and parse robots.txt from the site origin. Returns per-agent disallow/allow lists, crawl-delay, sitemap references, and `isFullyBlocked` flag. |
+| `get_cache_headers` | `sessionId` | 7 | Extract Cache-Control, ETag, Last-Modified, Expires, and Vary from the document + all REST/GraphQL API calls in a session. |
+| `lookup_ip_info` | `hostname` | 7 | OW. Resolve a hostname or URL to IP, country, city, ISP, ASN, and hosting provider via ip-api.com. |
+
+### Category 13: Diagnostics
+
+Server-level introspection and trust surfaces.
+
+| Tool | Input | AI Use | Notes |
+|------|-------|--------|-------|
+| `server_info` | none | 8 | Read-only diagnostic snapshot. Reports version, active toolset, capabilities, environment hints, directory writability, REST reachability, and starter workflows. |
 
 ---
 
@@ -227,12 +241,15 @@ Algorithmic tools returning structured data for AI reasoning — no external API
 | `src/product-extractor.js` | `extractProductData` | `extract_product_data` |
 | `src/job-extractor.js` | `extractJobData` | `extract_job_listings` |
 | `src/company-extractor.js` | `extractCompanyInfo` | `extract_company_info` |
+| `src/review-extractor.js` | `extractReviews` | `extract_reviews` |
+| `src/robots-parser.js` | `fetchAndParseRobots` | `get_robots_txt` |
+| `src/ip-lookup.js` | `lookupIpInfo` | `lookup_ip_info` |
 
 **Coverage: 100%** — all exported source functions are reachable via MCP.
 
 **Inline tools (no source module — implemented directly in mcp-server.js handlers):**
 - `extract_structured_data` — reads `page.meta.jsonLD/ogTags/twitterTags` from save files
-- `crawl_sitemap` — HTTP fetch + XML `<loc>` parsing, no Playwright
+- `crawl_sitemap` — HTTP fetch + XML `<loc>` parsing, seeded by robots.txt sitemap hints when available
 - `take_screenshot` — POST /api/screenshot (Playwright headless)
 - `fill_form` — POST /api/fill-form (Playwright headless)
 - `monitor_page` / `delete_monitor` — state in `data/monitors.json`, diff via `src/diff.js`
@@ -240,6 +257,7 @@ Algorithmic tools returning structured data for AI reasoning — no external API
 - `flag_anomalies` — z-score statistical analysis
 - `find_patterns` — URL normalization, frequency analysis
 - `extract_business_intel` — regex-based pricing/metrics extraction + company-extractor.js
+- `server_info` — runtime introspection assembled from live MCP metadata and local scraper health checks
 
 ---
 
@@ -333,6 +351,13 @@ All 13 issues from the initial audit were fixed on 2026-04-18. Round 2 improveme
 | ✅ | Round 4: check_broken_links progress | `onProgress` callback added to `checkBrokenLinks` in link-graph.js; wired to MCP progress notifications |
 | ✅ | Round 4: new tools | `extract_reviews` (JSON-LD + OG + text patterns), `get_robots_txt` (full parse: groups, sitemaps, crawl-delay) |
 | ✅ | Round 4: /docs prompts tab | Tools/Prompts tab switcher; 22 prompts with arguments, usage examples, live search |
+| ✅ | Round 5 (v2.5.0): iFrame content | scraper.js captures same-origin iFrame text, links, forms per child frame |
+| ✅ | Round 5 (v2.5.0): resource timings | extractor.js `resourceTimings` — name, type, duration, transferSize, encodedBodySize per asset (100 max) |
+| ✅ | Round 5 (v2.5.0): new tools | `get_cache_headers` (Cache-Control/ETag/Vary from doc + API calls), `lookup_ip_info` (IP, ISP, ASN, hosting via ip-api.com) |
+| ✅ | Round 5 (v2.5.0): map_site_for_goal progress | `_onProgress` callback added; emits MCP progress notifications per exploration round |
+| ✅ | Round 5 (v2.5.0): 5 new prompts (27 total) | `robots_and_seo_audit`, `review_sentiment_analysis`, `third_party_privacy_audit`, `infrastructure_fingerprint`, `iframe_content_map` |
+| ✅ | Round 5 (v2.5.0): landing page | GET / now serves dark-themed landing page; WSP moved to /wsp |
+| ✅ | Round 5 (v2.5.0): research_url docs fix | Removed stale Ollama references; description now references connected AI model |
 
 ---
 
@@ -342,8 +367,8 @@ As of Round 4 (`mcp-server.js` v2.1.0), the server declares the following MCP pr
 
 | Capability | Status | Notes |
 |-----------|--------|-------|
-| `tools` | ✅ | 68 tools |
-| `prompts` | ✅ | 22 prompts — workflow guides for AI |
+| `tools` | ✅ | 73 tools |
+| `prompts` | ✅ | 27 prompts — workflow guides for AI |
 | `resources` | ✅ | `subscribe: true, listChanged: true` — subscribe to `scrape://saves` for live updates |
 | `logging` | ✅ | `SetLevelRequestSchema` handler; `sendLog()` wraps every tool call |
 | `completions` | ✅ | `sessionId`, `url`, `apiKind`, `pageIndex` arguments auto-complete |
@@ -385,4 +410,4 @@ Run tests: `node tests/security/oidc_lab.test.js` or `node tests/security/pingfe
 
 ---
 
-*Last updated: 2026-05-01. Tool count: 70. Prompt count: 22. Version: 2.3.0.*
+*Last updated: 2026-05-01. Tool count: 73. Prompt count: 27. Version: 2.5.0.*

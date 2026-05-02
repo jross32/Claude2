@@ -46,7 +46,7 @@ APA-specific config lives in `.env` (gitignored) — not in `src/`.
 | `src/git-autosave.js` | Auto-commit & push on 10-min interval (starts with server) | Stable |
 | `src/oidc-tester.js` | OIDC/OAuth2 security test suite (8 test types) | Stable |
 | `src/tool-logger.js` | Per-call request logs + live usage counters in `logs/` | Stable |
-| `mcp-server.js` | MCP server — 54 tools, classification sets, handlers | Stable |
+| `mcp-server.js` | MCP server — 73 tools, 27 prompts, classification sets, handlers | Stable |
 | `MCP.md` | Living reference for all MCP tools — update when adding/changing tools | Stable |
 | `public/index.html` | Single-page frontend UI (large — edit carefully) | **Fragile** |
 | `public/js/app.js` | Frontend logic | **Fragile** |
@@ -105,15 +105,40 @@ const FRONTEND = {
 
 - Always commit to the **current branch** — never switch or create branches without being asked.
 - Use `node autosave.js "message"` (or `npm run save`) for commits.
-- **Only commit when explicitly asked.**
+- **Commit automatically after any meaningful code change** — any edit to a repo file (source, config, docs) should be committed. Do NOT commit when only answering questions or doing read-only planning.
+- Commit as `jross32` — git is configured with `user.name = "jross32"` and `user.email = justinwross32@gmail.com`. Never change these.
 - Never force push, `reset --hard`, or touch the remote without confirmation.
 
 ```js
 const GIT = {
   useAutosaveScript:   true,
   alwaysCurrentBranch: true,
-  commitOnlyWhenAsked: true,
+  commitAfterAnyEdit:  true,   // commit after any file edit, not just when asked
+  commitAuthor:        'jross32 <justinwross32@gmail.com>',
 };
+```
+
+### Commit Message Format
+
+Every commit message must include:
+1. **Subject**: `v{version}: {short description}` or just a short description for minor fixes
+2. **Changed files**: bullet list of what was added/changed/fixed
+3. **Bugs fixed** (if any): explicit list
+4. **Version bump** (if applicable): from → to
+
+Example:
+```
+v2.5.0: add iFrame extraction, resource timings, IP lookup, 5 new prompts
+
+Changed:
+- src/scraper.js: iFrame content extraction
+- src/extractor.js: resourceTimings field
+- mcp-server.js: 2 new tools, 5 new prompts, v2.5.0
+- src/server.js: landing page at GET /, WSP moved to /wsp
+
+Bugs fixed:
+- research_url description said "local AI (Ollama)" — fixed to "connected AI model"
+- Stale tool counts in README.md and MCP.md
 ```
 
 ### Secret Check (before every commit)
@@ -267,7 +292,7 @@ Never modify or import from it.
 
 ## Auto-Save Behavior
 
-`src/git-autosave.js` auto-commits + pushes every 10 minutes when the server is running.
+`src/git-autosave.js` auto-commits + pushes on a timer when the server is running (currently every 6 hours).
 Change `INTERVAL_MS` in that file to adjust frequency.
 
 ---
