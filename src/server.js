@@ -1365,6 +1365,192 @@ app.post('/api/fill-form', async (req, res) => {
   }
 });
 
+function sendBrowserError(res, err) {
+  res.status(err.statusCode || 400).json({
+    error: err.message,
+    ...(err.details || err.payload || {}),
+  });
+}
+
+app.post('/api/browser/sessions', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const result = await browserSessionManager.openSession({
+      url: body.url,
+      viewMode: body.viewMode,
+      persistenceMode: body.persistenceMode,
+      restoreSaveId: body.restoreSaveId,
+    });
+    res.json(result);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.get('/api/browser/sessions', (_req, res) => {
+  try {
+    res.json(browserSessionManager.listSessions());
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.get('/api/browser/sessions/:id', async (req, res) => {
+  try {
+    const refreshSnapshot = parseBooleanFlag(req.query.refreshSnapshot, false);
+    const state = await browserSessionManager.getSessionState(req.params.id, { refreshSnapshot });
+    res.json(state);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/navigate', async (req, res) => {
+  try {
+    const error = _require(req.body || {}, 'url');
+    if (error) return res.status(400).json({ error });
+    const snapshot = await browserSessionManager.navigateSession(req.params.id, req.body.url, req.body || {});
+    res.json(snapshot);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/inspect', async (req, res) => {
+  try {
+    const snapshot = await browserSessionManager.inspectSession(req.params.id, req.body || {});
+    res.json(snapshot);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/click', async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.elementId && !body.selector) {
+      return res.status(400).json({ error: 'elementId or selector is required' });
+    }
+    const snapshot = await browserSessionManager.clickElement(req.params.id, body);
+    res.json(snapshot);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/type', async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.elementId && !body.selector) {
+      return res.status(400).json({ error: 'elementId or selector is required' });
+    }
+    if (body.value === undefined || body.value === null) {
+      return res.status(400).json({ error: 'value is required' });
+    }
+    const snapshot = await browserSessionManager.typeIntoElement(req.params.id, body);
+    res.json(snapshot);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/select', async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.elementId && !body.selector) {
+      return res.status(400).json({ error: 'elementId or selector is required' });
+    }
+    if (body.value === undefined && body.label === undefined) {
+      return res.status(400).json({ error: 'value or label is required' });
+    }
+    const snapshot = await browserSessionManager.selectOption(req.params.id, body);
+    res.json(snapshot);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/wait', async (req, res) => {
+  try {
+    const snapshot = await browserSessionManager.waitForState(req.params.id, req.body || {});
+    res.json(snapshot);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/screenshot', async (req, res) => {
+  try {
+    const result = await browserSessionManager.screenshotSession(req.params.id, req.body || {});
+    res.json(result);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/steps', async (req, res) => {
+  try {
+    if (!Array.isArray(req.body?.steps) || req.body.steps.length === 0) {
+      return res.status(400).json({ error: 'steps must be a non-empty array' });
+    }
+    const result = await browserSessionManager.runBrowserSteps(req.params.id, req.body.steps);
+    res.json(result);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/save', async (req, res) => {
+  try {
+    const result = await browserSessionManager.saveSession(req.params.id, req.body || {});
+    res.json(result);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.post('/api/browser/sessions/:id/scrape', async (req, res) => {
+  try {
+    const result = await browserSessionManager.scrapeBrowserSession(req.params.id, req.body || {});
+    res.json(result);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.delete('/api/browser/sessions/:id', async (req, res) => {
+  try {
+    const result = await browserSessionManager.closeSession(req.params.id, req.body || {});
+    res.json(result);
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.get('/api/browser/saves', (_req, res) => {
+  try {
+    res.json(browserSessionManager.listSaves());
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.get('/api/browser/saves/:id', (req, res) => {
+  try {
+    res.json(browserSessionManager.getSave(req.params.id));
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
+app.delete('/api/browser/saves/:id', (req, res) => {
+  try {
+    res.json(browserSessionManager.deleteSave(req.params.id));
+  } catch (err) {
+    sendBrowserError(res, err);
+  }
+});
+
 // ---- Tool usage logs ----
 app.get('/api/tool-logs', (req, res) => {
   const logPath = path.join(__dirname, '../logs/tool-usage.json');
