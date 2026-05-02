@@ -24,9 +24,13 @@
 
 let ws = null;
 const activeSessions = new Map(); // sessionId -> { name, faviconUrl, liveView, expanded }
+const activeBrowserSessions = new Map(); // browserSessionId -> live browser session metadata
 const _credsSubmitted = new Set(); // sessions that have already submitted credentials
 let scrapedData = null;
 let _lastScrapePayload = null; // stored for retry-failed-pages
+let selectedBrowserSessionId = null;
+let browserSelectedTab = 'state';
+let browserLastScrapeResult = null;
 
 // ---- WebSocket ----
 function connectWS() {
@@ -36,6 +40,10 @@ function connectWS() {
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
+      if ((msg.type || '').startsWith('browser')) {
+        handleBrowserSessionMessage(msg.sessionId, msg);
+        return;
+      }
       if (!activeSessions.has(msg.sessionId)) return;
       handleSessionMessage(msg.sessionId, msg);
     } catch {}
