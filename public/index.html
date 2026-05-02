@@ -20,6 +20,10 @@
           <span class="nav-icon">&#128247;</span>
           <span class="nav-label">Scraper</span>
         </button>
+        <button class="nav-item" data-panel="browser" title="Browser" aria-label="Open Browser panel">
+          <span class="nav-icon">&#128376;</span>
+          <span class="nav-label">Browser</span>
+        </button>
         <button class="nav-item" data-panel="results" title="Results" aria-label="Open Results panel">
           <span class="nav-icon">&#128196;</span>
           <span class="nav-label">Results</span>
@@ -66,7 +70,7 @@
       </nav>
       <div class="sidebar-footer">
         <button class="btn-theme-toggle" id="btn-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle light and dark theme">&#9728;</button>
-        <span class="version">v2.0.0</span>
+        <span class="version">v2.6.0</span>
       </div>
     </aside>
 
@@ -569,6 +573,151 @@
 
         <!-- Sessions -->
         <div id="sessions-container"></div>
+      </section>
+
+      <!-- ===== BROWSER PANEL ===== -->
+      <section class="panel" id="panel-browser">
+        <div class="panel-header">
+          <h1>Browser Automation</h1>
+          <p class="subtitle">Persistent live browser sessions for AI-guided interaction, cursor playback, and scraper handoff</p>
+        </div>
+
+        <div class="browser-launch-card">
+          <div class="browser-launch-row">
+            <div class="field browser-field-grow">
+              <label for="browser-url">Start URL</label>
+              <input type="text" id="browser-url" placeholder="https://example.com/login" autocomplete="off" data-lpignore="true" />
+            </div>
+            <div class="field">
+              <label for="browser-view-mode">View Mode</label>
+              <select id="browser-view-mode">
+                <option value="console">Console</option>
+                <option value="desktop">Desktop</option>
+                <option value="both">Both</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="browser-persistence-mode">Persistence</label>
+              <select id="browser-persistence-mode">
+                <option value="auth_state">Auth State</option>
+                <option value="full_session">Full Session</option>
+                <option value="ephemeral">Ephemeral</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="browser-restore-save">Restore Save</label>
+              <select id="browser-restore-save">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="browser-launch-actions">
+              <button class="btn-primary" id="btn-browser-open" type="button">&#9654; Open Session</button>
+              <button class="btn-secondary" id="btn-browser-refresh" type="button">&#8635; Refresh</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="browser-workspace">
+          <aside class="browser-sidebar-pane">
+            <div class="browser-pane-card">
+              <div class="browser-pane-title">Active Sessions</div>
+              <div id="browser-sessions-list" class="browser-list"></div>
+            </div>
+            <div class="browser-pane-card">
+              <div class="browser-pane-title">Saved Browser States</div>
+              <div id="browser-saves-list" class="browser-list"></div>
+            </div>
+          </aside>
+
+          <section class="browser-stage-pane">
+            <div class="browser-stage-card">
+              <div class="browser-stage-top">
+                <div>
+                  <div class="browser-stage-title" id="browser-active-title">No active browser session</div>
+                  <div class="browser-stage-url" id="browser-active-url">Open or restore a browser session to begin.</div>
+                </div>
+                <div class="browser-stage-badges">
+                  <span class="browser-mini-badge" id="browser-active-mode">console</span>
+                  <span class="browser-mini-badge" id="browser-active-persistence">auth_state</span>
+                </div>
+              </div>
+              <div class="browser-frame-shell" id="browser-frame-wrap">
+                <img id="browser-live-frame" class="browser-live-frame" src="" alt="Live browser frame" />
+                <div id="browser-live-pointer" class="browser-live-pointer"></div>
+                <div id="browser-live-empty" class="browser-live-empty">Live browser frames will appear here, along with pointer and narration updates.</div>
+              </div>
+              <div class="browser-caption-row">
+                <div class="browser-narration-bubble" id="browser-live-narration">Waiting for a browser session.</div>
+                <div class="browser-stage-actions">
+                  <button class="btn-secondary btn-sm" id="btn-browser-inspect" type="button">Inspect</button>
+                  <button class="btn-secondary btn-sm" id="btn-browser-screenshot" type="button">Screenshot</button>
+                  <button class="btn-secondary btn-sm" id="btn-browser-save" type="button">Save</button>
+                  <button class="btn-secondary btn-sm" id="btn-browser-scrape" type="button">Scrape Handoff</button>
+                  <button class="btn-secondary btn-sm" id="btn-browser-close" type="button">Close</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="browser-pane-card">
+              <div class="browser-pane-title">Narration Timeline</div>
+              <div id="browser-narration-timeline" class="browser-timeline-list"></div>
+            </div>
+          </section>
+
+          <aside class="browser-detail-pane">
+            <div class="browser-pane-card">
+              <div class="browser-tabs">
+                <button class="browser-tab active" data-browser-tab="state" type="button">State</button>
+                <button class="browser-tab" data-browser-tab="elements" type="button">Elements</button>
+                <button class="browser-tab" data-browser-tab="network" type="button">Network</button>
+                <button class="browser-tab" data-browser-tab="logs" type="button">Logs</button>
+                <button class="browser-tab" data-browser-tab="actions" type="button">Actions</button>
+                <button class="browser-tab" data-browser-tab="data" type="button">Data</button>
+              </div>
+
+              <div class="browser-tab-panel active" id="browser-tab-state">
+                <pre id="browser-state-json" class="browser-json-view">No browser session selected.</pre>
+              </div>
+
+              <div class="browser-tab-panel" id="browser-tab-elements">
+                <div id="browser-elements-list" class="browser-elements-list"></div>
+              </div>
+
+              <div class="browser-tab-panel" id="browser-tab-network">
+                <div id="browser-network-list" class="browser-log-list"></div>
+              </div>
+
+              <div class="browser-tab-panel" id="browser-tab-logs">
+                <div id="browser-log-list" class="browser-log-list"></div>
+              </div>
+
+              <div class="browser-tab-panel" id="browser-tab-actions">
+                <div class="field">
+                  <label for="browser-action-element">Element ID</label>
+                  <input type="text" id="browser-action-element" placeholder="el_..." autocomplete="off" data-lpignore="true" />
+                </div>
+                <div class="field">
+                  <label for="browser-action-selector">Fallback Selector</label>
+                  <input type="text" id="browser-action-selector" placeholder="#search, button[type=submit], ..." autocomplete="off" data-lpignore="true" />
+                </div>
+                <div class="field">
+                  <label for="browser-action-value">Value / Text</label>
+                  <input type="text" id="browser-action-value" placeholder="Type value, option label, or wait text" autocomplete="off" data-lpignore="true" />
+                </div>
+                <div class="browser-inline-actions">
+                  <button class="btn-secondary btn-sm" id="btn-browser-action-click" type="button">Click</button>
+                  <button class="btn-secondary btn-sm" id="btn-browser-action-type" type="button">Type</button>
+                  <button class="btn-secondary btn-sm" id="btn-browser-action-select" type="button">Select</button>
+                  <button class="btn-secondary btn-sm" id="btn-browser-action-wait" type="button">Wait Text</button>
+                </div>
+              </div>
+
+              <div class="browser-tab-panel" id="browser-tab-data">
+                <pre id="browser-data-json" class="browser-json-view">No browser-originated scrape handoff has been run yet.</pre>
+              </div>
+            </div>
+          </aside>
+        </div>
       </section>
 
       <!-- ===== RESULTS PANEL ===== -->
