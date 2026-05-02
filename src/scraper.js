@@ -1471,10 +1471,17 @@ class ScraperSession {
     const launchOpts = {
       headless: true,
       slowMo: slowMotion ? parseInt(slowMotion) : 0,
+      // Remove --enable-automation which is Cloudflare's primary detection vector
+      ignoreDefaultArgs: ['--enable-automation'],
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-features=VizDisplayCompositor',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-infobars',
+        '--disable-dev-shm-usage',
+        '--no-first-run',
+        '--no-default-browser-check',
       ],
     };
     if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
