@@ -4,7 +4,8 @@
       "Bash(wc -l \"C:\\\\Users\\\\justi\\\\Claude2\\\\src\"/*.js)",
       "Bash(find . -not -path ./node_modules/* -not -path ./references/* -type d)",
       "mcp__Claude_Preview__preview_start",
-      "mcp__web-scraper__lookup_dns"
+      "mcp__web-scraper__lookup_dns",
+      "mcp__playwright__browser_snapshot"
     ]
   }
 }
