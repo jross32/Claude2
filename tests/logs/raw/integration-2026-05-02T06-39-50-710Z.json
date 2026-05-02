@@ -1,0 +1,92 @@
+{
+  "timestamp": "2026-05-02T06:39:50.708Z",
+  "git_commit": "9c0f388",
+  "suite": "integration",
+  "tests": [
+    {
+      "name": "MCP tools/list returns the live exposed toolset",
+      "status": "pass",
+      "duration_ms": 18,
+      "error": null,
+      "input": {},
+      "output": {
+        "toolCount": 89
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP tools/call can invoke server_info end-to-end",
+      "status": "pass",
+      "duration_ms": 83,
+      "error": null,
+      "input": {},
+      "output": {
+        "version": "2.5.3",
+        "prompts": 26
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP prompts/list and prompts/get return the current prompt catalog",
+      "status": "pass",
+      "duration_ms": 12,
+      "error": null,
+      "input": {},
+      "output": {
+        "promptCount": 26
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "MCP browser automation tools can drive a live session end-to-end",
+      "status": "fail",
+      "duration_ms": 15,
+      "error": "Unexpected token 'E', \"Error (too\"... is not valid JSON",
+      "input": {},
+      "output": {},
+      "stack_trace": "SyntaxError: Unexpected token 'E', \"Error (too\"... is not valid JSON\n    at JSON.parse (<anonymous>)\n    at parseToolData (C:\\Users\\justi\\Claude2\\tests\\integration\\mcp-protocol.test.js:167:15)\n    at C:\\Users\\justi\\Claude2\\tests\\integration\\mcp-protocol.test.js:249:24\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:22)\n    at async main (C:\\Users\\justi\\Claude2\\tests\\integration\\mcp-protocol.test.js:240:5)",
+      "screenshot": null
+    },
+    {
+      "name": "MCP resources/list, resources/templates/list, and resources/read expose saved scrape context",
+      "status": "fail",
+      "duration_ms": 12,
+      "error": "MCP error -32603: ",
+      "input": {},
+      "output": {},
+      "stack_trace": "McpError: MCP error -32603: \n    at McpError.fromError (C:\\Users\\justi\\Claude2\\node_modules\\@modelcontextprotocol\\sdk\\dist\\cjs\\types.js:2086:16)\n    at Client._onresponse (C:\\Users\\justi\\Claude2\\node_modules\\@modelcontextprotocol\\sdk\\dist\\cjs\\shared\\protocol.js:494:47)\n    at _transport.onmessage (C:\\Users\\justi\\Claude2\\node_modules\\@modelcontextprotocol\\sdk\\dist\\cjs\\shared\\protocol.js:238:22)\n    at StdioClientTransport.processReadBuffer (C:\\Users\\justi\\Claude2\\node_modules\\@modelcontextprotocol\\sdk\\dist\\cjs\\client\\stdio.js:137:33)\n    at Socket.<anonymous> (C:\\Users\\justi\\Claude2\\node_modules\\@modelcontextprotocol\\sdk\\dist\\cjs\\client\\stdio.js:99:22)\n    at Socket.emit (node:events:508:28)\n    at addChunk (node:internal/streams/readable:563:12)\n    at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)\n    at Readable.push (node:internal/streams/readable:394:5)\n    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)",
+      "screenshot": null
+    },
+    {
+      "name": "MCP completion/complete suggests saved session IDs",
+      "status": "fail",
+      "duration_ms": 9,
+      "error": "Expected completion results to include mcp-integration-1777703972275",
+      "input": {},
+      "output": {},
+      "stack_trace": "Error: Expected completion results to include mcp-integration-1777703972275\n    at C:\\Users\\justi\\Claude2\\tests\\integration\\mcp-protocol.test.js:344:15\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:22)\n    at async main (C:\\Users\\justi\\Claude2\\tests\\integration\\mcp-protocol.test.js:336:5)",
+      "screenshot": null
+    },
+    {
+      "name": "MCP resource subscriptions emit update notifications when saves change",
+      "status": "fail",
+      "duration_ms": 15189,
+      "error": "Condition not met within 15000ms",
+      "input": {},
+      "output": {},
+      "stack_trace": "Error: Condition not met within 15000ms\n    at waitFor (C:\\Users\\justi\\Claude2\\tests\\integration\\mcp-protocol.test.js:27:9)\n    at async C:\\Users\\justi\\Claude2\\tests\\integration\\mcp-protocol.test.js:367:7\n    at async TestRunner.run (C:\\Users\\justi\\Claude2\\tests\\runner.js:40:22)\n    at async main (C:\\Users\\justi\\Claude2\\tests\\integration\\mcp-protocol.test.js:350:5)",
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "passed": 3,
+    "failed": 4,
+    "skipped": 0,
+    "duration_ms": 30628,
+    "avg_duration_ms": 4375
+  }
+}

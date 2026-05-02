@@ -1,0 +1,127 @@
+{
+  "timestamp": "2026-05-02T06:39:54.284Z",
+  "git_commit": "9c0f388",
+  "suite": "api",
+  "tests": [
+    {
+      "name": "POST /api/generate/react → 200 + { jsx: string }",
+      "status": "pass",
+      "duration_ms": 3030,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "length": 715
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/generate/react with no pageData → 400",
+      "status": "pass",
+      "duration_ms": 24,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/generate/css → 200 + { css: string }",
+      "status": "pass",
+      "duration_ms": 4103,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "length": 8530
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/generate/css with no pageData → 400",
+      "status": "pass",
+      "duration_ms": 51,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/generate/markdown → 200 + { markdown: string }",
+      "status": "pass",
+      "duration_ms": 590,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "length": 251
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/generate/markdown with no pageData → 400",
+      "status": "pass",
+      "duration_ms": 16,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "POST /api/generate/sitemap → 200 + XML string",
+      "status": "pass",
+      "duration_ms": 15,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200,
+        "length": 275
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/generate/sitemap with no pages → 400",
+      "status": "pass",
+      "duration_ms": 8,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 400
+      },
+      "stack_trace": null,
+      "screenshot": null
+    },
+    {
+      "name": "[chaos] POST /api/generate/react with empty pageData → does not 500",
+      "status": "pass",
+      "duration_ms": 28,
+      "error": null,
+      "input": {},
+      "output": {
+        "status": 200
+      },
+      "stack_trace": null,
+      "screenshot": null
+    }
+  ],
+  "summary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 15058,
+    "avg_duration_ms": 1673
+  }
+}
