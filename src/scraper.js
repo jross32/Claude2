@@ -1688,6 +1688,9 @@ class ScraperSession {
         throw navErr;
       }
 
+      // ── Cloudflare challenge bypass ──────────────────────────────────────
+      try { await bypassCloudflare(page); } catch {}
+
       // ── Detect site info ─────────────────────────────────────────────────
       this.progress('Detecting site info', 22);
       const siteInfo = await this._detectSiteInfo(page, primaryUrl);
