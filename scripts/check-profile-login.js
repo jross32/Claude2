@@ -16,16 +16,44 @@ async function main() {
   const context = await chromium.launchPersistentContext(PROFILES[browserChoice], {
     channel: CHANNELS[browserChoice],
     headless: false,
-    args: ['--no-first-run', '--no-default-browser-check'],
+    ignoreDefaultArgs: ['--enable-automation'],
+    args: [
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-infobars',
+    ],
     viewport: { width: 1280, height: 800 },
   });
 
   const pages = context.pages();
   const page = pages.length > 0 ? pages[0] : await context.newPage();
-  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
 
-  // Wait for Cloudflare + JS render
-  await page.waitForTimeout(5000);
+  // Belt-and-suspenders stealth patches on top of the stealth plugin
+  await page.addInitScript(() => {
+    try { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); } catch {}
+    try { Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] }); } catch {}
+    try {
+      if (!window.chrome) window.chrome = {};
+      if (!window.chrome.runtime) window.chrome.runtime = { connect: () => {}, sendMessage: () => {} };
+    } catch {}
+    try {
+      const origQuery = navigator.permissions.query.bind(navigator.permissions);
+      navigator.permissions.query = (p) =>
+        p.name === 'notifications' ? Promise.resolve({ state: 'default' }) : origQuery(p);
+    } catch {}
+  });
+
+  await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+
+  // Wait for Cloudflare challenge to auto-resolve (up to 15s)
+  for (let i = 0; i < 10; i++) {
+    const t = await page.title();
+    if (t !== 'Just a moment...') break;
+    await page.waitForTimeout(1500);
+  }
+  // Extra settle time for JS hydration
+  await page.waitForTimeout(3000);
 
   const screenshotPath = `C:\\Users\\justi\\Claude2\\scripts\\profile-screenshot.png`;
   await page.screenshot({ path: screenshotPath, fullPage: false });
