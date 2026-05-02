@@ -2044,3 +2044,15 @@ server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
   gitAutosave.start();
 });
+
+async function shutdownBrowserSessions() {
+  try { await browserSessionManager.closeAll(); } catch {}
+}
+
+process.on('SIGTERM', () => {
+  shutdownBrowserSessions().finally(() => server.close(() => process.exit(0)));
+});
+
+process.on('SIGINT', () => {
+  shutdownBrowserSessions().finally(() => server.close(() => process.exit(0)));
+});
