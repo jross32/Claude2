@@ -1,21 +1,22 @@
-# Test Results — unit
+# Test Results — api
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-02T06:39:56.554Z
-**Commit:** `9c0f388`
-**Duration:** 16ms
+**Run:** 2026-05-02T06:40:07.118Z
+**Commit:** `7b14bf0`
+**Duration:** 12405ms
 
 ## Summary
 
 | Total | ✅ Pass | ❌ Fail | ⏭️ Skip |
 |-------|---------|---------|---------|
-| 2 | 2 | 0 | 0 |
+| 3 | 3 | 0 | 0 |
 
 ## Results
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | autosave persists console logs, websocket data, errors, and downloaded images | pass | 7ms | |
-| ✅ | autosave persists headless visibility metadata for MCP saves | pass | 4ms | |
+| ✅ | GET /api/mcp/tools exposes the live MCP tool catalog | pass | 51ms | |
+| ✅ | POST /api/mcp/tool/server_info invokes MCP tools through the HTTP bridge | pass | 5270ms | |
+| ✅ | GET /api/mcp-meta returns enriched live metadata | pass | 12ms | |
 
 
