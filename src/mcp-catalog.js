@@ -148,7 +148,6 @@ const TOOL_MATURITY = {
   find_patterns: 'beta',
   extract_business_intel: 'beta',
   extract_reviews: 'beta',
-  get_robots_txt: 'beta',
   get_cache_headers: 'beta',
   lookup_ip_info: 'beta',
   get_page_word_count: 'beta',
