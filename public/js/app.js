@@ -2020,6 +2020,493 @@ function onSessionError(sessionId, message) {
   body.appendChild(box);
 }
 
+async function browserFetchJson(url, options = {}) {
+  const res = await fetch(url, options);
+  const text = await res.text();
+  let body = {};
+  try { body = text ? JSON.parse(text) : {}; } catch { body = { error: text || 'Request failed' }; }
+  if (!res.ok) throw new Error(body?.error || text || `Request failed (${res.status})`);
+  return body;
+}
+
+function getSelectedBrowserSession() {
+  return selectedBrowserSessionId ? activeBrowserSessions.get(selectedBrowserSessionId) || null : null;
+}
+
+function updateBrowserHeader(session) {
+  document.getElementById('browser-active-title').textContent = session?.title || session?.snapshot?.title || session?.browserSessionId || 'No active browser session';
+  document.getElementById('browser-active-url').textContent = session?.currentUrl || session?.snapshot?.url || 'Open or restore a browser session to begin.';
+  document.getElementById('browser-active-mode').textContent = session?.effectiveViewMode || session?.requestedViewMode || 'console';
+  document.getElementById('browser-active-persistence').textContent = session?.persistenceMode || 'auth_state';
+}
+
+function renderBrowserPointer(pointer) {
+  const pointerEl = document.getElementById('browser-live-pointer');
+  const img = document.getElementById('browser-live-frame');
+  if (!pointerEl || !img || !img.src || !pointer || !Number.isFinite(pointer.x) || !Number.isFinite(pointer.y)) {
+    if (pointerEl) pointerEl.style.transform = 'translate(-9999px, -9999px)';
+    return;
+  }
+  const left = pointer.x * (img.clientWidth / 1440);
+  const top = pointer.y * (img.clientHeight / 900);
+  pointerEl.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+  pointerEl.style.boxShadow = pointer.clickPulse
+    ? '0 0 0 10px rgba(79,142,247,0.24)'
+    : '0 0 0 6px rgba(79,142,247,0.15)';
+}
+
+function renderBrowserTimeline(session) {
+  const container = document.getElementById('browser-narration-timeline');
+  if (!container) return;
+  const entries = session?.narrationTrail || session?.narrationHistory || [];
+  if (!entries.length) {
+    container.innerHTML = '<div class="browser-list-empty">Public action narration will appear here as the browser session runs.</div>';
+    return;
+  }
+  container.innerHTML = entries.slice().reverse().map((entry) => `
+    <div class="browser-timeline-entry">
+      <div class="browser-entry-time">${escapeHTML(new Date(entry.at).toLocaleTimeString())}</div>
+      <div class="browser-entry-text">${escapeHTML(entry.text)}</div>
+    </div>
+  `).join('');
+}
+
+function renderBrowserNetwork(session) {
+  const container = document.getElementById('browser-network-list');
+  if (!container) return;
+  const entries = session?.networkEvents || session?.snapshot?.networkSummary?.recentRequests || [];
+  if (!entries.length) {
+    container.innerHTML = '<div class="browser-list-empty">Recent browser requests will appear here.</div>';
+    return;
+  }
+  container.innerHTML = entries.slice().reverse().map((entry) => `
+    <div class="browser-log-entry">
+      <div class="browser-entry-time">${escapeHTML(entry.at ? new Date(entry.at).toLocaleTimeString() : `${entry.type || 'resource'} · ${entry.durationMs || 0}ms`)}</div>
+      <div class="browser-entry-text">${escapeHTML(entry.method ? `${entry.method} ${entry.status || ''} ${entry.url}` : `${entry.type || 'resource'} ${entry.name || ''}`)}</div>
+    </div>
+  `).join('');
+}
+
+function renderBrowserLogs(session) {
+  const container = document.getElementById('browser-log-list');
+  if (!container) return;
+  const entries = [
+    ...(session?.consoleEvents || []).map((entry) => ({ ...entry, kind: 'console' })),
+    ...(session?.pageErrors || []).map((entry) => ({ ...entry, kind: 'pageerror' })),
+  ].slice(-30).reverse();
+  if (!entries.length) {
+    container.innerHTML = '<div class="browser-list-empty">Console and page errors will appear here.</div>';
+    return;
+  }
+  container.innerHTML = entries.map((entry) => `
+    <div class="browser-log-entry">
+      <div class="browser-entry-time">${escapeHTML(new Date(entry.at).toLocaleTimeString())} · ${escapeHTML(entry.kind || entry.type || 'log')}</div>
+      <div class="browser-entry-text">${escapeHTML(entry.text || entry.message || '')}</div>
+    </div>
+  `).join('');
+}
+
+function setBrowserTab(tab) {
+  browserSelectedTab = tab;
+  document.querySelectorAll('.browser-tab').forEach((button) => {
+    button.classList.toggle('active', button.dataset.browserTab === tab);
+  });
+  document.querySelectorAll('.browser-tab-panel').forEach((panel) => {
+    panel.classList.toggle('active', panel.id === `browser-tab-${tab}`);
+  });
+}
+
+function renderBrowserState(session) {
+  const stateView = document.getElementById('browser-state-json');
+  const elementsContainer = document.getElementById('browser-elements-list');
+  if (!stateView || !elementsContainer) return;
+
+  if (!session) {
+    updateBrowserHeader(null);
+    document.getElementById('browser-live-narration').textContent = 'Waiting for a browser session.';
+    stateView.textContent = 'No browser session selected.';
+    elementsContainer.innerHTML = '<div class="browser-list-empty">Select a browser session to inspect interactable elements.</div>';
+    renderBrowserNetwork(null);
+    renderBrowserLogs(null);
+    renderBrowserTimeline(null);
+    renderBrowserPointer(null);
+    return;
+  }
+
+  updateBrowserHeader(session);
+  const snapshot = session.snapshot || {};
+  document.getElementById('browser-live-narration').textContent = session.lastNarration || snapshot.lastNarration || 'Browser session selected.';
+  stateView.textContent = JSON.stringify({
+    browserSessionId: session.browserSessionId,
+    state: session.state,
+    requestedViewMode: session.requestedViewMode,
+    effectiveViewMode: session.effectiveViewMode,
+    persistenceMode: session.persistenceMode,
+    currentUrl: session.currentUrl,
+    lastSaveId: session.lastSaveId,
+    warnings: snapshot.warnings || [],
+    pageChangeToken: snapshot.pageChangeToken || null,
+    actionHistory: session.actionHistory || [],
+  }, null, 2);
+
+  const interactables = snapshot.interactables || [];
+  if (!interactables.length) {
+    elementsContainer.innerHTML = '<div class="browser-list-empty">Inspect the page to populate interactable elements.</div>';
+  } else {
+    elementsContainer.innerHTML = interactables.map((element) => `
+      <div class="browser-element-card">
+        <div class="browser-element-title">${escapeHTML(element.label || element.text || element.elementId)}</div>
+        <div class="browser-element-meta">${escapeHTML(`${element.tag}${element.type ? ` · ${element.type}` : ''}${element.role ? ` · ${element.role}` : ''}`)}</div>
+        <div class="browser-code-chip">${escapeHTML(element.elementId)}</div>
+        <div class="browser-element-text">${escapeHTML(element.text || element.placeholder || element.preferredSelector || '')}</div>
+        <div class="browser-card-actions">
+          ${(element.actions || []).includes('click') ? `<button class="btn-secondary btn-sm" data-browser-element-action="click" data-browser-element-id="${escapeHTML(element.elementId)}">Click</button>` : ''}
+          ${(element.actions || []).includes('type') ? `<button class="btn-secondary btn-sm" data-browser-element-action="type" data-browser-element-id="${escapeHTML(element.elementId)}">Type</button>` : ''}
+          ${(element.actions || []).includes('select') ? `<button class="btn-secondary btn-sm" data-browser-element-action="select" data-browser-element-id="${escapeHTML(element.elementId)}">Select</button>` : ''}
+          <button class="btn-secondary btn-sm" data-browser-fill-element="${escapeHTML(element.elementId)}">Use ID</button>
+        </div>
+      </div>
+    `).join('');
+    elementsContainer.querySelectorAll('[data-browser-fill-element]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.getElementById('browser-action-element').value = btn.dataset.browserFillElement || '';
+        document.getElementById('browser-action-selector').value = '';
+        setBrowserTab('actions');
+      });
+    });
+    elementsContainer.querySelectorAll('[data-browser-element-action]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        document.getElementById('browser-action-element').value = btn.dataset.browserElementId || '';
+        document.getElementById('browser-action-selector').value = '';
+        setBrowserTab('actions');
+        await runBrowserQuickAction(btn.dataset.browserElementAction);
+      });
+    });
+  }
+
+  renderBrowserNetwork(session);
+  renderBrowserLogs(session);
+  renderBrowserTimeline(session);
+  renderBrowserPointer(session.pointer);
+}
+
+function renderBrowserSessionsList() {
+  const container = document.getElementById('browser-sessions-list');
+  if (!container) return;
+  const sessions = [...activeBrowserSessions.values()].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+  if (!sessions.length) {
+    container.innerHTML = '<div class="browser-list-empty">No live browser sessions yet.</div>';
+    return;
+  }
+  container.innerHTML = sessions.map((session) => `
+    <div class="browser-list-card ${session.browserSessionId === selectedBrowserSessionId ? 'active' : ''}">
+      <div class="browser-list-title">${escapeHTML(session.title || session.browserSessionId)}</div>
+      <div class="browser-list-sub">${escapeHTML(session.currentUrl || '')}</div>
+      <div class="browser-list-badges">
+        <span class="browser-mini-badge">${escapeHTML(session.effectiveViewMode || session.requestedViewMode || 'console')}</span>
+        <span class="browser-mini-badge">${escapeHTML(session.persistenceMode || 'auth_state')}</span>
+      </div>
+      <div class="browser-card-actions">
+        <button class="btn-secondary btn-sm" data-browser-select="${escapeHTML(session.browserSessionId)}">View</button>
+        <button class="btn-secondary btn-sm" data-browser-close-card="${escapeHTML(session.browserSessionId)}">Close</button>
+      </div>
+    </div>
+  `).join('');
+  container.querySelectorAll('[data-browser-select]').forEach((btn) => {
+    btn.addEventListener('click', () => selectBrowserSession(btn.dataset.browserSelect));
+  });
+  container.querySelectorAll('[data-browser-close-card]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(btn.dataset.browserCloseCard)}`, { method: 'DELETE' });
+        showToast('Browser session closed');
+        await loadBrowserWorkspace();
+      } catch (err) {
+        showToast(`Close failed: ${err.message}`);
+      }
+    });
+  });
+}
+
+function renderBrowserRestoreOptions(saves) {
+  const select = document.getElementById('browser-restore-save');
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = '<option value="">None</option>' + saves.map((save) => `
+    <option value="${escapeHTML(save.browserSaveId)}">${escapeHTML(save.name || save.browserSaveId)}</option>
+  `).join('');
+  if ([...select.options].some((option) => option.value === current)) select.value = current;
+}
+
+function renderBrowserSavesList(saves) {
+  const container = document.getElementById('browser-saves-list');
+  if (!container) return;
+  renderBrowserRestoreOptions(saves);
+  if (!saves.length) {
+    container.innerHTML = '<div class="browser-list-empty">No saved browser states yet.</div>';
+    return;
+  }
+  container.innerHTML = saves.map((save) => `
+    <div class="browser-list-card">
+      <div class="browser-list-title">${escapeHTML(save.name || save.browserSaveId)}</div>
+      <div class="browser-list-sub">${escapeHTML(save.lastUrl || '')}</div>
+      <div class="browser-list-badges">
+        <span class="browser-mini-badge">${escapeHTML(save.persistenceMode || 'auth_state')}</span>
+        <span class="browser-mini-badge">${escapeHTML(save.tabCount || 0)} tab${(save.tabCount || 0) === 1 ? '' : 's'}</span>
+      </div>
+      <div class="browser-card-actions">
+        <button class="btn-secondary btn-sm" data-browser-restore="${escapeHTML(save.browserSaveId)}">Restore</button>
+        <button class="btn-secondary btn-sm" data-browser-delete-save="${escapeHTML(save.browserSaveId)}">Delete</button>
+      </div>
+    </div>
+  `).join('');
+  container.querySelectorAll('[data-browser-restore]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      openBrowserSession({ restoreSaveId: btn.dataset.browserRestore }).catch((err) => showToast(`Restore failed: ${err.message}`));
+    });
+  });
+  container.querySelectorAll('[data-browser-delete-save]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await browserFetchJson(`/api/browser/saves/${encodeURIComponent(btn.dataset.browserDeleteSave)}`, { method: 'DELETE' });
+        showToast('Browser save deleted');
+        await loadBrowserWorkspace();
+      } catch (err) {
+        showToast(`Delete failed: ${err.message}`);
+      }
+    });
+  });
+}
+
+async function fetchAndRenderBrowserSession(browserSessionId, refreshSnapshot = false) {
+  const state = await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}?refreshSnapshot=${refreshSnapshot ? '1' : '0'}`);
+  activeBrowserSessions.set(browserSessionId, state);
+  renderBrowserSessionsList();
+  if (browserSessionId === selectedBrowserSessionId) renderBrowserState(state);
+}
+
+async function selectBrowserSession(browserSessionId) {
+  selectedBrowserSessionId = browserSessionId;
+  renderBrowserSessionsList();
+  await fetchAndRenderBrowserSession(browserSessionId, false);
+}
+
+async function loadBrowserWorkspace() {
+  const sessions = await browserFetchJson('/api/browser/sessions');
+  const saves = await browserFetchJson('/api/browser/saves');
+  activeBrowserSessions.clear();
+  sessions.forEach((session) => activeBrowserSessions.set(session.browserSessionId, session));
+  renderBrowserSessionsList();
+  renderBrowserSavesList(saves);
+
+  if (selectedBrowserSessionId && activeBrowserSessions.has(selectedBrowserSessionId)) {
+    await fetchAndRenderBrowserSession(selectedBrowserSessionId, false);
+  } else if (sessions.length) {
+    await selectBrowserSession(sessions[0].browserSessionId);
+  } else {
+    selectedBrowserSessionId = null;
+    renderBrowserState(null);
+  }
+}
+
+function handleBrowserSessionMessage(browserSessionId, msg) {
+  if (!browserSessionId) return;
+  const session = activeBrowserSessions.get(browserSessionId) || { browserSessionId, narrationTrail: [] };
+  if (msg.summary) Object.assign(session, msg.summary);
+  if (msg.snapshot) {
+    session.snapshot = msg.snapshot;
+    session.currentUrl = msg.summary?.currentUrl || msg.snapshot.url || session.currentUrl;
+    session.title = msg.summary?.title || msg.snapshot.title || session.title;
+    session.lastNarration = msg.snapshot.lastNarration || session.lastNarration;
+  }
+  if (msg.pointer) session.pointer = msg.pointer;
+  if (msg.text) {
+    session.lastNarration = msg.text;
+    session.narrationTrail = [...(session.narrationTrail || []), { text: msg.text, at: msg.at || new Date().toISOString(), action: msg.action || 'narration' }].slice(-50);
+  }
+
+  if (msg.type === 'browserClosed') {
+    activeBrowserSessions.delete(browserSessionId);
+    if (selectedBrowserSessionId === browserSessionId) {
+      selectedBrowserSessionId = [...activeBrowserSessions.keys()][0] || null;
+    }
+    renderBrowserSessionsList();
+    if (selectedBrowserSessionId) {
+      fetchAndRenderBrowserSession(selectedBrowserSessionId, false).catch(() => {});
+    } else {
+      renderBrowserState(null);
+    }
+    loadBrowserWorkspace().catch(() => {});
+    return;
+  }
+
+  activeBrowserSessions.set(browserSessionId, session);
+  renderBrowserSessionsList();
+
+  if (browserSessionId === selectedBrowserSessionId) {
+    if (msg.type === 'browserFrame') {
+      const img = document.getElementById('browser-live-frame');
+      const empty = document.getElementById('browser-live-empty');
+      img.src = msg.dataUrl || '';
+      if (msg.dataUrl) empty.style.display = 'none';
+      renderBrowserPointer(msg.pointer || session.pointer);
+    }
+    renderBrowserState(session);
+  }
+
+  if (msg.type === 'browserSaved') {
+    loadBrowserWorkspace().catch(() => {});
+  }
+}
+
+async function openBrowserSession(overrides = {}) {
+  const payload = {
+    url: overrides.url !== undefined ? overrides.url : document.getElementById('browser-url').value.trim(),
+    viewMode: overrides.viewMode || document.getElementById('browser-view-mode').value,
+    persistenceMode: overrides.persistenceMode || document.getElementById('browser-persistence-mode').value,
+    restoreSaveId: overrides.restoreSaveId !== undefined ? overrides.restoreSaveId : document.getElementById('browser-restore-save').value,
+  };
+  if (!payload.url && !payload.restoreSaveId) {
+    showToast('Enter a start URL or choose a saved browser state to restore');
+    return;
+  }
+  const result = await browserFetchJson('/api/browser/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (payload.url) saveRecentUrl(payload.url);
+  activeBrowserSessions.set(result.browserSessionId, result);
+  selectedBrowserSessionId = result.browserSessionId;
+  renderBrowserSessionsList();
+  renderBrowserState(result);
+  showToast('Browser session opened');
+  await loadBrowserWorkspace();
+}
+
+async function runBrowserQuickAction(action) {
+  const session = getSelectedBrowserSession();
+  if (!session) return showToast('Select a browser session first');
+  const elementId = document.getElementById('browser-action-element').value.trim();
+  const selector = document.getElementById('browser-action-selector').value.trim();
+  const value = document.getElementById('browser-action-value').value;
+  try {
+    if (action === 'click') {
+      await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}/click`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ elementId, selector }),
+      });
+    } else if (action === 'type') {
+      await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}/type`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ elementId, selector, value }),
+      });
+    } else if (action === 'select') {
+      await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ elementId, selector, value, label: value }),
+      });
+    } else if (action === 'wait') {
+      await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}/wait`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ textIncludes: value, timeoutMs: 12000 }),
+      });
+    }
+    await fetchAndRenderBrowserSession(session.browserSessionId, true);
+  } catch (err) {
+    showToast(`${action} failed: ${err.message}`);
+  }
+}
+
+function setupBrowserWorkspace() {
+  document.getElementById('btn-browser-open')?.addEventListener('click', () => {
+    openBrowserSession().catch((err) => showToast(`Open failed: ${err.message}`));
+  });
+  document.getElementById('btn-browser-refresh')?.addEventListener('click', () => {
+    loadBrowserWorkspace().catch((err) => showToast(`Refresh failed: ${err.message}`));
+  });
+  document.getElementById('btn-browser-inspect')?.addEventListener('click', async () => {
+    const session = getSelectedBrowserSession();
+    if (!session) return showToast('Select a browser session first');
+    await fetchAndRenderBrowserSession(session.browserSessionId, true).catch((err) => showToast(`Inspect failed: ${err.message}`));
+  });
+  document.getElementById('btn-browser-screenshot')?.addEventListener('click', async () => {
+    const session = getSelectedBrowserSession();
+    if (!session) return showToast('Select a browser session first');
+    try {
+      const result = await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}/screenshot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullPage: false }),
+      });
+      document.getElementById('browser-live-frame').src = `data:image/png;base64,${result.screenshotBase64}`;
+      document.getElementById('browser-live-empty').style.display = 'none';
+      showToast('Browser screenshot captured');
+    } catch (err) {
+      showToast(`Screenshot failed: ${err.message}`);
+    }
+  });
+  document.getElementById('btn-browser-save')?.addEventListener('click', async () => {
+    const session = getSelectedBrowserSession();
+    if (!session) return showToast('Select a browser session first');
+    try {
+      await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      showToast('Browser session saved');
+      await loadBrowserWorkspace();
+    } catch (err) {
+      showToast(`Save failed: ${err.message}`);
+    }
+  });
+  document.getElementById('btn-browser-scrape')?.addEventListener('click', async () => {
+    const session = getSelectedBrowserSession();
+    if (!session) return showToast('Select a browser session first');
+    try {
+      browserLastScrapeResult = await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}/scrape`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxPages: 2, captureGraphQL: true, captureREST: true }),
+      });
+      document.getElementById('browser-data-json').textContent = JSON.stringify(browserLastScrapeResult, null, 2);
+      setBrowserTab('data');
+      showToast(`Scrape handoff complete: ${browserLastScrapeResult.scrapeSessionId}`);
+    } catch (err) {
+      showToast(`Scrape handoff failed: ${err.message}`);
+    }
+  });
+  document.getElementById('btn-browser-close')?.addEventListener('click', async () => {
+    const session = getSelectedBrowserSession();
+    if (!session) return showToast('Select a browser session first');
+    try {
+      await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}`, { method: 'DELETE' });
+      showToast('Browser session closed');
+      await loadBrowserWorkspace();
+    } catch (err) {
+      showToast(`Close failed: ${err.message}`);
+    }
+  });
+  document.getElementById('btn-browser-action-click')?.addEventListener('click', () => runBrowserQuickAction('click'));
+  document.getElementById('btn-browser-action-type')?.addEventListener('click', () => runBrowserQuickAction('type'));
+  document.getElementById('btn-browser-action-select')?.addEventListener('click', () => runBrowserQuickAction('select'));
+  document.getElementById('btn-browser-action-wait')?.addEventListener('click', () => runBrowserQuickAction('wait'));
+  document.querySelectorAll('.browser-tab').forEach((button) => {
+    button.addEventListener('click', () => setBrowserTab(button.dataset.browserTab));
+  });
+  document.querySelector('[data-panel="browser"]')?.addEventListener('click', () => {
+    loadBrowserWorkspace().catch(() => {});
+  });
+  loadBrowserWorkspace().catch(() => {});
+}
+
+setupBrowserWorkspace();
+
 // ============================================
 
 // ---- Site preview (used by Detect button) ----
