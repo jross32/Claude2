@@ -115,6 +115,7 @@ const TOOL_CATEGORY_GROUPS = [
       'crawl_sitemap',
       'get_cache_headers',
       'get_page_word_count',
+      'get_robots_txt',
     ],
   },
   {
