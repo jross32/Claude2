@@ -96,8 +96,12 @@ async function main() {
   // ── Create "AI workspace" project ─────────────────────────────────────────
   console.log('\n[2] Creating "AI workspace" project...');
 
-  // Click "New project" in the sidebar (can be a link, button, or list item)
-  await page.click('text=New project', { timeout: 10000 });
+  // Expand the Projects section in the sidebar first
+  await page.click('text=Projects', { timeout: 10000 });
+  await page.waitForTimeout(800);
+
+  // Now "New project" should be visible — click it
+  await page.click('text=New project', { timeout: 8000 });
   await page.waitForTimeout(800);
   await shot(page, '02-create-project-dialog.png');
 
