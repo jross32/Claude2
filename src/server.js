@@ -1916,6 +1916,58 @@ app.post('/api/agent/:id/handoff', (req, res) => {
   res.json({ ok: true, status: run.status });
 });
 
+// Receive events pushed by the MCP server process (which has sampling transport)
+app.post('/api/agent/event', (req, res) => {
+  const { agentId, event } = req.body || {};
+  if (!agentId || !event) return res.status(400).json({ error: 'agentId and event required' });
+
+  let run = agentRuns.get(agentId);
+  if (!run) {
+    // Create a passive run record for MCP-originated agents
+    run = {
+      id: agentId,
+      goal: event.goal || '',
+      status: 'running',
+      steps: 0,
+      toolCallCount: 0,
+      startTime: Date.now(),
+      events: [],
+      _sseClients: [],
+      emit(type, data) {
+        const ev = { type: `agent_${type}`, agentId: this.id, ts: Date.now(), ...data };
+        this.events.push(ev);
+        broadcast(this.id, ev);
+        const line = `data: ${JSON.stringify(ev)}\n\n`;
+        this._sseClients = this._sseClients.filter((r) => { try { r.write(line); return true; } catch { return false; } });
+      },
+    };
+    agentRuns.set(agentId, run);
+  }
+
+  // Store and broadcast the event
+  run.events.push(event);
+  // Update run status from event
+  if (event.type === 'agent_status' && event.status) run.status = event.status;
+  if (event.type === 'agent_done') { run.status = 'done'; run.result = event.result; }
+  if (event.type === 'agent_error') { run.status = 'error'; run.error = event.message; }
+  if (event.type === 'agent_step') run.steps = event.step || run.steps;
+  if (event.type === 'agent_tool_result') run.toolCallCount = event.callIndex || run.toolCallCount;
+
+  // Broadcast to WS and SSE clients
+  broadcast(agentId, event);
+  const line = `data: ${JSON.stringify(event)}\n\n`;
+  run._sseClients = (run._sseClients || []).filter((r) => { try { r.write(line); return true; } catch { return false; } });
+
+  // If terminal event, close SSE streams
+  if (['agent_done', 'agent_error'].includes(event.type)) {
+    const eof = `data: ${JSON.stringify({ type: 'agent_eof', agentId })}\n\n`;
+    (run._sseClients || []).forEach((r) => { try { r.write(eof); r.end(); } catch {} });
+    run._sseClients = [];
+  }
+
+  res.json({ ok: true });
+});
+
 app.post('/api/agent/:id/stop', (req, res) => {
   const run = agentRuns.get(req.params.id);
   if (!run) return res.status(404).json({ error: 'Agent not found' });

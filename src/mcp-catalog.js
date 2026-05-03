@@ -155,6 +155,12 @@ const TOOL_CATEGORY_GROUPS = [
       'server_info',
     ],
   },
+  {
+    name: 'Agent',
+    tools: [
+      'run_agent',
+    ],
+  },
 ];
 
 const TOOL_MATURITY = {
@@ -190,6 +196,7 @@ const TOOL_MATURITY = {
   lookup_ip_info: 'beta',
   get_page_word_count: 'beta',
   server_info: 'beta',
+  run_agent: 'beta',
 };
 
 const TOOL_EXAMPLES = {
@@ -233,6 +240,7 @@ const TOOL_EXAMPLES = {
   get_page_word_count: { sessionId: 'save-123' },
   get_robots_txt: { url: 'https://example.com' },
   server_info: {},
+  run_agent: { goal: 'Scrape example.com and summarize what it is about' },
 };
 
 const STARTER_WORKFLOWS = [

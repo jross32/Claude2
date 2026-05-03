@@ -5825,7 +5825,11 @@ function agentOnDone(msg) {
 
 function agentOnError(message) {
   agentSetStatus('error');
-  agentAddTimelineBlock('agent-error-block', `<span class="agent-error-icon">&#9888;</span> ${escapeHTML(message || 'Unknown error')}`);
+  const isNoClient = message && message.includes('No AI client connected');
+  const html = isNoClient
+    ? `<span class="agent-error-icon">&#9888;</span> <strong>No AI client connected.</strong> To use agent mode, tell your AI:<br><code>run_agent(goal: "${escapeHTML((_agentCurrentId ? '' : ''))}")</code><br><small>Or open Claude Code with this MCP server configured.</small>`
+    : `<span class="agent-error-icon">&#9888;</span> ${escapeHTML(message || 'Unknown error')}`;
+  agentAddTimelineBlock('agent-error-block', html);
 }
 
 function agentShowHandoff(reason, options) {

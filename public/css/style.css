@@ -3308,6 +3308,8 @@ body.sidebar-open .sidebar-overlay { display: block; }
   border-radius: var(--radius-sm);
 }
 .agent-error-icon { margin-right: 6px; }
+.agent-error-block code { background: rgba(239,68,68,0.15); padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 11px; color: var(--danger); }
+.agent-error-block small { color: var(--text2); font-size: 11px; display: block; margin-top: 6px; }
 
 /* Handoff panel */
 .agent-handoff-card {

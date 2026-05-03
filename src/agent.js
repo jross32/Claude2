@@ -464,7 +464,7 @@ async function runAgent(run) {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 function createAgentRun(goal, options, deps) {
-  const id = `agent-${uuidv4().slice(0, 8)}`;
+  const id = options?.agentId || `agent-${uuidv4().slice(0, 8)}`;
   return new AgentRun(id, goal, options || {}, deps);
 }
 
