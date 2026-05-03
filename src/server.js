@@ -28,6 +28,7 @@ const { diffScrapes } = require('./diff');
 const { createSchedule, deleteSchedule, listSchedules } = require('./scheduler');
 const { generateReact, extractCSS, generateMarkdown, generateSitemap } = require('./generators');
 const gitAutosave = require('./git-autosave');
+const { createAgentRun, runAgent } = require('./agent');
 const { performOidcSecurityTests, testTlsFingerprint } = require('./oidc-tester');
 const { decodeJWT, extractJWTs } = require('./jwt-decoder');
 const { lookupDNS } = require('./dns-lookup');
@@ -169,6 +170,9 @@ function _requireType(body, field, type) {
 
 // Active scraping sessions
 const sessions = new Map();
+
+// Active agent runs
+const agentRuns = new Map();
 
 const SCRAPE_STATUS_STATES = {
   RUNNING: 'running',
@@ -1793,6 +1797,99 @@ app.post('/api/extract-company', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Agent Mode API ────────────────────────────────────────────────────────────
+app.post('/api/agent/start', (req, res) => {
+  const { goal, model, maxSteps, enableThinking } = req.body || {};
+  if (!goal || !goal.trim()) return res.status(400).json({ error: 'goal is required' });
+
+  const run = createAgentRun(
+    goal.trim(),
+    { model, maxSteps, enableThinking },
+    { broadcast, callTool: (name, args) => handleMcpTool(name, args) }
+  );
+  agentRuns.set(run.id, run);
+
+  // Prune old completed runs (keep last 20)
+  if (agentRuns.size > 20) {
+    const keys = [...agentRuns.keys()];
+    for (const k of keys.slice(0, agentRuns.size - 20)) {
+      const r = agentRuns.get(k);
+      if (r && ['done', 'error', 'stopped'].includes(r.status)) agentRuns.delete(k);
+    }
+  }
+
+  runAgent(run).catch((err) => console.error('[agent] runAgent error:', err.message));
+
+  res.json({ agentId: run.id, goal: run.goal, status: run.status });
+});
+
+app.get('/api/agent/list', (_req, res) => {
+  const list = [...agentRuns.values()].map((r) => ({
+    agentId: r.id,
+    goal: r.goal,
+    status: r.status,
+    steps: r.steps,
+    toolCalls: r.toolCallCount,
+    startedAt: r.startTime,
+    durationMs: Date.now() - r.startTime,
+    result: r.result ? r.result.slice(0, 200) : null,
+    error: r.error,
+  }));
+  res.json(list.reverse());
+});
+
+app.get('/api/agent/:id/status', (req, res) => {
+  const run = agentRuns.get(req.params.id);
+  if (!run) return res.status(404).json({ error: 'Agent not found' });
+  res.json({
+    agentId: run.id,
+    goal: run.goal,
+    status: run.status,
+    steps: run.steps,
+    toolCalls: run.toolCallCount,
+    startedAt: run.startTime,
+    durationMs: Date.now() - run.startTime,
+    result: run.result,
+    error: run.error,
+    events: run.events,
+  });
+});
+
+app.post('/api/agent/:id/pause', (req, res) => {
+  const run = agentRuns.get(req.params.id);
+  if (!run) return res.status(404).json({ error: 'Agent not found' });
+  const ok = run.pause();
+  res.json({ ok, status: run.status });
+});
+
+app.post('/api/agent/:id/resume', (req, res) => {
+  const run = agentRuns.get(req.params.id);
+  if (!run) return res.status(404).json({ error: 'Agent not found' });
+  const { message } = req.body || {};
+  const ok = run.resume(message);
+  res.json({ ok, status: run.status });
+});
+
+app.post('/api/agent/:id/handoff', (req, res) => {
+  const run = agentRuns.get(req.params.id);
+  if (!run) return res.status(404).json({ error: 'Agent not found' });
+  const { action, message } = req.body || {};
+  if (run.status !== 'waiting_handoff') return res.status(400).json({ error: 'Agent is not waiting for handoff' });
+  if (action === 'stop') {
+    run.stop();
+  } else {
+    run.resume(message);
+  }
+  res.json({ ok: true, status: run.status });
+});
+
+app.post('/api/agent/:id/stop', (req, res) => {
+  const run = agentRuns.get(req.params.id);
+  if (!run) return res.status(404).json({ error: 'Agent not found' });
+  run.stop();
+  res.json({ ok: true, status: run.status });
 });
 
 // --- MCP HTTP Tool API ---

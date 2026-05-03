@@ -44,6 +44,10 @@ function connectWS() {
         handleBrowserSessionMessage(msg.sessionId, msg);
         return;
       }
+      if ((msg.type || '').startsWith('agent_')) {
+        handleAgentMessage(msg.agentId || msg.sessionId, msg);
+        return;
+      }
       if (!activeSessions.has(msg.sessionId)) return;
       handleSessionMessage(msg.sessionId, msg);
     } catch {}
@@ -5627,5 +5631,343 @@ async function sendAIQuestion() {
 
   const sourceEl = document.getElementById('ai-source');
   sourceEl?.dispatchEvent(new Event('change'));
+
+  // ── Agent Panel ────────────────────────────────────────────────────────────
+  initAgentPanel();
 })();
+
+// ── Agent state + message handler ─────────────────────────────────────────────
+let _agentCurrentId = null;
+let _agentCurrentThinkingEl = null;
+let _agentCurrentTextEl = null;
+let _agentPendingToolCalls = {};
+
+function handleAgentMessage(agentId, msg) {
+  if (agentId !== _agentCurrentId) return;
+  const type = (msg.type || '').replace(/^agent_/, '');
+
+  switch (type) {
+    case 'status':
+      agentSetStatus(msg.status);
+      break;
+    case 'step':
+      _agentCurrentThinkingEl = null;
+      _agentCurrentTextEl = null;
+      agentSetStats(msg.step);
+      break;
+    case 'thinking_delta':
+      agentAppendThinking(msg.text);
+      break;
+    case 'thinking_done':
+      agentFinalizeThinking(msg.text);
+      break;
+    case 'delta':
+      agentAppendText(msg.text);
+      break;
+    case 'tool_call':
+      agentAddToolCall(msg);
+      break;
+    case 'tool_result':
+      agentFillToolResult(msg);
+      break;
+    case 'handoff_request':
+      agentShowHandoff(msg.reason, msg.options);
+      break;
+    case 'done':
+      agentOnDone(msg);
+      break;
+    case 'error':
+      agentOnError(msg.message);
+      break;
+  }
+}
+
+function agentSetStatus(status) {
+  const dot = document.getElementById('agent-status-dot');
+  const text = document.getElementById('agent-status-text');
+  const controls = document.getElementById('agent-controls');
+  const pauseBtn = document.getElementById('btn-agent-pause');
+  if (!dot || !text) return;
+
+  dot.className = `agent-status-dot agent-dot-${status}`;
+  const labels = { running: 'Running', paused: 'Paused', waiting_handoff: 'Waiting for you', done: 'Done', error: 'Error', stopped: 'Stopped' };
+  text.textContent = labels[status] || status;
+
+  if (controls) controls.style.display = ['running', 'paused'].includes(status) ? '' : 'none';
+  if (pauseBtn) {
+    if (status === 'paused') {
+      pauseBtn.textContent = '▶ Resume';
+      pauseBtn.dataset.state = 'paused';
+    } else {
+      pauseBtn.innerHTML = '&#9646;&#9646; Pause';
+      pauseBtn.dataset.state = 'running';
+    }
+  }
+
+  if (['done', 'error', 'stopped'].includes(status)) {
+    document.getElementById('agent-handoff-panel').style.display = 'none';
+  }
+}
+
+function agentSetStats(step) {
+  const statsEl = document.getElementById('agent-stats');
+  if (statsEl) statsEl.textContent = `Step ${step}`;
+}
+
+function agentGetTimeline() {
+  return document.getElementById('agent-timeline');
+}
+
+function agentAddTimelineBlock(className, html) {
+  const tl = agentGetTimeline();
+  if (!tl) return null;
+  const el = document.createElement('div');
+  el.className = `agent-block ${className}`;
+  el.innerHTML = html;
+  tl.appendChild(el);
+  tl.scrollTop = tl.scrollHeight;
+  return el;
+}
+
+function agentAppendThinking(text) {
+  if (!_agentCurrentThinkingEl) {
+    const block = agentAddTimelineBlock('agent-thinking-block', `<div class="agent-thinking-spinner"></div><div class="agent-thinking-text"></div>`);
+    if (block) _agentCurrentThinkingEl = block.querySelector('.agent-thinking-text');
+  }
+  if (_agentCurrentThinkingEl) {
+    _agentCurrentThinkingEl.textContent += text;
+    const tl = agentGetTimeline();
+    if (tl) tl.scrollTop = tl.scrollHeight;
+  }
+}
+
+function agentFinalizeThinking(fullText) {
+  if (_agentCurrentThinkingEl) {
+    const block = _agentCurrentThinkingEl.closest('.agent-thinking-block');
+    if (block) {
+      const spinner = block.querySelector('.agent-thinking-spinner');
+      if (spinner) spinner.style.display = 'none';
+      block.classList.add('agent-thinking-done');
+      // Replace with collapsible summary
+      const words = (fullText || _agentCurrentThinkingEl.textContent || '').split(/\s+/);
+      const summary = words.slice(0, 10).join(' ') + (words.length > 10 ? '…' : '');
+      block.innerHTML = `<div class="agent-thinking-summary" onclick="this.parentElement.classList.toggle('agent-thinking-expanded')">&#128161; ${escapeHTML(summary)}</div><div class="agent-thinking-full">${escapeHTML(fullText || '')}</div>`;
+    }
+    _agentCurrentThinkingEl = null;
+  }
+}
+
+function agentAppendText(text) {
+  if (!_agentCurrentTextEl) {
+    const block = agentAddTimelineBlock('agent-text-block', `<div class="agent-text-content"></div>`);
+    if (block) _agentCurrentTextEl = block.querySelector('.agent-text-content');
+  }
+  if (_agentCurrentTextEl) {
+    _agentCurrentTextEl.textContent += text;
+    const tl = agentGetTimeline();
+    if (tl) tl.scrollTop = tl.scrollHeight;
+  }
+}
+
+function agentAddToolCall(msg) {
+  _agentCurrentTextEl = null; // new tool call breaks text accumulation
+  const inputStr = JSON.stringify(msg.input || {}, null, 2);
+  const inputPreview = inputStr.length > 200 ? inputStr.slice(0, 200) + '…' : inputStr;
+  const block = agentAddTimelineBlock('agent-tool-block', `
+    <div class="agent-tool-header">
+      <span class="agent-tool-icon">&#9874;</span>
+      <span class="agent-tool-name">${escapeHTML(msg.tool || '')}</span>
+      <span class="agent-tool-status agent-tool-running">running…</span>
+    </div>
+    <div class="agent-tool-input">${escapeHTML(inputPreview)}</div>
+    <div class="agent-tool-result" style="display:none"></div>
+  `);
+  if (block) _agentPendingToolCalls[msg.callId] = block;
+}
+
+function agentFillToolResult(msg) {
+  _agentCurrentTextEl = null;
+  const block = _agentPendingToolCalls[msg.callId];
+  if (!block) return;
+  delete _agentPendingToolCalls[msg.callId];
+
+  const statusEl = block.querySelector('.agent-tool-status');
+  const resultEl = block.querySelector('.agent-tool-result');
+  const durationStr = msg.durationMs ? ` ${(msg.durationMs / 1000).toFixed(1)}s` : '';
+  if (statusEl) {
+    statusEl.className = `agent-tool-status ${msg.ok !== false ? 'agent-tool-ok' : 'agent-tool-err'}`;
+    statusEl.textContent = msg.ok !== false ? `✓${durationStr}` : `✗${durationStr}`;
+  }
+  if (resultEl) {
+    const out = typeof msg.output === 'string' ? msg.output : JSON.stringify(msg.output || '');
+    const preview = out.length > 400 ? out.slice(0, 400) + '…' : out;
+    resultEl.textContent = preview;
+    resultEl.style.display = '';
+  }
+  const tl = agentGetTimeline();
+  if (tl) tl.scrollTop = tl.scrollHeight;
+}
+
+function agentOnDone(msg) {
+  _agentCurrentThinkingEl = null;
+  _agentCurrentTextEl = null;
+  agentSetStatus('done');
+  const steps = msg.steps || 0;
+  const tools = msg.toolCalls || 0;
+  const secs = msg.durationMs ? (msg.durationMs / 1000).toFixed(1) : '?';
+  agentAddTimelineBlock('agent-done-block', `
+    <div class="agent-done-header">&#10003; Done — ${steps} step${steps !== 1 ? 's' : ''}, ${tools} tool call${tools !== 1 ? 's' : ''}, ${secs}s</div>
+    ${msg.result ? `<div class="agent-done-result">${escapeHTML(msg.result)}</div>` : ''}
+    ${msg.warning === 'max_steps_reached' ? `<div class="agent-done-warn">Max steps reached — result may be incomplete.</div>` : ''}
+  `);
+  const statsEl = document.getElementById('agent-stats');
+  if (statsEl) statsEl.textContent = `${steps} steps · ${tools} tools · ${secs}s`;
+  document.getElementById('agent-controls').style.display = 'none';
+}
+
+function agentOnError(message) {
+  agentSetStatus('error');
+  agentAddTimelineBlock('agent-error-block', `<span class="agent-error-icon">&#9888;</span> ${escapeHTML(message || 'Unknown error')}`);
+}
+
+function agentShowHandoff(reason, options) {
+  agentSetStatus('waiting_handoff');
+  const panel = document.getElementById('agent-handoff-panel');
+  const reasonEl = document.getElementById('agent-handoff-reason');
+  const optionsEl = document.getElementById('agent-handoff-options');
+  if (!panel) return;
+
+  if (reasonEl) reasonEl.textContent = reason || '';
+  if (optionsEl) {
+    optionsEl.innerHTML = '';
+    (options || []).forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.className = 'btn-secondary agent-handoff-opt';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => {
+        const msgEl = document.getElementById('agent-handoff-msg');
+        if (msgEl) msgEl.value = opt;
+      });
+      optionsEl.appendChild(btn);
+    });
+  }
+  panel.style.display = '';
+  document.getElementById('agent-live-area').style.display = '';
+  const tl = agentGetTimeline();
+  if (tl) tl.scrollTop = tl.scrollHeight;
+}
+
+// ── Agent panel init ──────────────────────────────────────────────────────────
+function initAgentPanel() {
+  function agentSwitchToLive() {
+    document.getElementById('agent-start-area').style.display = 'none';
+    document.getElementById('agent-live-area').style.display = '';
+    document.getElementById('agent-controls').style.display = '';
+  }
+
+  function agentResetToStart() {
+    _agentCurrentId = null;
+    _agentCurrentThinkingEl = null;
+    _agentCurrentTextEl = null;
+    _agentPendingToolCalls = {};
+    document.getElementById('agent-start-area').style.display = '';
+    document.getElementById('agent-live-area').style.display = 'none';
+    document.getElementById('agent-controls').style.display = 'none';
+    document.getElementById('agent-handoff-panel').style.display = 'none';
+    const tl = document.getElementById('agent-timeline');
+    if (tl) tl.innerHTML = '';
+  }
+
+  document.getElementById('btn-agent-start')?.addEventListener('click', async () => {
+    const goal = document.getElementById('agent-goal')?.value?.trim();
+    if (!goal) { showToast('Enter a goal first'); return; }
+    const model = document.getElementById('agent-model')?.value;
+    const maxSteps = parseInt(document.getElementById('agent-max-steps')?.value || '20', 10);
+    const enableThinking = document.getElementById('agent-thinking')?.checked !== false;
+
+    try {
+      const resp = await fetch('/api/agent/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal, model, maxSteps, enableThinking }),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const data = await resp.json();
+      _agentCurrentId = data.agentId;
+      _agentPendingToolCalls = {};
+      _agentCurrentThinkingEl = null;
+      _agentCurrentTextEl = null;
+      const tl = document.getElementById('agent-timeline');
+      if (tl) tl.innerHTML = '';
+      agentSwitchToLive();
+      agentSetStatus('running');
+    } catch (err) {
+      showToast(`Failed to start agent: ${err.message}`, 'error');
+    }
+  });
+
+  document.getElementById('btn-agent-new')?.addEventListener('click', agentResetToStart);
+
+  document.getElementById('btn-agent-pause')?.addEventListener('click', async () => {
+    if (!_agentCurrentId) return;
+    const btn = document.getElementById('btn-agent-pause');
+    const isPaused = btn?.dataset.state === 'paused';
+    const endpoint = isPaused ? 'resume' : 'pause';
+    try {
+      await fetch(`/api/agent/${_agentCurrentId}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    } catch (err) {
+      showToast(`Failed to ${endpoint} agent: ${err.message}`, 'error');
+    }
+  });
+
+  document.getElementById('btn-agent-stop')?.addEventListener('click', async () => {
+    if (!_agentCurrentId) return;
+    try {
+      await fetch(`/api/agent/${_agentCurrentId}/stop`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    } catch (err) {
+      showToast(`Failed to stop agent: ${err.message}`, 'error');
+    }
+  });
+
+  document.getElementById('btn-agent-handoff-now')?.addEventListener('click', () => {
+    if (!_agentCurrentId) return;
+    agentShowHandoff('You requested a handoff. Type a message or instruction for the agent.', []);
+  });
+
+  document.getElementById('btn-agent-handoff-send')?.addEventListener('click', async () => {
+    if (!_agentCurrentId) return;
+    const message = document.getElementById('agent-handoff-msg')?.value?.trim() || '';
+    document.getElementById('agent-handoff-panel').style.display = 'none';
+    try {
+      await fetch(`/api/agent/${_agentCurrentId}/handoff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resume', message }),
+      });
+    } catch (err) {
+      showToast(`Handoff failed: ${err.message}`, 'error');
+    }
+  });
+
+  document.getElementById('btn-agent-handoff-stop')?.addEventListener('click', async () => {
+    if (!_agentCurrentId) return;
+    document.getElementById('agent-handoff-panel').style.display = 'none';
+    try {
+      await fetch(`/api/agent/${_agentCurrentId}/handoff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop' }),
+      });
+    } catch (err) {
+      showToast(`Stop failed: ${err.message}`, 'error');
+    }
+  });
+
+  document.getElementById('agent-goal')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      document.getElementById('btn-agent-start')?.click();
+    }
+  });
+}
 

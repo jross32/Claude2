@@ -63,6 +63,10 @@
           <span class="nav-icon">&#129504;</span>
           <span class="nav-label">AI</span>
         </button>
+        <button class="nav-item" data-panel="agent" title="Agent" aria-label="Open Agent panel">
+          <span class="nav-icon">&#129351;</span>
+          <span class="nav-label">Agent</span>
+        </button>
 <button class="nav-item" data-panel="logs" title="Tool Logs" aria-label="Open Tool Logs panel">
           <span class="nav-icon">&#128202;</span>
           <span class="nav-label">Logs</span>
@@ -1481,6 +1485,82 @@
               <div class="form-actions">
                 <button class="btn-primary" id="btn-ai-send">&#9654; Ask AI</button>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== AGENT PANEL ===== -->
+      <section class="panel" id="panel-agent">
+        <div class="panel-header">
+          <div>
+            <h1>Agent</h1>
+            <p class="subtitle">Autonomous multi-step AI agent — give it a goal and watch it work in real time.</p>
+          </div>
+          <div class="panel-actions" id="agent-controls" style="display:none">
+            <button class="btn-secondary" id="btn-agent-pause">&#9646;&#9646; Pause</button>
+            <button class="btn-secondary" id="btn-agent-handoff-now">&#8644; Handoff</button>
+            <button class="btn-danger" id="btn-agent-stop">&#9632; Stop</button>
+          </div>
+        </div>
+
+        <!-- Goal input (idle state) -->
+        <div id="agent-start-area">
+          <div class="form-card agent-goal-card">
+            <div class="form-section">
+              <h2 class="section-title"><span class="section-icon">&#127919;</span> Goal</h2>
+              <div class="field">
+                <label for="agent-goal">What should the agent do?</label>
+                <textarea id="agent-goal" class="code-editor" rows="4" placeholder="Examples:&#10;- Scrape example.com and summarize what it's about&#10;- Find all product listings on this site and extract prices&#10;- Research the tech stack used by github.com"></textarea>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="agent-model">Model</label>
+                  <select id="agent-model">
+                    <option value="claude-opus-4-7">Claude Opus 4.7</option>
+                    <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>
+                    <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="agent-max-steps">Max Steps</label>
+                  <input type="number" id="agent-max-steps" min="1" max="50" value="20" />
+                </div>
+                <div class="field">
+                  <label class="checkbox-label" style="margin-top:22px">
+                    <input type="checkbox" id="agent-thinking" checked />
+                    <span>Extended thinking</span>
+                  </label>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn-primary" id="btn-agent-start">&#9654; Run Agent</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live agent output (running state) -->
+        <div id="agent-live-area" style="display:none">
+          <div class="agent-status-bar" id="agent-status-bar">
+            <span class="agent-status-dot" id="agent-status-dot"></span>
+            <span id="agent-status-text">Starting...</span>
+            <span class="agent-stats" id="agent-stats"></span>
+            <button class="btn-secondary agent-new-btn" id="btn-agent-new">&#43; New Run</button>
+          </div>
+          <div class="agent-timeline" id="agent-timeline"></div>
+        </div>
+
+        <!-- Handoff panel (waiting_handoff state) -->
+        <div id="agent-handoff-panel" style="display:none">
+          <div class="agent-handoff-card">
+            <div class="agent-handoff-header">&#9997; Agent needs your input</div>
+            <div class="agent-handoff-reason" id="agent-handoff-reason"></div>
+            <div class="agent-handoff-options" id="agent-handoff-options"></div>
+            <textarea id="agent-handoff-msg" class="code-editor" rows="2" placeholder="Optional message to the agent..."></textarea>
+            <div class="form-actions">
+              <button class="btn-primary" id="btn-agent-handoff-send">&#8594; Send &amp; Resume</button>
+              <button class="btn-danger" id="btn-agent-handoff-stop">Stop Agent</button>
             </div>
           </div>
         </div>
