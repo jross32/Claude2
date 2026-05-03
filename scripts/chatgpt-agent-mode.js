@@ -102,38 +102,73 @@ async function main() {
 
   // Now "New project" should be visible — click it
   await page.click('text=New project', { timeout: 8000 });
-  await page.waitForTimeout(800);
-  await shot(page, '02-create-project-dialog.png');
+  await page.waitForTimeout(1200);
+  await shot(page, '02-after-new-project-click.png');
 
-  // Dialog is now open — fill the name input (placeholder: "Copenhagen Trip")
-  const nameInput = await page.waitForSelector('dialog input[type="text"], dialog input:not([type])', { timeout: 5000 });
+  const urlAfterClick = page.url();
+  console.log(`  URL after "New project" click: ${urlAfterClick}`);
+
+  // The "New project" click may open a dialog OR navigate to a URL with an inline form.
+  // Use a broad selector that covers both cases — try for up to 15s for loading to finish.
+  console.log('  Waiting for project name input...');
+  const nameInput = await page.waitForSelector(
+    [
+      // Classic dialog variants
+      'dialog input[type="text"]',
+      'dialog input:not([type])',
+      // Non-dialog modal/sheet variants (div/section acting as modal)
+      '[role="dialog"] input[type="text"]',
+      '[role="dialog"] input:not([type])',
+      // Placeholder-based (ChatGPT uses "Copenhagen Trip" as example)
+      'input[placeholder*="Copenhagen" i]',
+      'input[placeholder*="project" i]',
+      'input[placeholder*="name" i]',
+      // Aria label variants
+      '[aria-label*="project name" i]',
+      '[aria-label*="name" i]',
+    ].join(', '),
+    { timeout: 15000 }
+  );
+  console.log('  ✓ Project name input found');
+
   await nameInput.click({ clickCount: 3 }).catch(() => nameInput.click());
   await nameInput.fill('AI workspace');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   await shot(page, '03-name-filled.png');
 
-  // Click "Create project" button inside the dialog
-  await page.click('dialog button:has-text("Create project")', { timeout: 5000 });
-  console.log('  ✓ Create project clicked');
+  // Click "Create project" — try dialog-scoped first, then page-wide
+  const createBtn = await page.$(
+    'dialog button:has-text("Create project"), [role="dialog"] button:has-text("Create project"), button:has-text("Create project")'
+  );
+  if (createBtn) {
+    await createBtn.click();
+  } else {
+    // Fallback: press Enter in the input
+    await nameInput.press('Enter');
+  }
+  console.log('  ✓ Create project submitted');
 
-  // Wait for the dialog to close and project to be created
-  await page.waitForSelector('dialog', { state: 'hidden', timeout: 10000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  // Wait for the form/dialog to disappear and project to be created
+  await page.waitForTimeout(2000);
   await shot(page, '04-project-created.png');
 
   // ── Start a new chat inside the project ──────────────────────────────────
   console.log('\n[3] Starting a new chat...');
 
-  // Navigate to the project or click "New chat"
-  // After project creation, ChatGPT may navigate into the project automatically
   const currentUrl = page.url();
   console.log(`  URL after project create: ${currentUrl}`);
 
-  // Look for "New chat" button or the chat input
-  const newChatBtn = await page.$('a[href="/"]:has-text("New chat"), button:has-text("New chat"), [data-testid="new-chat-button"]');
-  if (newChatBtn) {
-    await newChatBtn.click();
-    await page.waitForTimeout(1500);
+  // If we're on a project page (e.g. /g/g-p-xxx), the chat input may already be visible.
+  // Otherwise look for a "New chat" button.
+  const chatInputVisible = await page.$('#prompt-textarea, textarea[placeholder], [contenteditable="true"][id*="prompt"]');
+  if (!chatInputVisible) {
+    const newChatBtn = await page.$(
+      'a[href="/"]:has-text("New chat"), button:has-text("New chat"), [data-testid="new-chat-button"], a:has-text("New chat")'
+    );
+    if (newChatBtn) {
+      await newChatBtn.click();
+      await page.waitForTimeout(1500);
+    }
   }
   await shot(page, '05-new-chat.png');
 
