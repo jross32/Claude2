@@ -5891,7 +5891,10 @@ function initAgentPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ goal, model, maxSteps, enableThinking }),
       });
-      if (!resp.ok) throw new Error(await resp.text());
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || 'Server error');
+      }
       const data = await resp.json();
       _agentCurrentId = data.agentId;
       _agentPendingToolCalls = {};

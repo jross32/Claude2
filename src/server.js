@@ -1803,6 +1803,7 @@ app.post('/api/extract-company', (req, res) => {
 app.post('/api/agent/start', (req, res) => {
   const { goal, model, maxSteps, enableThinking } = req.body || {};
   if (!goal || !goal.trim()) return res.status(400).json({ error: 'goal is required' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'ANTHROPIC_API_KEY is not set in .env — add it to use the agent.' });
 
   const run = createAgentRun(
     goal.trim(),

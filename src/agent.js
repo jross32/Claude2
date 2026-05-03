@@ -305,6 +305,12 @@ async function executeTool(run, toolName, toolInput) {
 
 // ── Main agent loop ───────────────────────────────────────────────────────────
 async function runAgent(run) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    run.status = 'error';
+    run.error = 'ANTHROPIC_API_KEY is not set. Add it to your .env file to use the agent.';
+    run.emit('error', { message: run.error });
+    return;
+  }
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   run.emit('status', { status: 'running' });
