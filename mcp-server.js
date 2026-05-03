@@ -8309,6 +8309,7 @@ module.exports = {
   listTools: listToolsForCurrentToolset,
   listPrompts: getPromptCatalog,
   getMcpMeta,
+  sampleFromClient,
   __private__: {
     analyzeResearchQuestion,
     buildApiSurface,
