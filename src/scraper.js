@@ -1691,6 +1691,13 @@ class ScraperSession {
       // ── Cloudflare challenge bypass ──────────────────────────────────────
       try { await bypassCloudflare(page); } catch {}
 
+      // ── SPA hydration settle ──────────────────────────────────────────────
+      // SPAs (React, Next.js, Vue) fire XHR/fetch calls 500ms–4s after domcontentloaded,
+      // after JS hydrates and auth state resolves. A short networkidle wait (capped at 5s)
+      // lets those first-wave API calls register before extraction starts.
+      // Busy sites like ChatGPT that never go idle will timeout — that's expected and fine.
+      try { await page.waitForLoadState('networkidle', { timeout: 5000 }); } catch {}
+
       // ── Detect site info ─────────────────────────────────────────────────
       this.progress('Detecting site info', 22);
       const siteInfo = await this._detectSiteInfo(page, primaryUrl);
