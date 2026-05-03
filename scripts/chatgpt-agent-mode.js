@@ -61,10 +61,28 @@ async function main() {
       try {
         const body = await res.body();
         const text = body.toString('utf-8');
-        captured.sseEvents.push({ url, bytes: body.length, preview: text.slice(0, 3000) });
+        captured.sseEvents.push({ url, bytes: body.length, preview: text.slice(0, 5000) });
         console.log(`  ← SSE ${res.status()} ${url.replace('https://chatgpt.com', '')} (${body.length} bytes)`);
       } catch {}
     }
+  });
+  // WebSocket capture — ChatGPT streams actual token/tool content over WS after handoff
+  context.on('websocket', (ws) => {
+    console.log(`  ← WS opened: ${ws.url()}`);
+    ws.on('framesent', (frame) => {
+      if (frame.text) captured.wsMessages.push({ dir: 'sent', ts: Date.now(), text: frame.text.slice(0, 2000) });
+    });
+    ws.on('framereceived', (frame) => {
+      if (frame.text) {
+        const preview = frame.text.slice(0, 2000);
+        captured.wsMessages.push({ dir: 'recv', ts: Date.now(), text: preview });
+        // Log tool calls and content events
+        if (frame.text.includes('"type"') && (frame.text.includes('tool') || frame.text.includes('content') || frame.text.includes('delta'))) {
+          console.log(`  ← WS frame: ${preview.slice(0, 120).replace(/\n/g, ' ')}`);
+        }
+      }
+    });
+    ws.on('close', () => console.log(`  ← WS closed: ${ws.url()}`));
   });
 
   const page = await context.newPage();
@@ -74,6 +92,44 @@ async function main() {
       if (!window.chrome) window.chrome = {};
       if (!window.chrome.runtime) window.chrome.runtime = { connect: () => {}, sendMessage: () => {} };
     } catch {}
+
+    // Monkey-patch WebSocket to capture all messages from any domain
+    const OrigWS = window.WebSocket;
+    window.WebSocket = function(url, protocols) {
+      const ws = protocols ? new OrigWS(url, protocols) : new OrigWS(url);
+      window.__wsCapture = window.__wsCapture || [];
+      window.__wsCapture.push({ url, ts: Date.now(), frames: [] });
+      const idx = window.__wsCapture.length - 1;
+      console.log('[WS-OPEN]', url);
+      const orig = ws.addEventListener.bind(ws);
+      ws.addEventListener('message', (e) => {
+        const text = typeof e.data === 'string' ? e.data.slice(0, 3000) : '[binary]';
+        window.__wsCapture[idx].frames.push({ dir: 'recv', ts: Date.now(), text });
+        if (text.includes('delta') || text.includes('tool') || text.includes('content')) {
+          console.log('[WS-RECV]', text.slice(0, 200));
+        }
+      });
+      const origSend = ws.send.bind(ws);
+      ws.send = function(data) {
+        const text = typeof data === 'string' ? data.slice(0, 1000) : '[binary]';
+        window.__wsCapture[idx].frames.push({ dir: 'sent', ts: Date.now(), text });
+        return origSend(data);
+      };
+      return ws;
+    };
+    Object.assign(window.WebSocket, OrigWS);
+    window.WebSocket.prototype = OrigWS.prototype;
+
+    // Also intercept fetch to capture SSE from any URL
+    const origFetch = window.fetch;
+    window.fetch = async function(...args) {
+      const res = await origFetch(...args);
+      const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+      if (url.includes('conversation') && res.headers.get('content-type')?.includes('event-stream')) {
+        console.log('[SSE-FETCH]', url.replace('https://chatgpt.com', ''));
+      }
+      return res;
+    };
   });
 
   // ── Navigate ─────────────────────────────────────────────────────────────
@@ -158,30 +214,38 @@ async function main() {
   const currentUrl = page.url();
   console.log(`  URL after project create: ${currentUrl}`);
 
-  // If we're on a project page (e.g. /g/g-p-xxx), the chat input may already be visible.
-  // Otherwise look for a "New chat" button.
-  const chatInputVisible = await page.$('#prompt-textarea, textarea[placeholder], [contenteditable="true"][id*="prompt"]');
-  if (!chatInputVisible) {
-    const newChatBtn = await page.$(
-      'a[href="/"]:has-text("New chat"), button:has-text("New chat"), [data-testid="new-chat-button"], a:has-text("New chat")'
-    );
-    if (newChatBtn) {
-      await newChatBtn.click();
-      await page.waitForTimeout(1500);
-    }
+  // After project creation ChatGPT lands on /g/g-p-xxx/project (settings page).
+  // Navigate to /g/g-p-xxx to open a new chat inside the project.
+  if (currentUrl.endsWith('/project') || currentUrl.includes('/project?')) {
+    const chatUrl = currentUrl.replace(/\/project(\?.*)?$/, '');
+    console.log(`  Navigating to project chat: ${chatUrl}`);
+    await page.goto(chatUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000);
   }
   await shot(page, '05-new-chat.png');
 
   // ── Find chat input and type ──────────────────────────────────────────────
   console.log('\n[4] Locating chat input...');
-  const textarea = await page.waitForSelector('#prompt-textarea, textarea[placeholder], [data-id="root"] textarea', { timeout: 15000 });
+  // ChatGPT uses a contenteditable div with id="prompt-textarea" as the real input.
+  // The <textarea name="prompt-textarea"> is a hidden virtual keyboard fallback — skip it.
+  const textarea = await page.waitForSelector(
+    'div#prompt-textarea[contenteditable], div[contenteditable="true"][aria-label*="chat" i], [aria-label*="New chat" i][contenteditable]',
+    { timeout: 15000 }
+  );
   console.log('  ✓ Chat input found');
 
-  // Check if Extended / agent mode button is available
-  const extendedBtn = await page.$('button:has-text("Extended"), [aria-label*="Extended" i]');
+  // Look for Extended/agent mode toggle button scoped to the chat footer area
+  const extendedBtn = await page.$(
+    'form button:has-text("Extended"), footer button:has-text("Extended"), ' +
+    '[aria-label*="Extended" i]:not([class*="sidebar"]), ' +
+    'div[class*="composer"] button:has-text("Search")'
+  );
   if (extendedBtn) {
-    console.log('  Found "Extended" button — it is already available');
-    // Don't click it yet — note its presence for later
+    console.log('  Clicking extended/agent mode button...');
+    await extendedBtn.click({ force: true });
+    await page.waitForTimeout(600);
+  } else {
+    console.log('  Extended button not found in chat area — proceeding with prompt only');
   }
 
   // ── Send a prompt that triggers multi-step agent behavior ─────────────────
@@ -193,20 +257,29 @@ async function main() {
 Show me your thinking at each step, use your web search tool, and be thorough.`;
 
   await textarea.click();
-  await textarea.fill(prompt);
+  // Use execCommand insertText so newlines don't submit the form in the contenteditable
+  await page.evaluate((text) => {
+    const el = document.querySelector('div#prompt-textarea[contenteditable]');
+    if (el) {
+      el.focus();
+      // Clear existing content then insert full text preserving newlines
+      document.execCommand('selectAll', false);
+      document.execCommand('insertText', false, text);
+    }
+  }, prompt);
   await page.waitForTimeout(500);
   await shot(page, '06-prompt-entered.png');
 
-  // Submit
-  const sendBtn = await page.$('[data-testid="send-button"], button[aria-label*="send" i]');
+  // Submit — try the send button first, then Enter
+  const sendBtn = await page.$('[data-testid="send-button"], button[aria-label*="send" i], button[aria-label*="Send" i]');
   if (sendBtn) await sendBtn.click();
-  else await page.keyboard.press('Enter');
+  else await textarea.press('Enter');
   console.log('  ✓ Prompt submitted');
 
   // ── Wait for and capture the agent response ───────────────────────────────
-  console.log('\n[6] Waiting for agent response (up to 120s)...');
+  console.log('\n[6] Waiting for agent response (up to 180s)...');
   let lastText = '';
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < 120; i++) {
     await page.waitForTimeout(1500);
 
     // Capture screenshots periodically
@@ -240,11 +313,23 @@ Show me your thinking at each step, use your web search tool, and be thorough.`;
     }));
   }).catch(() => []);
 
+  // Harvest JS-level WebSocket captures
+  const wsCapture = await page.evaluate(() => window.__wsCapture || []).catch(() => []);
+  if (wsCapture.length > 0) {
+    console.log(`  WS connections captured at JS level: ${wsCapture.length}`);
+    wsCapture.forEach(c => console.log(`    ${c.url} — ${c.frames.length} frames`));
+    // Merge into captured.wsMessages
+    wsCapture.forEach(c => {
+      c.frames.forEach(f => captured.wsMessages.push({ url: c.url, ...f }));
+    });
+  }
+
   // ── Save research data ────────────────────────────────────────────────────
   console.log('\n[7] Saving research data...');
   save('conversation.json', conversation);
   save('network-requests.json', captured.requests);
   save('sse-streams.json', captured.sseEvents);
+  save('ws-messages.json', captured.wsMessages);
   save('research-summary.txt', [
     `=== ChatGPT Agent Mode Research ===`,
     `Date: ${new Date().toISOString()}`,
@@ -253,12 +338,22 @@ Show me your thinking at each step, use your web search tool, and be thorough.`;
     `  API requests to backend-api: ${captured.requests.filter(r => r.url.includes('backend-api')).length}`,
     `  SSE streams captured: ${captured.sseEvents.length}`,
     `  Total SSE bytes: ${captured.sseEvents.reduce((n, s) => n + s.bytes, 0)}`,
+    `  WebSocket frames captured: ${captured.wsMessages.length}`,
+    `  WS frames sent: ${captured.wsMessages.filter(m => m.dir === 'sent').length}`,
+    `  WS frames received: ${captured.wsMessages.filter(m => m.dir === 'recv').length}`,
+    ``,
+    `Key endpoints:`,
+    `  Conversation stream: POST /backend-api/f/conversation`,
+    `  Handoff protocol: SSE → JWT token + topic_id → WS subscribe_ws_topic`,
     ``,
     `API Endpoints called:`,
     ...captured.requests.map(r => `  ${r.method} ${r.url.replace('https://chatgpt.com', '')}`),
     ``,
-    `SSE Streams:`,
+    `SSE Streams (handoff only — actual tokens in WS):`,
     ...captured.sseEvents.map(s => `  ${s.url.replace('https://chatgpt.com', '')} (${s.bytes} bytes)`),
+    ``,
+    `WebSocket frames (first 20):`,
+    ...captured.wsMessages.slice(0, 20).map(m => `  [${m.dir}] ${m.text.slice(0, 120).replace(/\n/g, ' ')}`),
     ``,
     `Conversation turns: ${conversation.length}`,
   ].join('\n'));

@@ -1,0 +1,7 @@
+[
+  {
+    "url": "https://chatgpt.com/backend-api/f/conversation",
+    "bytes": 975,
+    "preview": "event: delta_encoding\ndata: \"v1\"\n\ndata: {\"type\": \"resume_conversation_token\", \"kind\": \"topic\", \"token\": \"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb25kdWl0X3V1aWQiOiJhNGE3ZmU2OTZjNTI0ODcxYWY0MDBjNDkxZTFlNDRmNSIsImNvbmR1aXRfbG9jYXRpb24iOiIxMC4xMjguMTk5LjIwOTo4MzAyIiwiY2x1c3RlciI6InVuaWZpZWQtMTQ4IiwiaWF0IjoxNzc3Nzk3NTMwLCJleHAiOjE3Nzc4MDQ3MzAsInR1cm5fdG9waWNfaWQiOiJjb252ZXJzYXRpb24tdHVybi0yMzlkOTY2NS0xNjU4LTQzMTAtYTFkNy0yY2M3MTA0NjRiOGYifQ.gBEezopSFYvoyBatLYCvAk9X4TRXaemK0eBofry3_OqIJ0FgokbBGDIzCfOL1c_k_DGRLYD5LbDWWY9MrxGM-A\", \"conversation_id\": \"69f70996-64b4-83ea-8880-10c63d656836\"}\n\ndata: {\"type\": \"stream_handoff\", \"conversation_id\": \"69f70996-64b4-83ea-8880-10c63d656836\", \"turn_exchange_id\": \"239d9665-1658-4310-a1d7-2cc710464b8f\", \"options\": [{\"type\": \"resume_sse_endpoint\", \"topic_id\": \"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f\"}, {\"type\": \"subscribe_ws_topic\", \"topic_id\": \"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f\"}]}\n\ndata: [DONE]\n\n"
+  }
+]

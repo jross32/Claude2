@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "agent-ops-hub": {
+      "command": "node",
+      "args": ["C:/Users/justi/mcp-servers/agent-ops-hub/mcp-server.js"]
+    },
     "web-scraper": {
       "command": "node",
       "args": ["./mcp-server.js"],

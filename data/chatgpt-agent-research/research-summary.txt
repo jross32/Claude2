@@ -1,0 +1,176 @@
+=== ChatGPT Agent Mode Research ===
+Date: 2026-05-03T08:39:54.644Z
+
+Network:
+  API requests to backend-api: 122
+  SSE streams captured: 1
+  Total SSE bytes: 975
+  WebSocket frames captured: 138
+  WS frames sent: 3
+  WS frames received: 135
+
+Key endpoints:
+  Conversation stream: POST /backend-api/f/conversation
+  Handoff protocol: SSE → JWT token + topic_id → WS subscribe_ws_topic
+
+API Endpoints called:
+  GET /cdn/assets/conversation-small-nikr8dxc.css
+  GET /cdn/assets/_conversation-fze5y1oo.js
+  GET /cdn/assets/conversation-small-k6r3ex3dhdlph5qx.js
+  GET /cdn/assets/_conversation._index-hlz5za91.js
+  GET /backend-api/accounts/optimized/check
+  GET /backend-api/user_system_messages
+  GET /backend-api/settings/user
+  POST /backend-api/sentinel/chat-requirements/prepare
+  GET /backend-api/system_hints?mode=basic
+  GET /backend-api/system_hints?mode=connectors
+  GET /backend-api/system_hints?mode=custom_agents
+  POST /backend-api/aip/connectors/list_accessible?skip_actions=true&external_logos=true
+  POST /backend-api/aip/connectors/links/list_accessible
+  POST /backend-api/sentinel/chat-requirements/finalize
+  GET /backend-api/calpico/chatgpt/rooms/summary?limit=10&include_pinned=true
+  GET /backend-api/pins
+  POST /backend-api/conversation/init
+  GET /backend-api/conversations?offset=0&limit=28&order=updated&is_archived=false&is_starred=false
+  GET /backend-api/gizmos/snorlax/sidebar?owned_only=true&conversations_per_gizmo=5&limit=20
+  GET /backend-api/user_segments
+  POST /backend-api/aip/connectors/links/list_accessible
+  GET /backend-api/client/strings
+  GET /backend-api/apps/sources_dropdown
+  GET /backend-api/prompt_library/?limit=4&use_v2=true&model_slug=gpt-5-5-thinking
+  GET /backend-api/images/bootstrap
+  GET /backend-api/beacons/home
+  GET /backend-api/amphora/notifications?limit=20
+  GET /cdn/assets/conversation-small-nikr8dxc.css
+  GET /backend-api/subscriptions?account_id=e8983011-c1a4-4f61-a5eb-d1674f6f7422
+  GET /backend-api/user_surveys/active
+  GET /backend-api/memories?exclusive_to_gizmo=false&include_memory_entries=false
+  GET /backend-api/tasks
+  GET /backend-api/celsius/ws/user
+  POST /backend-api/files/library
+  GET /backend-api/checkout_pricing_config/countries
+  GET /backend-api/checkout_pricing_config/configs/US
+  POST /backend-api/gizmos/snorlax/upsert
+  GET /backend-api/gizmos/snorlax/sidebar?owned_only=true&conversations_per_gizmo=5&limit=20
+  GET /backend-api/gizmos/g-p-69f7098c82d081919c757ea9669a8cab/conversations?cursor=0
+  POST /backend-api/conversation/init
+  GET /backend-api/user_segments
+  GET /backend-api/memories?gizmo_id=g-p-69f7098c82d081919c757ea9669a8cab&exclusive_to_gizmo=false&include_memory_entries=false
+  GET /backend-api/settings/is_adult
+  GET /backend-api/apps/sources_dropdown
+  GET /backend-api/aip/connectors/connector_5f3c8c41a1e54ad7a76272c89e2554fa?include_logo=false&include_actions=false
+  GET /backend-api/aip/connectors/connector_0f9c9d4592e54d0a9a12b3f44a1e2010?include_logo=false&include_actions=false
+  GET /backend-api/aip/connectors/asdk_app_69a1d78e929881919bba0dbda1f6436d?include_logo=false&include_actions=false
+  GET /backend-api/projects/g-p-69f7098c82d081919c757ea9669a8cab/connector_scopes?limit=100
+  GET /cdn/assets/conversation-small-nikr8dxc.css
+  GET /cdn/assets/conversation-small-k6r3ex3dhdlph5qx.js
+  GET /backend-api/accounts/optimized/check
+  GET /backend-api/user_system_messages
+  GET /backend-api/settings/user
+  GET /backend-api/system_hints?mode=basic
+  GET /backend-api/system_hints?mode=connectors
+  GET /backend-api/system_hints?mode=custom_agents
+  POST /backend-api/aip/connectors/list_accessible?skip_actions=true&external_logos=true
+  POST /backend-api/aip/connectors/links/list_accessible
+  GET /backend-api/models?iim=false&is_gizmo=false
+  GET /backend-api/calpico/chatgpt/rooms/summary?limit=10&include_pinned=true
+  GET /backend-api/pins
+  GET /backend-api/gizmos/g-p-69f7098c82d081919c757ea9669a8cab
+  GET /backend-api/conversations?offset=0&limit=28&order=updated&is_archived=false&is_starred=false
+  GET /backend-api/gizmos/snorlax/sidebar?owned_only=true&conversations_per_gizmo=5&limit=20
+  GET /backend-api/user_segments
+  POST /backend-api/aip/connectors/links/list_accessible
+  GET /backend-api/gizmos/g-p-69f7098c82d081919c757ea9669a8cab/conversations?cursor=0
+  GET /backend-api/amphora/notifications?limit=20
+  GET /backend-api/gizmos/g-p-69f70905a3c48191b3c47e9b5609f430
+  GET /backend-api/gizmos/g-p-69f7086c2e0c819181c6572c4b21dca7
+  GET /backend-api/gizmos/g-p-69f7081e0eb88191a12b5f0e4ee8a271
+  GET /backend-api/gizmos/g-p-69f707da79fc8191b9d598b0b4f5806f
+  GET /backend-api/settings/is_adult
+  GET /cdn/assets/conversation-small-nikr8dxc.css
+  GET /backend-api/gizmos/g-p-69f70905a3c48191b3c47e9b5609f430/conversations?cursor=0
+  GET /backend-api/gizmos/g-p-69f7086c2e0c819181c6572c4b21dca7/conversations?cursor=0
+  GET /backend-api/gizmos/g-p-69f7081e0eb88191a12b5f0e4ee8a271/conversations?cursor=0
+  GET /backend-api/gizmos/g-p-69f707da79fc8191b9d598b0b4f5806f/conversations?cursor=0
+  GET /backend-api/user_surveys/active
+  GET /backend-api/tasks
+  GET /backend-api/celsius/ws/user
+  GET /backend-api/memories?gizmo_id=g-p-69f7098c82d081919c757ea9669a8cab&exclusive_to_gizmo=false&include_memory_entries=false
+  POST /backend-api/conversation/init
+  POST /backend-api/files/library
+  GET /backend-api/memories?gizmo_id=g-p-69f7098c82d081919c757ea9669a8cab&exclusive_to_gizmo=false&include_memory_entries=false
+  GET /backend-api/apps/sources_dropdown
+  GET /backend-api/aip/connectors/connector_5f3c8c41a1e54ad7a76272c89e2554fa?include_logo=false&include_actions=false
+  GET /backend-api/aip/connectors/connector_0f9c9d4592e54d0a9a12b3f44a1e2010?include_logo=false&include_actions=false
+  GET /backend-api/aip/connectors/asdk_app_69a1d78e929881919bba0dbda1f6436d?include_logo=false&include_actions=false
+  GET /backend-api/projects/g-p-69f7098c82d081919c757ea9669a8cab/connector_scopes?limit=100
+  GET /backend-api/checkout_pricing_config/countries
+  GET /backend-api/checkout_pricing_config/configs/US
+  GET /backend-api/models?iim=false&is_gizmo=true
+  GET /public-api/conversation_limit
+  POST /backend-api/f/conversation/prepare
+  GET /backend-api/client/strings
+  GET /backend-api/memories?gizmo_id=g-p-69f7098c82d081919c757ea9669a8cab&exclusive_to_gizmo=false&include_memory_entries=false
+  GET /backend-api/apps/sources_dropdown
+  POST /backend-api/sentinel/chat-requirements/prepare
+  GET /backend-api/sentinel/sdk.js
+  POST /backend-api/f/conversation
+  POST /backend-api/sentinel/chat-requirements/prepare
+  POST /backend-api/sentinel/ping
+  POST /backend-api/sentinel/chat-requirements/finalize
+  GET /backend-api/sentinel/frame.html?sv=20260423af3c
+  GET /backend-api/conversation/69f70996-64b4-83ea-8880-10c63d656836/stream_status
+  GET /backend-api/conversations?offset=0&limit=28&order=updated&is_archived=false&is_starred=false
+  GET /backend-api/gizmos/g-p-69f7098c82d081919c757ea9669a8cab/conversations?cursor=0
+  GET /cdn/assets/_conversation-fze5y1oo.js
+  GET /cdn/assets/_conversation.g._gizmoId.c._conversationId-hxg5envs.js
+  POST /backend-api/sentinel/ping
+  GET /backend-api/subscriptions?account_id=e8983011-c1a4-4f61-a5eb-d1674f6f7422
+  POST /backend-api/conversation/init
+  GET /backend-api/user_segments
+  GET /backend-api/memories?gizmo_id=g-p-69f7098c82d081919c757ea9669a8cab&exclusive_to_gizmo=false&include_memory_entries=false
+  GET /backend-api/apps/sources_dropdown
+  GET /backend-api/images/bootstrap
+  GET /backend-api/beacons/home?conversation_id=69f70996-64b4-83ea-8880-10c63d656836
+  POST /backend-api/sentinel/req
+  POST /backend-api/sentinel/ping
+  POST /backend-api/sentinel/ping
+  POST /backend-api/sentinel/ping
+  POST /backend-api/sentinel/req
+  POST /backend-api/sentinel/ping
+  POST /backend-api/sentinel/ping
+  POST /backend-api/sentinel/heartbeat
+  GET /backend-api/conversation/69f70996-64b4-83ea-8880-10c63d656836/textdocs
+  POST /backend-api/lat/r
+  GET /backend-api/projects/g-p-69f7098c82d081919c757ea9669a8cab/saves?limit=100
+  GET /backend-api/settings/voices
+  POST /backend-api/f/conversation/prepare
+  POST /backend-api/sentinel/ping
+  GET /backend-api/conversations?offset=0&limit=28&order=updated&is_archived=false&is_starred=false
+
+SSE Streams (handoff only — actual tokens in WS):
+  /backend-api/f/conversation (975 bytes)
+
+WebSocket frames (first 20):
+  [sent] [{"id":1,"command":{"type":"connect","presence":{"type":"presence","state":"foreground"}}},{"id":2,"command":{"type":"su
+  [recv] [{"id":1,"type":"reply","reply":{"type":"connect","subscriptions":{}}},{"id":2,"type":"reply","reply":{"type":"subscribe
+  [sent] [{"id":5,"command":{"type":"subscribe","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","offset":"0"}
+  [recv] [{"id":5,"type":"reply","reply":{"type":"subscribe","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f",
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+  [recv] [{"type":"message","topic_id":"conversation-turn-239d9665-1658-4310-a1d7-2cc710464b8f","payload":{"type":"conversation-t
+
+Conversation turns: 3
