@@ -96,14 +96,14 @@ async function main() {
   // ── Create "AI workspace" project ─────────────────────────────────────────
   console.log('\n[2] Creating "AI workspace" project...');
 
-  // Click "New project" button in the sidebar
-  await page.click('button:has-text("New project")', { timeout: 10000 });
+  // Click "New project" in the sidebar (can be a link, button, or list item)
+  await page.click('text=New project', { timeout: 10000 });
   await page.waitForTimeout(800);
   await shot(page, '02-create-project-dialog.png');
 
   // Dialog is now open — fill the name input (placeholder: "Copenhagen Trip")
   const nameInput = await page.waitForSelector('dialog input[type="text"], dialog input:not([type])', { timeout: 5000 });
-  await nameInput.triple_click().catch(() => nameInput.click());
+  await nameInput.click({ clickCount: 3 }).catch(() => nameInput.click());
   await nameInput.fill('AI workspace');
   await page.waitForTimeout(300);
   await shot(page, '03-name-filled.png');
