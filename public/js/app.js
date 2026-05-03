@@ -5638,6 +5638,7 @@ let _agentCurrentId = null;
 let _agentCurrentThinkingEl = null;
 let _agentCurrentTextEl = null;
 let _agentPendingToolCalls = {};
+let _agentSSE = null; // active EventSource for the current agent run
 
 function handleAgentMessage(agentId, msg) {
   if (agentId !== _agentCurrentId) return;
@@ -5863,6 +5864,7 @@ function agentShowHandoff(reason, options) {
   }
 
   function agentResetToStart() {
+    if (_agentSSE) { _agentSSE.close(); _agentSSE = null; }
     _agentCurrentId = null;
     _agentCurrentThinkingEl = null;
     _agentCurrentTextEl = null;
@@ -5873,6 +5875,23 @@ function agentShowHandoff(reason, options) {
     document.getElementById('agent-handoff-panel').style.display = 'none';
     const tl = document.getElementById('agent-timeline');
     if (tl) tl.innerHTML = '';
+  }
+
+  function agentSubscribeSSE(agentId) {
+    if (_agentSSE) { _agentSSE.close(); _agentSSE = null; }
+    const sse = new EventSource(`/api/agent/${agentId}/stream`);
+    _agentSSE = sse;
+    sse.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'agent_eof') { sse.close(); _agentSSE = null; return; }
+        handleAgentMessage(agentId, msg);
+      } catch {}
+    };
+    sse.onerror = () => {
+      sse.close();
+      if (_agentSSE === sse) _agentSSE = null;
+    };
   }
 
   document.getElementById('btn-agent-start')?.addEventListener('click', async () => {
@@ -5901,6 +5920,8 @@ function agentShowHandoff(reason, options) {
       if (tl) tl.innerHTML = '';
       agentSwitchToLive();
       agentSetStatus('running');
+      // Subscribe via SSE — replays past events then streams future ones
+      agentSubscribeSSE(data.agentId);
     } catch (err) {
       showToast(`Failed to start agent: ${err.message}`, 'error');
     }

@@ -227,6 +227,7 @@ class AgentRun {
     this.startTime = Date.now();
     this.history = []; // [{role, content}] — conversation context
     this.events = [];
+    this._sseClients = []; // SSE response objects
     this._pauseResolve = null;
     this._handoffResolve = null;
     this._stopped = false;
@@ -238,6 +239,11 @@ class AgentRun {
     const event = { type: `agent_${type}`, agentId: this.id, ts: Date.now(), ...data };
     this.events.push(event);
     this.broadcast(this.id, event);
+    // Push to all SSE clients
+    const line = `data: ${JSON.stringify(event)}\n\n`;
+    this._sseClients = this._sseClients.filter((res) => {
+      try { res.write(line); return true; } catch { return false; }
+    });
   }
 
   async checkPause() {

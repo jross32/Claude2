@@ -1841,6 +1841,36 @@ app.get('/api/agent/list', (_req, res) => {
   res.json(list.reverse());
 });
 
+app.get('/api/agent/:id/stream', (req, res) => {
+  const run = agentRuns.get(req.params.id);
+  if (!run) return res.status(404).json({ error: 'Agent not found' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  // Replay all past events
+  for (const event of run.events) {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+
+  // If already finished, close immediately
+  if (['done', 'error', 'stopped'].includes(run.status)) {
+    res.write(`data: ${JSON.stringify({ type: 'agent_eof', agentId: run.id })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Register for future events
+  run._sseClients.push(res);
+
+  req.on('close', () => {
+    run._sseClients = run._sseClients.filter((r) => r !== res);
+  });
+});
+
 app.get('/api/agent/:id/status', (req, res) => {
   const run = agentRuns.get(req.params.id);
   if (!run) return res.status(404).json({ error: 'Agent not found' });
