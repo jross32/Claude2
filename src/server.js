@@ -41,6 +41,7 @@ const { extractCompanyInfo } = require('./company-extractor');
 const {
   getMcpMeta,
   handleTool: handleMcpTool,
+  sampleFromClient,
   __private__: {
     analyzeResearchQuestion,
     normalizeCompletedScrapeResult,
@@ -1803,12 +1804,11 @@ app.post('/api/extract-company', (req, res) => {
 app.post('/api/agent/start', (req, res) => {
   const { goal, model, maxSteps, enableThinking } = req.body || {};
   if (!goal || !goal.trim()) return res.status(400).json({ error: 'goal is required' });
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'ANTHROPIC_API_KEY is not set in .env — add it to use the agent.' });
 
   const run = createAgentRun(
     goal.trim(),
     { model, maxSteps, enableThinking },
-    { broadcast, callTool: (name, args) => handleMcpTool(name, args) }
+    { broadcast, callTool: (name, args) => handleMcpTool(name, args), sampleFn: sampleFromClient }
   );
   agentRuns.set(run.id, run);
 

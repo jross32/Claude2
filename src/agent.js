@@ -1,55 +1,50 @@
 'use strict';
-// MCP Agent Mode — autonomous multi-step AI agent with live UI, pause/resume, and handoffs.
+// MCP Agent Mode — autonomous multi-step AI agent powered by MCP sampling.
+// No API key needed: uses whatever AI is connected via the MCP protocol
+// (Claude Code, GitHub Copilot, Codex, etc.)
 
-const Anthropic = require('@anthropic-ai/sdk');
 const { v4: uuidv4 } = require('uuid');
 
-const DEFAULT_MODEL = process.env.AGENT_MODEL || 'claude-opus-4-7';
 const DEFAULT_MAX_STEPS = 30;
-const DEFAULT_THINKING_BUDGET = 8000;
 
-// ── Tool definitions Claude can call ─────────────────────────────────────────
-// Subset of MCP tools most useful for general agent tasks
+// ── Tool definitions the agent can call ──────────────────────────────────────
 const AGENT_TOOLS = [
   {
     name: 'scrape_url',
-    description: 'Fully scrape a URL using a headless browser. Captures page text, links, images, API calls, and more. Use for any website that needs deep extraction.',
+    description: 'Fully scrape a URL using a headless browser. Captures page text, links, images, API calls.',
     input_schema: {
       type: 'object',
       properties: {
         url: { type: 'string', description: 'URL to scrape' },
-        depth: { type: 'number', description: 'Link depth (0=single page, 1=follow links, etc.)' },
-        waitMs: { type: 'number', description: 'Extra ms to wait for JS to settle (default 1000)' },
-        captureApiCalls: { type: 'boolean', description: 'Capture REST/GraphQL API calls (default true)' },
-        captureSSE: { type: 'boolean', description: 'Capture SSE streams' },
+        depth: { type: 'number', description: 'Link depth (0=single page)' },
+        waitMs: { type: 'number', description: 'Extra ms to wait for JS' },
       },
       required: ['url'],
     },
   },
   {
     name: 'http_fetch',
-    description: 'Make a plain HTTP/HTTPS request without a browser. Good for APIs, JSON endpoints, and simple pages.',
+    description: 'Make a plain HTTP/HTTPS request without a browser. Good for APIs and JSON endpoints.',
     input_schema: {
       type: 'object',
       properties: {
         url: { type: 'string', description: 'URL to fetch' },
-        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], description: 'HTTP method (default GET)' },
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] },
         headers: { type: 'object', description: 'Request headers' },
-        body: { type: 'string', description: 'Request body (for POST/PUT)' },
-        json: { type: 'boolean', description: 'Parse response as JSON' },
+        body: { type: 'string', description: 'Request body for POST/PUT' },
       },
       required: ['url'],
     },
   },
   {
     name: 'research_url',
-    description: 'Scrape a URL and use AI to answer a specific research question about it. Best for extracting insights, summarizing content, or answering questions about a page.',
+    description: 'Scrape a URL and use AI to answer a specific research question about it.',
     input_schema: {
       type: 'object',
       properties: {
         url: { type: 'string', description: 'URL to research' },
-        question: { type: 'string', description: 'Specific question to answer about the page' },
-        mode: { type: 'string', enum: ['quick', 'deep'], description: 'Research depth' },
+        question: { type: 'string', description: 'Question to answer about the page' },
+        mode: { type: 'string', enum: ['quick', 'deep'] },
       },
       required: ['url', 'question'],
     },
@@ -59,88 +54,80 @@ const AGENT_TOOLS = [
     description: 'List recent saved scrape sessions.',
     input_schema: {
       type: 'object',
-      properties: {
-        limit: { type: 'number', description: 'Max number of saves to return (default 20)' },
-      },
+      properties: { limit: { type: 'number', description: 'Max results (default 20)' } },
     },
   },
   {
     name: 'get_save_overview',
-    description: 'Get a compact overview of a saved scrape session — page count, text sample, API calls, links, etc.',
+    description: 'Get a compact summary of a saved scrape — page count, text sample, links, API calls.',
     input_schema: {
       type: 'object',
-      properties: {
-        sessionId: { type: 'string', description: 'Session ID from a completed scrape' },
-      },
+      properties: { sessionId: { type: 'string', description: 'Session ID' } },
       required: ['sessionId'],
     },
   },
   {
     name: 'get_page_text',
-    description: 'Get the extracted plain text from a saved scrape session.',
+    description: 'Get extracted plain text from a saved scrape session.',
     input_schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', description: 'Session ID of a completed scrape' },
-        maxChars: { type: 'number', description: 'Maximum characters to return (default 20000)' },
+        sessionId: { type: 'string', description: 'Session ID' },
+        maxChars: { type: 'number', description: 'Max chars to return (default 20000)' },
       },
       required: ['sessionId'],
     },
   },
   {
     name: 'detect_site',
-    description: 'Quickly detect technology stack, CMS, framework, and basic info about a URL without a full scrape.',
+    description: 'Quickly detect the tech stack, CMS, and framework used by a URL.',
     input_schema: {
       type: 'object',
-      properties: {
-        url: { type: 'string', description: 'URL to detect' },
-      },
+      properties: { url: { type: 'string', description: 'URL to detect' } },
       required: ['url'],
     },
   },
   {
     name: 'list_links',
-    description: 'Get all links from a saved scrape session.',
+    description: 'Get all links found during a saved scrape session.',
     input_schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', description: 'Session ID of a completed scrape' },
-        filter: { type: 'string', description: 'Filter links by type: internal, external, or all (default all)' },
+        sessionId: { type: 'string', description: 'Session ID' },
+        filter: { type: 'string', description: 'internal, external, or all (default all)' },
       },
       required: ['sessionId'],
     },
   },
   {
     name: 'extract_structured_data',
-    description: 'Extract structured data (JSON-LD, microdata, Open Graph, meta tags, tables) from a saved scrape.',
+    description: 'Extract JSON-LD, microdata, Open Graph, meta tags, and tables from a saved scrape.',
     input_schema: {
       type: 'object',
-      properties: {
-        sessionId: { type: 'string', description: 'Session ID of a completed scrape' },
-      },
+      properties: { sessionId: { type: 'string', description: 'Session ID' } },
       required: ['sessionId'],
     },
   },
   {
     name: 'get_api_calls',
-    description: 'Get all API/XHR/fetch calls captured during a scrape session.',
+    description: 'Get REST/XHR/GraphQL/SSE calls captured during a scrape.',
     input_schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', description: 'Session ID of a completed scrape' },
-        filter: { type: 'string', description: 'Filter by type: rest, graphql, sse, or all (default all)' },
+        sessionId: { type: 'string', description: 'Session ID' },
+        filter: { type: 'string', description: 'rest, graphql, sse, or all' },
       },
       required: ['sessionId'],
     },
   },
   {
     name: 'find_patterns',
-    description: 'Find patterns, repeated structures, or data clusters in a saved scrape (prices, names, emails, phones, etc.).',
+    description: 'Find repeated patterns (prices, emails, phones, links) in a saved scrape.',
     input_schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', description: 'Session ID of a completed scrape' },
-        pattern: { type: 'string', description: 'Type of pattern: prices, contacts, emails, links, or a custom regex' },
+        sessionId: { type: 'string', description: 'Session ID' },
+        pattern: { type: 'string', description: 'prices, contacts, emails, links, or a regex' },
       },
       required: ['sessionId'],
     },
@@ -151,7 +138,7 @@ const AGENT_TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        sessionId: { type: 'string', description: 'Session ID of a completed scrape' },
+        sessionId: { type: 'string', description: 'Session ID' },
         query: { type: 'string', description: 'Text to search for' },
       },
       required: ['sessionId', 'query'],
@@ -159,22 +146,20 @@ const AGENT_TOOLS = [
   },
   {
     name: 'preflight_url',
-    description: 'Quickly check if a URL is reachable, get its status code, redirect chain, and response headers — without scraping.',
+    description: 'Check if a URL is reachable, get its status code, redirects, and headers.',
     input_schema: {
       type: 'object',
-      properties: {
-        url: { type: 'string', description: 'URL to check' },
-      },
+      properties: { url: { type: 'string', description: 'URL to check' } },
       required: ['url'],
     },
   },
   {
     name: 'crawl_sitemap',
-    description: 'Discover pages via sitemap.xml or robots.txt — returns a list of URLs.',
+    description: 'Discover pages via sitemap.xml or robots.txt.',
     input_schema: {
       type: 'object',
       properties: {
-        url: { type: 'string', description: 'Root URL to crawl sitemap for' },
+        url: { type: 'string', description: 'Root URL to crawl' },
         limit: { type: 'number', description: 'Max URLs to return (default 100)' },
       },
       required: ['url'],
@@ -182,11 +167,11 @@ const AGENT_TOOLS = [
   },
   {
     name: 'batch_scrape',
-    description: 'Scrape multiple URLs in parallel. Returns session IDs when complete.',
+    description: 'Scrape multiple URLs in parallel.',
     input_schema: {
       type: 'object',
       properties: {
-        urls: { type: 'array', items: { type: 'string' }, description: 'List of URLs to scrape' },
+        urls: { type: 'array', items: { type: 'string' }, description: 'URLs to scrape' },
         depth: { type: 'number', description: 'Link depth per URL' },
       },
       required: ['urls'],
@@ -194,37 +179,54 @@ const AGENT_TOOLS = [
   },
 ];
 
-const SYSTEM_PROMPT = `You are an autonomous web research and scraping agent. You have tools to scrape websites, fetch URLs, extract data, and research content.
+// ── System prompt for the agent ───────────────────────────────────────────────
+function buildSystemPrompt(tools) {
+  const toolList = tools.map((t) => {
+    const args = Object.entries(t.input_schema?.properties || {})
+      .map(([k, v]) => `${k}${(t.input_schema?.required || []).includes(k) ? '*' : ''}: ${v.description || v.type}`)
+      .join(', ');
+    return `  ${t.name}(${args}) — ${t.description}`;
+  }).join('\n');
 
-Guidelines:
-- Think through your approach before acting
-- Use tools in logical order (detect site → scrape → analyze)
-- For multi-page tasks, use batch_scrape or crawl_sitemap first
-- Summarize findings clearly with specific data, not vague descriptions
-- If you encounter an error, try an alternative approach before giving up
-- Be thorough — don't stop after one scrape if deeper analysis is needed
-- Always report what you found, even partial results`;
+  return `You are an autonomous web research and scraping agent. You have access to these tools:
+
+${toolList}
+
+STRICT RESPONSE FORMAT — you must respond with ONLY valid JSON, no other text:
+
+To call a tool:
+{"action":"tool","tool":"TOOL_NAME","args":{"key":"value"},"thinking":"your reasoning here"}
+
+To finish with a final answer:
+{"action":"done","result":"your complete answer here"}
+
+Rules:
+- Think through each step in the "thinking" field
+- Use tools systematically: detect/preflight first, then scrape, then analyze
+- For multi-page sites, use crawl_sitemap or batch_scrape
+- Always summarize findings with specific data, not vague descriptions
+- If a tool call fails, try an alternative approach
+- Never repeat the same tool call with the same args`;
+}
 
 // ── AgentRun class ────────────────────────────────────────────────────────────
 class AgentRun {
-  constructor(id, goal, options, { broadcast, callTool }) {
+  constructor(id, goal, options, { broadcast, callTool, sampleFn }) {
     this.id = id;
     this.goal = goal;
     this.options = {
-      model: options.model || DEFAULT_MODEL,
       maxSteps: options.maxSteps || DEFAULT_MAX_STEPS,
-      enableThinking: options.enableThinking !== false,
-      thinkingBudget: options.thinkingBudget || DEFAULT_THINKING_BUDGET,
       tools: options.tools || AGENT_TOOLS,
     };
     this.broadcast = broadcast;
     this.callTool = callTool;
+    this.sampleFn = sampleFn; // sampleFromClient from mcp-server.js
     this.status = 'running';
     this.steps = 0;
     this.toolCallCount = 0;
     this.startTime = Date.now();
-    this.messages = [];
-    this.events = []; // full event log for replay
+    this.history = []; // [{role, content}] — conversation context
+    this.events = [];
     this._pauseResolve = null;
     this._handoffResolve = null;
     this._stopped = false;
@@ -238,7 +240,6 @@ class AgentRun {
     this.broadcast(this.id, event);
   }
 
-  // Pause execution between tool calls
   async checkPause() {
     if (this._stopped) throw new Error('Agent stopped by user');
     if (this.status === 'paused') {
@@ -270,7 +271,6 @@ class AgentRun {
     return true;
   }
 
-  // Agent requests user intervention — pauses until user responds
   async requestHandoff(reason, options = ['Continue', 'Stop']) {
     this.status = 'waiting_handoff';
     this.emit('handoff_request', { reason, options });
@@ -287,10 +287,9 @@ class AgentRun {
 }
 
 // ── Tool execution ────────────────────────────────────────────────────────────
-async function executeTool(run, toolName, toolInput) {
+async function executeTool(run, toolName, toolArgs) {
   try {
-    const result = await run.callTool(toolName, toolInput);
-    // Extract text content from MCP result
+    const result = await run.callTool(toolName, toolArgs || {});
     if (result && result.content) {
       if (Array.isArray(result.content)) {
         return result.content.map((c) => (c.type === 'text' ? c.text : JSON.stringify(c))).join('\n');
@@ -303,18 +302,47 @@ async function executeTool(run, toolName, toolInput) {
   }
 }
 
+// ── Parse sampling response into action ──────────────────────────────────────
+function parseResponse(text) {
+  if (!text || typeof text !== 'string') return { action: 'unknown' };
+  const trimmed = text.trim();
+
+  // Try to extract JSON from the response (may have surrounding text)
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.action === 'tool' && parsed.tool) return parsed;
+      if (parsed.action === 'done') return parsed;
+    } catch {}
+  }
+
+  // If JSON parse fails, treat the whole thing as a final result
+  return { action: 'done', result: trimmed };
+}
+
+// ── Build context string for sampling ────────────────────────────────────────
+function buildContext(run) {
+  const lines = [`Goal: ${run.goal}`, ''];
+  for (const entry of run.history) {
+    if (entry.role === 'assistant') {
+      lines.push(`Assistant: ${entry.content}`);
+    } else if (entry.role === 'tool_result') {
+      lines.push(`Tool result for ${entry.tool}:\n${entry.content}`);
+    } else if (entry.role === 'user_message') {
+      lines.push(`User: ${entry.content}`);
+    }
+    lines.push('');
+  }
+  lines.push('What is your next action? Respond with ONLY the JSON format specified.');
+  return lines.join('\n');
+}
+
 // ── Main agent loop ───────────────────────────────────────────────────────────
 async function runAgent(run) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    run.status = 'error';
-    run.error = 'ANTHROPIC_API_KEY is not set. Add it to your .env file to use the agent.';
-    run.emit('error', { message: run.error });
-    return;
-  }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   run.emit('status', { status: 'running' });
-  run.messages = [{ role: 'user', content: run.goal }];
+
+  const systemPrompt = buildSystemPrompt(run.options.tools);
 
   try {
     for (let step = 0; step < run.options.maxSteps; step++) {
@@ -323,141 +351,85 @@ async function runAgent(run) {
       run.steps = step + 1;
       run.emit('step', { step: run.steps });
 
-      // Build API call params
-      const params = {
-        model: run.options.model,
-        max_tokens: 16000,
-        system: SYSTEM_PROMPT,
-        tools: run.options.tools,
-        messages: run.messages,
-      };
+      // Show thinking spinner
+      run.emit('thinking_delta', { text: 'Deciding next action…' });
 
-      // Enable extended thinking if supported and requested
-      if (run.options.enableThinking) {
-        params.thinking = { type: 'enabled', budget_tokens: run.options.thinkingBudget };
-        // Extended thinking requires max_tokens > budget_tokens
-        params.max_tokens = Math.max(params.max_tokens, run.options.thinkingBudget + 8000);
-      }
-
-      // Stream the response
-      let currentThinking = '';
-      let currentText = '';
-      let thinkingBlockOpen = false;
-
-      let finalMessage;
-      try {
-        const stream = await client.messages.create({ ...params, stream: true });
-
-        for await (const event of stream) {
-          if (run._stopped) break;
-
-          if (event.type === 'content_block_start') {
-            if (event.content_block.type === 'thinking') {
-              currentThinking = '';
-              thinkingBlockOpen = true;
-            } else if (event.content_block.type === 'text') {
-              thinkingBlockOpen = false;
-            }
-          } else if (event.type === 'content_block_delta') {
-            if (event.delta.type === 'thinking_delta') {
-              currentThinking += event.delta.thinking;
-              run.emit('thinking_delta', { text: event.delta.thinking });
-            } else if (event.delta.type === 'text_delta') {
-              currentText += event.delta.text;
-              run.emit('delta', { text: event.delta.text });
-            }
-          } else if (event.type === 'content_block_stop') {
-            if (thinkingBlockOpen && currentThinking) {
-              run.emit('thinking_done', { text: currentThinking });
-              currentThinking = '';
-              thinkingBlockOpen = false;
-            }
-          } else if (event.type === 'message_delta') {
-            // stop_reason available here during streaming
-          } else if (event.type === 'message_stop') {
-            // Stream finished
-          }
-        }
-
-        // Get the final accumulated message
-        finalMessage = await stream.finalMessage();
-      } catch (apiErr) {
-        // If thinking is not supported, retry without it
-        if (apiErr.message?.includes('thinking') || apiErr.message?.includes('beta')) {
-          run.options.enableThinking = false;
-          delete params.thinking;
-          params.max_tokens = 16000;
-          const stream2 = await client.messages.create({ ...params, stream: true });
-          currentText = '';
-          for await (const event of stream2) {
-            if (run._stopped) break;
-            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-              currentText += event.delta.text;
-              run.emit('delta', { text: event.delta.text });
-            }
-          }
-          finalMessage = await stream2.finalMessage();
-        } else {
-          throw apiErr;
-        }
-      }
+      // Call the AI via MCP sampling
+      const context = buildContext(run);
+      const rawResponse = await run.sampleFn(systemPrompt, context, { maxTokens: 2048 });
 
       if (run._stopped) break;
 
-      // Add assistant message to history (must include thinking blocks for context)
-      run.messages.push({ role: 'assistant', content: finalMessage.content });
+      if (!rawResponse) {
+        run.emit('thinking_done', { text: '' });
+        throw new Error('No AI client connected or sampling not supported. Connect an AI client (Claude Code, Copilot, Codex) via the MCP protocol to use agent mode.');
+      }
 
-      // If model called tools
-      if (finalMessage.stop_reason === 'tool_use') {
-        const toolUseBlocks = finalMessage.content.filter((b) => b.type === 'tool_use');
-        const toolResults = [];
+      // Finalize the thinking bubble with the raw response
+      run.emit('thinking_done', { text: rawResponse });
 
-        for (const toolCall of toolUseBlocks) {
-          run.toolCallCount++;
-          run.emit('tool_call', {
-            callId: toolCall.id,
-            tool: toolCall.name,
-            input: toolCall.input,
-            callIndex: run.toolCallCount,
-          });
+      // Parse the response
+      const action = parseResponse(rawResponse);
 
-          // Check pause/stop before executing tool
-          await run.checkPause();
+      if (action.action === 'tool') {
+        // Store in history
+        run.history.push({ role: 'assistant', content: rawResponse });
 
-          const t0 = Date.now();
-          const output = await executeTool(run, toolCall.name, toolCall.input);
-          const durationMs = Date.now() - t0;
+        run.toolCallCount++;
+        run.emit('tool_call', {
+          callId: `call-${run.toolCallCount}`,
+          tool: action.tool,
+          input: action.args || {},
+          callIndex: run.toolCallCount,
+          reason: action.reason,
+        });
 
-          run.emit('tool_result', {
-            callId: toolCall.id,
-            tool: toolCall.name,
-            output: typeof output === 'string' ? output.slice(0, 4000) : JSON.stringify(output).slice(0, 4000),
-            durationMs,
-            callIndex: run.toolCallCount,
-          });
+        await run.checkPause();
 
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: toolCall.id,
-            content: typeof output === 'string' ? output : JSON.stringify(output),
-          });
-        }
+        const t0 = Date.now();
+        const output = await executeTool(run, action.tool, action.args || {});
+        const durationMs = Date.now() - t0;
 
-        // Add tool results and continue
-        run.messages.push({ role: 'user', content: toolResults });
+        const outputPreview = typeof output === 'string' ? output.slice(0, 4000) : JSON.stringify(output).slice(0, 4000);
+
+        run.emit('tool_result', {
+          callId: `call-${run.toolCallCount}`,
+          tool: action.tool,
+          output: outputPreview,
+          durationMs,
+          callIndex: run.toolCallCount,
+          ok: !String(output).startsWith('Error:'),
+        });
+
+        run.history.push({
+          role: 'tool_result',
+          tool: action.tool,
+          content: outputPreview,
+        });
+
         continue;
       }
 
-      // Model finished (end_turn) — we're done
-      const finalText = finalMessage.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text)
-        .join('\n');
+      if (action.action === 'done') {
+        const result = action.result || rawResponse;
+        run.result = result;
+        run.status = 'done';
+        run.emit('delta', { text: result });
+        run.emit('done', {
+          result,
+          steps: run.steps,
+          toolCalls: run.toolCallCount,
+          durationMs: Date.now() - run.startTime,
+        });
+        return;
+      }
 
-      run.result = finalText;
+      // Fallback: treat as final answer
+      run.result = rawResponse;
       run.status = 'done';
+      run.emit('delta', { text: rawResponse });
       run.emit('done', {
-        result: finalText,
+        result: rawResponse,
         steps: run.steps,
         toolCalls: run.toolCallCount,
         durationMs: Date.now() - run.startTime,
@@ -465,9 +437,8 @@ async function runAgent(run) {
       return;
     }
 
-    // Max steps reached
     if (!run._stopped) {
-      run.result = 'Reached maximum steps limit.';
+      run.result = 'Reached maximum steps.';
       run.status = 'done';
       run.emit('done', {
         result: run.result,
