@@ -4439,6 +4439,19 @@ const TOOLS = [
     },
   },
   {
+    name: 'run_agent',
+    description: 'Run an autonomous multi-step agent loop powered by the connected AI via MCP sampling. The agent uses web scraping tools to accomplish a goal and broadcasts live progress to the web panel at localhost:3000/wsp (Agent tab). Supports pause, resume, and handoff.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        goal: { type: 'string', description: 'What the agent should accomplish — be specific' },
+        maxSteps: { type: 'number', description: 'Maximum steps before stopping (default 20)' },
+        agentId: { type: 'string', description: 'Optional: attach to an existing pending run from the web panel' },
+      },
+      required: ['goal'],
+    },
+  },
+  {
     name: 'server_info',
     description: 'Report MCP server diagnostics: version, exposed toolset, protocol capabilities, local directories, environment flags, and local REST server readiness. Helpful for health checks and debugging client integrations.',
     inputSchema: {
@@ -4560,6 +4573,7 @@ const OPEN_WORLD_TOOL_NAMES = new Set([
   'test_oidc_security',
   'test_tls_fingerprint',
   'check_broken_links',
+  'run_agent',
 ]);
 
 TOOLS.forEach((tool) => {
@@ -6922,6 +6936,46 @@ async function handleTool(name, args, progressToken = null) {
         paragraphCount: paragraphs.length,
         avgWordsPerSentence: sentences.length > 0 ? Math.round(words.length / sentences.length) : 0,
       };
+    }
+
+    // ── run_agent ─────────────────────────────────────────────────────────────
+    case 'run_agent': {
+      const { goal, maxSteps, agentId: requestedId } = input;
+      if (!goal || !goal.trim()) throw new Error('goal is required');
+
+      const { createAgentRun, runAgent } = require('./src/agent');
+      const scraper_url = process.env.SCRAPER_URL || 'http://localhost:3000';
+
+      async function pushEvent(agentId, event) {
+        try {
+          await fetch(`${scraper_url}/api/agent/event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId, event }),
+          });
+        } catch { /* web server may not be running — ignore */ }
+      }
+
+      const run = createAgentRun(
+        goal.trim(),
+        { maxSteps: maxSteps || 20, agentId: requestedId },
+        {
+          broadcast: pushEvent,
+          callTool: (name, args) => handleTool(name, args),
+          sampleFn: sampleFromClient,
+        }
+      );
+
+      await runAgent(run);
+
+      return createToolSuccess({
+        agentId: run.id,
+        status: run.status,
+        steps: run.steps,
+        toolCalls: run.toolCallCount,
+        result: run.result,
+        error: run.error,
+      });
     }
 
     // ── server_info ───────────────────────────────────────────────────────────
