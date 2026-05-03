@@ -1,9 +1,9 @@
 # Test Results — smoke
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-03T14:50:57.671Z
-**Commit:** `07d4cc4`
-**Duration:** 15953ms
+**Run:** 2026-05-03T14:58:37.232Z
+**Commit:** `4c36757`
+**Duration:** 12025ms
 
 ## Summary
 
@@ -15,14 +15,14 @@
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | Server starts without crashing | pass | 9973ms | |
-| ✅ | GET /api/saves → 200 + JSON array | pass | 5269ms | |
-| ✅ | GET /api/schedules → 200 + JSON array | pass | 15ms | |
-| ✅ | GET /api/session/check → 200 + { exists: boolean } | pass | 8ms | |
-| ✅ | GET /api/site-credentials → 200 + { found: boolean } | pass | 4ms | |
-| ✅ | GET / serves HTML frontend | pass | 6ms | |
-| ✅ | [chaos] POST /api/scrape with no URL → 400 | pass | 43ms | |
-| ✅ | [chaos] GET unknown endpoint → 404 | pass | 10ms | |
-| ✅ | [chaos] GET /api/saves/:id with fake ID → 404 | pass | 5ms | |
+| ✅ | Chromium launches in headless mode | pass | 711ms | |
+| ✅ | Browser can open a new page | pass | 161ms | |
+| ✅ | Browser reports correct version string | pass | 0ms | |
+| ✅ | Multiple pages open and close independently | pass | 138ms | |
+| ✅ | Browser closes cleanly | pass | 124ms | |
+| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 4146ms | |
+| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 1814ms | |
+| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 2351ms | |
+| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 2573ms | |
 
 
