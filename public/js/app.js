@@ -5631,12 +5631,9 @@ async function sendAIQuestion() {
 
   const sourceEl = document.getElementById('ai-source');
   sourceEl?.dispatchEvent(new Event('change'));
-
-  // ── Agent Panel ────────────────────────────────────────────────────────────
-  initAgentPanel();
 })();
 
-// ── Agent state + message handler ─────────────────────────────────────────────
+// ── Agent state ───────────────────────────────────────────────────────────────
 let _agentCurrentId = null;
 let _agentCurrentThinkingEl = null;
 let _agentCurrentTextEl = null;
@@ -5858,7 +5855,7 @@ function agentShowHandoff(reason, options) {
 }
 
 // ── Agent panel init ──────────────────────────────────────────────────────────
-function initAgentPanel() {
+(function initAgentPanel() {
   function agentSwitchToLive() {
     document.getElementById('agent-start-area').style.display = 'none';
     document.getElementById('agent-live-area').style.display = '';
@@ -5972,5 +5969,5 @@ function initAgentPanel() {
       document.getElementById('btn-agent-start')?.click();
     }
   });
-}
+})();
 
