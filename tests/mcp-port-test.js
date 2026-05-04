@@ -58,9 +58,9 @@ async function runTest() {
   // 3. list_saves (lightweight read)
   sendLine(proc, {
     jsonrpc: '2.0', id: 3, method: 'tools/call',
-    params: { name: 'list_saves', arguments: {} }
+    params: { name: 'list_saves', arguments: { limit: 5 } }
   });
-  await new Promise(r => setTimeout(r, 4000));
+  await new Promise(r => setTimeout(r, 8000));
 
   proc.kill();
   await new Promise(r => setTimeout(r, 500));
