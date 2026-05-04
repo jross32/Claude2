@@ -14,3 +14,4 @@ logs/requests/
 logs/tool-usage.json
 logs/tool-usage.txt
 artifacts/
+tests/logs/raw/
