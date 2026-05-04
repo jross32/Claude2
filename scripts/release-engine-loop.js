@@ -6,6 +6,7 @@ const { spawnSync } = require('child_process');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const STATE_FILE = path.join(REPO_ROOT, 'artifacts', 'release-engine', 'state.json');
+const LOOP_SUMMARY_FILE = path.join(REPO_ROOT, 'artifacts', 'release-engine', 'loop-summary.json');
 
 function readStateCompleted() {
   if (!fs.existsSync(STATE_FILE)) return 0;
@@ -15,6 +16,12 @@ function readStateCompleted() {
   } catch (_err) {
     return 0;
   }
+}
+
+function writeLoopSummary(summary) {
+  const dir = path.dirname(LOOP_SUMMARY_FILE);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(LOOP_SUMMARY_FILE, JSON.stringify(summary, null, 2) + '\n', 'utf8');
 }
 
 function parseArgs(argv) {
@@ -36,6 +43,7 @@ function parseArgs(argv) {
     dryRun: flags.has('--dry-run') || process.env.RELEASE_DRY_RUN === '1',
     pushEach: flags.has('--push-each') || process.env.RELEASE_PUSH_EACH === '1',
     continueOnFailure: flags.has('--continue-on-failure'),
+    maxLoopRuns: Number(readValue('--max-loop-runs', process.env.RELEASE_MAX_LOOP_RUNS || '0')),
   };
 }
 
@@ -87,12 +95,30 @@ function main() {
   if (!Number.isFinite(cfg.chunkSize) || cfg.chunkSize < 1) {
     throw new Error('chunk-size must be >= 1');
   }
+  if (!Number.isFinite(cfg.maxLoopRuns) || cfg.maxLoopRuns < 0) {
+    throw new Error('max-loop-runs must be >= 0');
+  }
 
   let loops = 0;
+  const startedAt = new Date().toISOString();
   while (true) {
+    if (cfg.maxLoopRuns > 0 && loops >= cfg.maxLoopRuns) {
+      console.log(`release-engine-loop halted after max-loop-runs=${cfg.maxLoopRuns}`);
+      break;
+    }
+
     const completed = readStateCompleted();
     if (completed >= cfg.targetTotal) {
       console.log(`release-engine-loop complete: ${completed}/${cfg.targetTotal}`);
+      writeLoopSummary({
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        status: 'target_reached',
+        loops,
+        completed,
+        targetTotal: cfg.targetTotal,
+        chunkSize: cfg.chunkSize,
+      });
       break;
     }
 
@@ -101,10 +127,32 @@ function main() {
     loops += 1;
 
     console.log(`[loop ${loops}] completed=${completed}, remaining=${remaining}, running chunk=${iterations}`);
+    writeLoopSummary({
+      startedAt,
+      updatedAt: new Date().toISOString(),
+      status: 'running',
+      loops,
+      completed,
+      remaining,
+      targetTotal: cfg.targetTotal,
+      chunkSize: cfg.chunkSize,
+      plannedIterations: iterations,
+    });
+
     const chunk = runChunk(cfg, iterations);
     console.log(`[loop ${loops}] chunk-exit=${chunk.code}, durationMs=${chunk.durationMs}`);
 
     if (chunk.code !== 0 && !cfg.continueOnFailure) {
+      writeLoopSummary({
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        status: 'failed',
+        loops,
+        completed,
+        targetTotal: cfg.targetTotal,
+        chunkSize: cfg.chunkSize,
+        exitCode: chunk.code,
+      });
       process.exit(chunk.code);
     }
   }
