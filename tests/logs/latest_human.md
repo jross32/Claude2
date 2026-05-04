@@ -1,9 +1,9 @@
 # Test Results — smoke
 
 **Status:** ✅ HEALTHY
-**Run:** 2026-05-04T05:22:43.499Z
-**Commit:** `ef69eb5`
-**Duration:** 13232ms
+**Run:** 2026-05-04T05:23:46.775Z
+**Commit:** `a26259a`
+**Duration:** 12907ms
 
 ## Summary
 
@@ -15,14 +15,14 @@
 
 | | Test | Status | Duration | |
 |--|------|--------|----------|--|
-| ✅ | Chromium launches in headless mode | pass | 1395ms | |
-| ✅ | Browser can open a new page | pass | 193ms | |
+| ✅ | Chromium launches in headless mode | pass | 1581ms | |
+| ✅ | Browser can open a new page | pass | 244ms | |
 | ✅ | Browser reports correct version string | pass | 0ms | |
-| ✅ | Multiple pages open and close independently | pass | 253ms | |
-| ✅ | Browser closes cleanly | pass | 259ms | |
-| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 4319ms | |
-| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 2013ms | |
-| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 2519ms | |
-| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 2273ms | |
+| ✅ | Multiple pages open and close independently | pass | 221ms | |
+| ✅ | Browser closes cleanly | pass | 238ms | |
+| ✅ | [chaos] Navigation to invalid URL throws and browser stays alive | pass | 4133ms | |
+| ✅ | [chaos] browser.close() in finally block prevents zombie (double-close safe) | pass | 1904ms | |
+| ✅ | [chaos] Empty page has no JS errors on about:blank | pass | 2249ms | |
+| ✅ | playwright-extra can launch with stealth plugin enabled | pass | 2328ms | |
 
 
