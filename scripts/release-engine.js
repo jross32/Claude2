@@ -10,6 +10,10 @@ const ARTIFACT_ROOT = path.join(REPO_ROOT, 'artifacts', 'release-engine');
 const RELEASE_DIR = path.join(ARTIFACT_ROOT, 'releases');
 const STATE_FILE = path.join(ARTIFACT_ROOT, 'state.json');
 
+const DEFAULT_IGNORE_STATUS_PATTERNS = [
+  '^\\?\\?\\s+tests/logs/raw/',
+];
+
 function ensureDirs() {
   fs.mkdirSync(RELEASE_DIR, { recursive: true });
 }
@@ -93,6 +97,18 @@ function getGitStatusShort() {
   return output.split(/\r?\n/).filter(Boolean);
 }
 
+function compileIgnorePatterns(patterns) {
+  return patterns
+    .map((p) => String(p || '').trim())
+    .filter(Boolean)
+    .map((p) => new RegExp(p));
+}
+
+function filterStatusLines(statusLines, ignoreRegexes) {
+  if (!ignoreRegexes.length) return statusLines;
+  return statusLines.filter((line) => !ignoreRegexes.some((rx) => rx.test(line)));
+}
+
 function getChangedSummary() {
   const output = run('git diff --name-only', { capture: true }).trim();
   if (!output) return [];
@@ -138,11 +154,32 @@ async function runReleaseCycle(config, state, releaseIndex) {
     releaseIndex,
   };
 
+  const statusSnapshot = getGitStatusShort();
+  const actionableStatus = filterStatusLines(statusSnapshot, config.ignoreStatusRegexes);
+
   cycle.checks.push({
     name: 'git-status-snapshot',
-    value: getGitStatusShort(),
+    value: statusSnapshot,
     ok: true,
   });
+
+  cycle.checks.push({
+    name: 'git-status-actionable',
+    value: actionableStatus,
+    ok: true,
+  });
+
+  if (!config.allowDirty && actionableStatus.length > 0) {
+    cycle.status = 'failed';
+    cycle.completedAt = new Date().toISOString();
+    cycle.checks.push({
+      name: 'dirty-guard',
+      ok: false,
+      error: 'Working tree has actionable uncommitted changes; pass --allow-dirty to continue.',
+    });
+    writeJson(path.join(RELEASE_DIR, `release-${releaseId}.json`), cycle);
+    return { ok: false, cycle };
+  }
 
   if (config.verifyCommand) {
     const verifyStart = Date.now();
@@ -194,6 +231,9 @@ async function runReleaseCycle(config, state, releaseIndex) {
 
     runGit(['add', 'package.json']);
     runGit(['commit', '-m', commitSubject, '-m', commitBody]);
+    if (config.pushEach) {
+      runGit(['push']);
+    }
   }
 
   cycle.completedAt = new Date().toISOString();
@@ -231,6 +271,12 @@ function parseArgs(argv) {
     dryRun: flags.has('--dry-run') || process.env.RELEASE_DRY_RUN === '1',
     stopOnFailure: !flags.has('--continue-on-failure'),
     heartbeatMs: Number(readValue('--heartbeat-ms', process.env.RELEASE_HEARTBEAT_MS || '15000')),
+    allowDirty: flags.has('--allow-dirty') || process.env.RELEASE_ALLOW_DIRTY === '1',
+    pushEach: flags.has('--push-each') || process.env.RELEASE_PUSH_EACH === '1',
+    ignoreStatusPatterns: String(readValue('--ignore-status', process.env.RELEASE_IGNORE_STATUS || '') || '')
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean),
   };
 }
 
@@ -251,6 +297,9 @@ async function main() {
     throw new Error('heartbeat-ms must be >= 1000');
   }
 
+  const combinedIgnorePatterns = DEFAULT_IGNORE_STATUS_PATTERNS.concat(cfg.ignoreStatusPatterns);
+  cfg.ignoreStatusRegexes = compileIgnorePatterns(combinedIgnorePatterns);
+
   const remaining = Math.max(0, cfg.targetTotal - state.releasesCompleted);
   const maxRuns = Math.min(cfg.iterations, remaining);
 
@@ -259,7 +308,7 @@ async function main() {
     return;
   }
 
-  console.log(`Starting release-engine: runs=${maxRuns}, completed=${state.releasesCompleted}, target=${cfg.targetTotal}, dryRun=${cfg.dryRun}`);
+  console.log(`Starting release-engine: runs=${maxRuns}, completed=${state.releasesCompleted}, target=${cfg.targetTotal}, dryRun=${cfg.dryRun}, allowDirty=${cfg.allowDirty}, pushEach=${cfg.pushEach}`);
 
   const heartbeat = setInterval(() => {
     console.log(`[heartbeat] completed=${state.releasesCompleted}, currentVersion=${state.currentVersion}`);

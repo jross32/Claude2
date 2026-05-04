@@ -10,7 +10,9 @@
     "test": "node tests/run.js smoke",
     "test:all": "node tests/run.js all",
     "release:engine": "node scripts/release-engine.js",
-    "release:engine:dry": "node scripts/release-engine.js --dry-run --iterations 1 --verify \"node tests/run.js smoke\" --review-delay-ms 0"
+    "release:engine:dry": "node scripts/release-engine.js --dry-run --iterations 1 --verify \"node tests/run.js smoke\" --review-delay-ms 0 --allow-dirty",
+    "release:engine:strict": "node scripts/release-engine.js --iterations 1 --verify \"node tests/run.js smoke\" --review-delay-ms 3000",
+    "release:engine:autopush": "node scripts/release-engine.js --iterations 1 --verify \"node tests/run.js smoke\" --review-delay-ms 3000 --push-each --allow-dirty"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
