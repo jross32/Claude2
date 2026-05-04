@@ -3,7 +3,7 @@
  * MCP server that wraps the web scraper app's REST API and core modules.
  *
  * Prerequisites: the scraper app must be running (npm start).
- * This server communicates with it over localhost:3000.
+ * This server communicates with it over localhost:12345.
  *
  * Registered via .mcp.json in the project root.
  */
@@ -54,7 +54,7 @@ const {
   buildToolCatalog,
 } = require('./src/mcp-catalog');
 
-const BASE_URL = process.env.SCRAPER_URL || 'http://localhost:3000';
+const BASE_URL = process.env.SCRAPER_URL || 'http://localhost:12345';
 const WS_URL = BASE_URL.replace(/^http/, 'ws');
 const SERVER_VERSION = PACKAGE_VERSION || '0.0.0';
 const REQUEST_TIMEOUT_MS = 30 * 1000;
@@ -4440,7 +4440,7 @@ const TOOLS = [
   },
   {
     name: 'run_agent',
-    description: 'Run an autonomous multi-step agent loop powered by the connected AI via MCP sampling. The agent uses web scraping tools to accomplish a goal and broadcasts live progress to the web panel at localhost:3000/wsp (Agent tab). Supports pause, resume, and handoff.',
+    description: 'Run an autonomous multi-step agent loop powered by the connected AI via MCP sampling. The agent uses web scraping tools to accomplish a goal and broadcasts live progress to the web panel at localhost:12345/wsp (Agent tab). Supports pause, resume, and handoff.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -6944,7 +6944,7 @@ async function handleTool(name, args, progressToken = null) {
       if (!goal || !goal.trim()) throw new Error('goal is required');
 
       const { createAgentRun, runAgent } = require('./src/agent');
-      const scraper_url = process.env.SCRAPER_URL || 'http://localhost:3000';
+      const scraper_url = process.env.SCRAPER_URL || 'http://localhost:12345';
 
       async function pushEvent(agentId, event) {
         try {

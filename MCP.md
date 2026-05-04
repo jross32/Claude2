@@ -14,7 +14,7 @@ AI Agent (Claude, etc.)
     ▼
 mcp-server.js          ← tool definitions, handlers, classification sets
     │
-    ├── HTTP (localhost) → src/server.js (Express REST API, port 3000)
+    ├── HTTP (localhost) → src/server.js (Express REST API, port 12345)
     │       │
     │       ├── src/scraper.js         (Playwright browser automation)
     │       ├── src/extractor.js       (DOM extraction — 50+ data types)

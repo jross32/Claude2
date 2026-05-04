@@ -18,12 +18,12 @@ node mcp-server.js
 
 Open:
 
-- Landing: [http://localhost:3000](http://localhost:3000)
-- Web Scraper Panel: [http://localhost:3000/wsp](http://localhost:3000/wsp)
-- Live docs: [http://localhost:3000/docs](http://localhost:3000/docs)
+- Landing: [http://localhost:12345](http://localhost:12345)
+- Web Scraper Panel: [http://localhost:12345/wsp](http://localhost:12345/wsp)
+- Live docs: [http://localhost:12345/docs](http://localhost:12345/docs)
 - MCP architecture reference: [MCP.md](./MCP.md)
 
-By default the MCP server talks to the local REST app at `http://localhost:3000`. Override with `SCRAPER_URL` if needed.
+By default the MCP server talks to the local REST app at `http://localhost:12345`. Override with `SCRAPER_URL` if needed.
 
 ## What It Can Do
 

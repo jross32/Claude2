@@ -427,7 +427,7 @@ Change `INTERVAL_MS` in that file to adjust frequency.
 
 3. **Manual Browser Verification:**
   - Start/verify server running: `node src/server.js`
-  - Open browser to `http://localhost:3000`
+  - Open browser to `http://localhost:12345`
   - Navigate to all affected UI sections (e.g., Batch panel, Schedule panel, Preset modal)
   - Test toggle behavior (click, observe state change, verify input field responds)
   - Test form submission (fill fields, click save/submit, check network payload in DevTools)
