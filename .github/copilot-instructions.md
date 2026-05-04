@@ -12,6 +12,16 @@ No approval prompts should ever appear.
 
 ---
 
+## Autonomy Mode
+
+- When Justin asks for auto mode, continuous improvement, or open-ended iteration, do not stop after a phase boundary to ask whether to continue.
+- Choose the best next implementation step yourself, keep coding, keep validating, and continue until Justin explicitly stops or a real blocker is reached.
+- Do not pause with messages like "should I start phase X" after a completed step when the standing request is to continue autonomously.
+- For long-running work, prefer bounded, observable execution: emit progress regularly, checkpoint state, use timeouts for external commands, and design resumable scripts so work does not appear stuck.
+- If a long-running script is needed, add heartbeat output and persisted progress before treating it as the main execution path.
+
+---
+
 ## MCP Server Reference
 
 For the full MCP tool catalog, classification details, source-module mapping, and rules for adding new tools, see **[MCP.md](../MCP.md)**. Update that file whenever tools are added or changed.
