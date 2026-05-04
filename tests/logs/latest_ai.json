@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-05-04T04:49:30.133Z",
-  "git_commit": "9c6b7c0",
+  "timestamp": "2026-05-04T04:50:32.216Z",
+  "git_commit": "5fe8280",
   "suite": "smoke",
   "tests": [
     {
       "name": "Chromium launches in headless mode",
       "status": "pass",
-      "duration_ms": 1462,
+      "duration_ms": 1543,
       "error": null,
       "input": {},
       "output": {
@@ -18,7 +18,7 @@
     {
       "name": "Browser can open a new page",
       "status": "pass",
-      "duration_ms": 207,
+      "duration_ms": 201,
       "error": null,
       "input": {},
       "output": {
@@ -43,7 +43,7 @@
     {
       "name": "Multiple pages open and close independently",
       "status": "pass",
-      "duration_ms": 202,
+      "duration_ms": 226,
       "error": null,
       "input": {},
       "output": {
@@ -56,7 +56,7 @@
     {
       "name": "Browser closes cleanly",
       "status": "pass",
-      "duration_ms": 222,
+      "duration_ms": 232,
       "error": null,
       "input": {},
       "output": {
@@ -68,7 +68,7 @@
     {
       "name": "[chaos] Navigation to invalid URL throws and browser stays alive",
       "status": "pass",
-      "duration_ms": 4315,
+      "duration_ms": 4281,
       "error": null,
       "input": {},
       "output": {
@@ -80,7 +80,7 @@
     {
       "name": "[chaos] browser.close() in finally block prevents zombie (double-close safe)",
       "status": "pass",
-      "duration_ms": 1590,
+      "duration_ms": 1774,
       "error": null,
       "input": {},
       "output": {
@@ -92,7 +92,7 @@
     {
       "name": "[chaos] Empty page has no JS errors on about:blank",
       "status": "pass",
-      "duration_ms": 2080,
+      "duration_ms": 2074,
       "error": null,
       "input": {},
       "output": {
@@ -104,7 +104,7 @@
     {
       "name": "playwright-extra can launch with stealth plugin enabled",
       "status": "pass",
-      "duration_ms": 2317,
+      "duration_ms": 2213,
       "error": null,
       "input": {},
       "output": {
@@ -119,7 +119,7 @@
     "passed": 9,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 12402,
-    "avg_duration_ms": 1378
+    "duration_ms": 12550,
+    "avg_duration_ms": 1394
   }
 }
