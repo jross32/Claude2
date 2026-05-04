@@ -37,6 +37,7 @@ function parseArgs(argv) {
     chunkSize: Number(readValue('--chunk-size', process.env.RELEASE_CHUNK_SIZE || '5')),
     verifyCommand: String(readValue('--verify', process.env.RELEASE_VERIFY_COMMAND || 'node tests/run.js smoke')),
     verifyTimeoutMs: Number(readValue('--verify-timeout-ms', process.env.RELEASE_VERIFY_TIMEOUT_MS || '180000')),
+    verifyEvery: Number(readValue('--verify-every', process.env.RELEASE_VERIFY_EVERY || '1')),
     reviewDelayMs: Number(readValue('--review-delay-ms', process.env.RELEASE_REVIEW_DELAY_MS || '3000')),
     heartbeatMs: Number(readValue('--heartbeat-ms', process.env.RELEASE_HEARTBEAT_MS || '15000')),
     allowDirty: flags.has('--allow-dirty') || process.env.RELEASE_ALLOW_DIRTY === '1',
@@ -58,6 +59,8 @@ function buildEngineArgs(cfg, iterations) {
     cfg.verifyCommand,
     '--verify-timeout-ms',
     String(cfg.verifyTimeoutMs),
+    '--verify-every',
+    String(cfg.verifyEvery),
     '--review-delay-ms',
     String(cfg.reviewDelayMs),
     '--heartbeat-ms',
@@ -94,6 +97,9 @@ function main() {
   }
   if (!Number.isFinite(cfg.chunkSize) || cfg.chunkSize < 1) {
     throw new Error('chunk-size must be >= 1');
+  }
+  if (!Number.isFinite(cfg.verifyEvery) || cfg.verifyEvery < 1) {
+    throw new Error('verify-every must be >= 1');
   }
   if (!Number.isFinite(cfg.maxLoopRuns) || cfg.maxLoopRuns < 0) {
     throw new Error('max-loop-runs must be >= 0');

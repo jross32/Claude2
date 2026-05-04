@@ -14,7 +14,9 @@
     "release:engine:strict": "node scripts/release-engine.js --iterations 1 --verify \"node tests/run.js smoke\" --review-delay-ms 3000",
     "release:engine:autopush": "node scripts/release-engine.js --iterations 1 --verify \"node tests/run.js smoke\" --review-delay-ms 3000 --push-each --allow-dirty",
     "release:engine:loop": "node scripts/release-engine-loop.js --chunk-size 5 --target-total 10000 --allow-dirty --continue-on-failure",
-    "release:engine:loop:dry": "node scripts/release-engine-loop.js --dry-run --chunk-size 2 --target-total 10 --allow-dirty"
+    "release:engine:loop:dry": "node scripts/release-engine-loop.js --dry-run --chunk-size 2 --target-total 10 --allow-dirty",
+    "release:engine:loop:fast": "node scripts/release-engine-loop.js --chunk-size 5 --target-total 10000 --verify-every 10 --allow-dirty --continue-on-failure --push-each",
+    "release:engine:loop:dry:fast": "node scripts/release-engine-loop.js --dry-run --chunk-size 3 --target-total 15 --verify-every 5 --allow-dirty"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

@@ -181,7 +181,9 @@ async function runReleaseCycle(config, state, releaseIndex) {
     return { ok: false, cycle };
   }
 
-  if (config.verifyCommand) {
+  const shouldVerify = config.verifyEvery <= 1 || (state.releasesCompleted % config.verifyEvery === 0);
+
+  if (config.verifyCommand && shouldVerify) {
     const verifyStart = Date.now();
     try {
       run(config.verifyCommand, { timeoutMs: config.verifyTimeoutMs });
@@ -204,6 +206,14 @@ async function runReleaseCycle(config, state, releaseIndex) {
       writeJson(path.join(RELEASE_DIR, `release-${releaseId}.json`), cycle);
       return { ok: false, cycle };
     }
+  } else if (config.verifyCommand && !shouldVerify) {
+    cycle.checks.push({
+      name: 'verify-command',
+      command: config.verifyCommand,
+      ok: true,
+      skipped: true,
+      reason: `verifyEvery=${config.verifyEvery}`,
+    });
   }
 
   cycle.nextPlan = buildNextPlan(getChangedSummary(), toVersion);
@@ -273,6 +283,7 @@ function parseArgs(argv) {
     heartbeatMs: Number(readValue('--heartbeat-ms', process.env.RELEASE_HEARTBEAT_MS || '15000')),
     allowDirty: flags.has('--allow-dirty') || process.env.RELEASE_ALLOW_DIRTY === '1',
     pushEach: flags.has('--push-each') || process.env.RELEASE_PUSH_EACH === '1',
+    verifyEvery: Number(readValue('--verify-every', process.env.RELEASE_VERIFY_EVERY || '1')),
     ignoreStatusPatterns: String(readValue('--ignore-status', process.env.RELEASE_IGNORE_STATUS || '') || '')
       .split(';')
       .map((s) => s.trim())
@@ -295,6 +306,10 @@ async function main() {
 
   if (!Number.isFinite(cfg.heartbeatMs) || cfg.heartbeatMs < 1000) {
     throw new Error('heartbeat-ms must be >= 1000');
+  }
+
+  if (!Number.isFinite(cfg.verifyEvery) || cfg.verifyEvery < 1) {
+    throw new Error('verify-every must be >= 1');
   }
 
   const combinedIgnorePatterns = DEFAULT_IGNORE_STATUS_PATTERNS.concat(cfg.ignoreStatusPatterns);
