@@ -286,7 +286,7 @@ tests/
 | `stress/` | Yes — real load needed | No | Push actual limits |
 | `security/` | No | No | Static analysis & file checks only |
 | `compatibility/` | Yes — must hit real target site | Fixtures as fallback | Per-site subfolders |
-| `api/` | Local server only — no external sites | No | Direct HTTP calls to `localhost:3000` |
+| `api/` | Local server only — no external sites | No | Direct HTTP calls to `localhost:12345` |
 | `snapshots/` | Yes — captures real output | Saved snapshots as comparison baseline | Detects site drift |
 | `schema/` | No | Fixtures + `references/bot/` JSON snapshots | Validates data shapes |
 

@@ -2219,7 +2219,7 @@ document.getElementById('prompt-search').addEventListener('input',function(){
 </html>`);
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 12345;
 server.listen(PORT, () => {
   console.log(`Web Scraper running at http://localhost:${PORT}`);
   if (process.env.DISABLE_GIT_AUTOSAVE !== '1' && process.env.NODE_ENV !== 'test') {
