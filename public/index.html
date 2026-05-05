@@ -3,93 +3,186 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebScraper Pro</title>
+  <title>web-scraper</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div class="app">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="primary-sidebar">
-      <div class="logo">
-        <span class="logo-icon">&#9741;</span>
-        <span class="logo-text">WebScraper<span class="accent">Pro</span></span>
-        <button class="sidebar-collapse-btn" id="btn-sidebar-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" aria-controls="primary-sidebar" aria-expanded="true">&#9664;</button>
+<div class="page-wrap">
+
+  <!-- MOBILE TOPBAR (≤680px only) -->
+  <div class="mobile-topbar">
+    <button class="btn-hamburger" id="btn-hamburger" aria-label="Open menu" aria-controls="primary-sidebar" aria-expanded="false">&#9776;</button>
+    <span class="mobile-logo">web-<span class="accent">scraper</span></span>
+    <button class="btn-theme-toggle" id="btn-theme-toggle-mobile" title="Toggle theme" aria-label="Toggle light and dark theme">&#9728;</button>
+  </div>
+
+  <!-- TOPBAR (desktop) -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo"><span class="logo-hex">&#x2B21;</span> web-scraper</div>
+      <div class="conn-dot" id="ws-conn-dot"></div>
+      <span class="conn-label" id="ws-conn-label">Connecting&#x2026;</span>
+    </div>
+    <div class="topbar-mid">
+      <span class="topbar-stat">&#128247; <b id="stat-active-scrapes">0</b> active</span>
+      <span class="topbar-stat">&#128193; <b id="stat-saves-count">0</b> saves</span>
+      <span class="topbar-stat">&#128336; <b id="stat-sched-count">0</b> schedules</span>
+    </div>
+    <div class="topbar-right">
+      <span class="pill pill-ver">v2.6.0</span>
+      <button class="btn-theme-toggle" id="btn-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle light and dark theme">&#9728;</button>
+    </div>
+  </header>
+
+  <!-- APP BODY -->
+  <div class="app-body">
+
+    <!-- ACTIVITY BAR -->
+    <nav class="activity-bar" id="activity-bar">
+      <button class="act-btn active" id="act-scraping" title="Scraping" onclick="actGroup('scraping')">&#128247;</button>
+      <button class="act-btn" id="act-analysis" title="Analysis" onclick="actGroup('analysis')">&#128196;</button>
+      <button class="act-btn" id="act-tools" title="Tools" onclick="actGroup('tools')">&#9998;</button>
+      <button class="act-btn" id="act-automation" title="Automation" onclick="actGroup('automation')">&#128336;</button>
+      <div class="act-sep"></div>
+      <button class="act-btn" id="act-ai" title="AI &amp; Agent" onclick="actGroup('ai')">&#129504;</button>
+      <button class="act-btn" id="act-logs" title="Logs" onclick="actGroup('logs')">&#128202;</button>
+    </nav>
+
+    <!-- EXPLORER COLUMN (was sidebar) -->
+    <aside class="explorer-col" id="primary-sidebar">
+
+      <!-- Scraping group -->
+      <div class="exp-section" id="sec-scraping">
+        <div class="exp-section-head" onclick="toggleExpSection('sec-scraping')">
+          <span class="exp-chevron">&#x25BE;</span>
+          <span class="exp-section-title">Scraping</span>
+        </div>
+        <div class="exp-section-body">
+          <button class="nav-item active" data-panel="scraper">
+            <span class="nav-icon">&#128247;</span>
+            <span class="nav-label">Scraper</span>
+          </button>
+          <button class="nav-item" data-panel="browser">
+            <span class="nav-icon">&#128376;</span>
+            <span class="nav-label">Browser</span>
+          </button>
+          <button class="nav-item" data-panel="batch">
+            <span class="nav-icon">&#128295;</span>
+            <span class="nav-label">Batch</span>
+          </button>
+        </div>
       </div>
-      <nav class="nav">
-        <button class="nav-item active" data-panel="scraper" title="Scraper" aria-label="Open Scraper panel" aria-current="page">
-          <span class="nav-icon">&#128247;</span>
-          <span class="nav-label">Scraper</span>
-        </button>
-        <button class="nav-item" data-panel="browser" title="Browser" aria-label="Open Browser panel">
-          <span class="nav-icon">&#128376;</span>
-          <span class="nav-label">Browser</span>
-        </button>
-        <button class="nav-item" data-panel="results" title="Results" aria-label="Open Results panel">
-          <span class="nav-icon">&#128196;</span>
-          <span class="nav-label">Results</span>
-          <span class="badge" id="results-badge" style="display:none">0</span>
-        </button>
-        <button class="nav-item" data-panel="api-calls" title="API Calls" aria-label="Open API Calls panel">
-          <span class="nav-icon">&#128257;</span>
-          <span class="nav-label">API Calls</span>
-          <span class="badge" id="api-badge" style="display:none">0</span>
-        </button>
-        <button class="nav-item" data-panel="assets" title="Assets" aria-label="Open Assets panel">
-          <span class="nav-icon">&#128444;</span>
-          <span class="nav-label">Assets</span>
-        </button>
-        <button class="nav-item" data-panel="refactor" title="Refactor" aria-label="Open Refactor panel">
-          <span class="nav-icon">&#9998;</span>
-          <span class="nav-label">Refactor</span>
-        </button>
-        <button class="nav-item" data-panel="batch" title="Batch" aria-label="Open Batch panel">
-          <span class="nav-icon">&#128295;</span>
-          <span class="nav-label">Batch</span>
-        </button>
-        <button class="nav-item" data-panel="diff" title="Diff" aria-label="Open Diff panel">
-          <span class="nav-icon">&#9870;</span>
-          <span class="nav-label">Diff</span>
-        </button>
-        <button class="nav-item" data-panel="schedule" title="Schedule" aria-label="Open Schedule panel">
-          <span class="nav-icon">&#128336;</span>
-          <span class="nav-label">Schedule</span>
-        </button>
-        <button class="nav-item" data-panel="runs" title="Runs" aria-label="Open Runs panel">
-          <span class="nav-icon">&#128202;</span>
-          <span class="nav-label">Runs</span>
-          <span class="badge" id="runs-badge" style="display:none">0</span>
-        </button>
-        <button class="nav-item" data-panel="ai" title="AI Assistant" aria-label="Open AI Assistant panel">
-          <span class="nav-icon">&#129504;</span>
-          <span class="nav-label">AI</span>
-          <span class="ai-status-dot checking" id="ai-status-dot" title="AI Connection Status" style="margin-left:6px;"></span>
-        </button>
-        <button class="nav-item" data-panel="agent" title="Agent" aria-label="Open Agent panel">
-          <span class="nav-icon">&#129351;</span>
-          <span class="nav-label">Agent</span>
-        </button>
-<button class="nav-item" data-panel="logs" title="Tool Logs" aria-label="Open Tool Logs panel">
-          <span class="nav-icon">&#128202;</span>
-          <span class="nav-label">Logs</span>
-        </button>
-      </nav>
-      <div class="sidebar-footer">
-        <button class="btn-theme-toggle" id="btn-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle light and dark theme">&#9728;</button>
+
+      <!-- Analysis group -->
+      <div class="exp-section" id="sec-analysis">
+        <div class="exp-section-head" onclick="toggleExpSection('sec-analysis')">
+          <span class="exp-chevron">&#x25BE;</span>
+          <span class="exp-section-title">Analysis</span>
+        </div>
+        <div class="exp-section-body">
+          <button class="nav-item" data-panel="results">
+            <span class="nav-icon">&#128196;</span>
+            <span class="nav-label">Results</span>
+            <span class="badge" id="results-badge" style="display:none">0</span>
+          </button>
+          <button class="nav-item" data-panel="api-calls">
+            <span class="nav-icon">&#128257;</span>
+            <span class="nav-label">API Calls</span>
+            <span class="badge" id="api-badge" style="display:none">0</span>
+          </button>
+          <button class="nav-item" data-panel="assets">
+            <span class="nav-icon">&#128444;</span>
+            <span class="nav-label">Assets</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tools group -->
+      <div class="exp-section" id="sec-tools">
+        <div class="exp-section-head" onclick="toggleExpSection('sec-tools')">
+          <span class="exp-chevron">&#x25BE;</span>
+          <span class="exp-section-title">Tools</span>
+        </div>
+        <div class="exp-section-body">
+          <button class="nav-item" data-panel="refactor">
+            <span class="nav-icon">&#9998;</span>
+            <span class="nav-label">Refactor</span>
+          </button>
+          <button class="nav-item" data-panel="diff">
+            <span class="nav-icon">&#9870;</span>
+            <span class="nav-label">Diff</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Automation group -->
+      <div class="exp-section" id="sec-automation">
+        <div class="exp-section-head" onclick="toggleExpSection('sec-automation')">
+          <span class="exp-chevron">&#x25BE;</span>
+          <span class="exp-section-title">Automation</span>
+        </div>
+        <div class="exp-section-body">
+          <button class="nav-item" data-panel="schedule">
+            <span class="nav-icon">&#128336;</span>
+            <span class="nav-label">Schedule</span>
+          </button>
+          <button class="nav-item" data-panel="runs">
+            <span class="nav-icon">&#128202;</span>
+            <span class="nav-label">Runs</span>
+            <span class="badge" id="runs-badge" style="display:none">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- AI group -->
+      <div class="exp-section" id="sec-ai">
+        <div class="exp-section-head" onclick="toggleExpSection('sec-ai')">
+          <span class="exp-chevron">&#x25BE;</span>
+          <span class="exp-section-title">AI &amp; Agent</span>
+        </div>
+        <div class="exp-section-body">
+          <button class="nav-item" data-panel="ai">
+            <span class="nav-icon">&#129504;</span>
+            <span class="nav-label">AI</span>
+            <span class="ai-status-dot checking" id="ai-status-dot" title="AI Connection Status"></span>
+          </button>
+          <button class="nav-item" data-panel="agent">
+            <span class="nav-icon">&#129351;</span>
+            <span class="nav-label">Agent</span>
+          </button>
+          <button class="nav-item" data-panel="logs">
+            <span class="nav-icon">&#128202;</span>
+            <span class="nav-label">Logs</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Explorer footer -->
+      <div class="exp-footer">
+        <button class="act-btn" id="btn-sidebar-collapse" title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">&#9664;</button>
         <span class="version">v2.6.0</span>
       </div>
+
     </aside>
 
-    <!-- Mobile sidebar overlay -->
-    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    <!-- MAIN VIEW COLUMN -->
+    <main class="view-col">
 
-    <!-- Main content -->
-    <main class="main">
-      <!-- Mobile top bar -->
-      <div class="mobile-topbar">
-        <button class="btn-hamburger" id="btn-hamburger" aria-label="Open menu" aria-controls="primary-sidebar" aria-expanded="false">&#9776;</button>
-        <span class="mobile-logo">WebScraper<span class="accent">Pro</span></span>
-        <button class="btn-theme-toggle" id="btn-theme-toggle-mobile" title="Toggle theme" aria-label="Toggle light and dark theme">&#9728;</button>
+      <!-- Context / breadcrumb bar -->
+      <div class="ctx-bar">
+        <div class="ctx-crumb">
+          <span>web-scraper</span>
+          <span class="ctx-crumb-sep">&#x203A;</span>
+          <span class="ctx-crumb-cur" id="ctx-crumb-cur">Scraper</span>
+        </div>
+        <div class="ctx-spacer"></div>
+        <div class="ctx-right">
+          <button class="btn-hamburger" id="btn-hamburger-ctx" aria-label="Open menu" style="display:none">&#9776;</button>
+        </div>
       </div>
+
+      <!-- Panel content area -->
+      <div class="view-content">
 
       <!-- ===== SCRAPER PANEL ===== -->
       <section class="panel active" id="panel-scraper">
@@ -1622,22 +1715,95 @@
         </div>
       </section>
 
-    </main>
-  </div>
+      </div><!-- /.view-content -->
+    </main><!-- /.view-col -->
 
-  <!-- ===== HELP MODAL ===== -->
-  <div id="help-modal" class="modal-backdrop" style="display:none">
-    <div class="modal-box help-modal-box">
-      <div class="modal-header">
-        <span id="help-modal-title">Help &amp; Documentation</span>
-        <button class="modal-close" id="btn-help-modal-close">&#10005;</button>
-      </div>
-      <div class="modal-body help-modal-body help-content" id="help-modal-content">
-        <!-- Help content injected by JS -->
-      </div>
+  </div><!-- /.app-body -->
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="foot-left">
+      <span class="foot-dot" id="foot-ws-dot"></span>
+      <span id="foot-ws-label">WebSocket</span>
+    </div>
+    <span>web-scraper v2.6.0</span>
+  </footer>
+
+</div><!-- /.page-wrap -->
+
+<!-- Mobile sidebar overlay -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<!-- ===== HELP MODAL ===== -->
+<div id="help-modal" class="modal-backdrop" style="display:none">
+  <div class="modal-box help-modal-box">
+    <div class="modal-header">
+      <span id="help-modal-title">Help &amp; Documentation</span>
+      <button class="modal-close" id="btn-help-modal-close">&#10005;</button>
+    </div>
+    <div class="modal-body help-modal-body help-content" id="help-modal-content">
+      <!-- Help content injected by JS -->
     </div>
   </div>
+</div>
 
-  <script src="js/app.js"></script>
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="js/app.js"></script>
+<script>
+/* ── Explorer section toggle ──────────────────────────────────── */
+function toggleExpSection(id) {
+  document.getElementById(id)?.classList.toggle('collapsed');
+}
+
+/* ── Activity bar group switcher ──────────────────────────────── */
+const PANEL_GROUPS = {
+  scraping:   ['scraper','browser','batch'],
+  analysis:   ['results','api-calls','assets'],
+  tools:      ['refactor','diff'],
+  automation: ['schedule','runs'],
+  ai:         ['ai','agent','logs'],
+  logs:       ['logs'],
+};
+
+function actGroup(group) {
+  // Highlight the correct act-btn
+  document.querySelectorAll('.activity-bar .act-btn').forEach(b => b.classList.remove('active'));
+  const actBtn = document.getElementById('act-' + group);
+  if (actBtn) actBtn.classList.add('active');
+
+  // Click the first panel in that group
+  const panels = PANEL_GROUPS[group];
+  if (!panels) return;
+  const btn = document.querySelector(`.nav-item[data-panel="${panels[0]}"]`);
+  btn?.click();
+}
+
+/* ── Keep ctx crumb in sync with active panel ─────────────────── */
+const PANEL_LABELS = {
+  scraper:'Scraper', browser:'Browser', results:'Results',
+  'api-calls':'API Calls', assets:'Assets', refactor:'Refactor',
+  batch:'Batch', diff:'Diff', schedule:'Schedule', runs:'Runs',
+  ai:'AI Assistant', agent:'Agent', logs:'Logs',
+};
+document.querySelectorAll('.nav-item[data-panel]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const label = PANEL_LABELS[btn.dataset.panel] || btn.dataset.panel;
+    const el = document.getElementById('ctx-crumb-cur');
+    if (el) el.textContent = label;
+
+    // Sync activity bar highlight
+    for (const [group, panels] of Object.entries(PANEL_GROUPS)) {
+      if (panels.includes(btn.dataset.panel)) {
+        document.querySelectorAll('.activity-bar .act-btn').forEach(b => b.classList.remove('active'));
+        const ab = document.getElementById('act-' + group);
+        if (ab) ab.classList.add('active');
+        break;
+      }
+    }
+  });
+});
+</script>
 </body>
 </html>
