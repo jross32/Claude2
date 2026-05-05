@@ -1071,6 +1071,10 @@ app.post('/api/generate/sitemap', (req, res) => {
 });
 
 // ---- AI assistant ----
+app.get('/api/ai/status', (req, res) => {
+  res.json({ status: 'ok', model: 'Extractive AI', user: req.headers['x-user'] || 'anonymous' });
+});
+
 app.post('/api/ai/chat', async (req, res) => {
   const {
     source = 'current',

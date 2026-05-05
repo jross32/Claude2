@@ -5996,3 +5996,85 @@ function agentShowHandoff(reason, options) {
   });
 })();
 
+
+
+
+
+
+// ===== AI Connection Status & Diagnostics =====
+async function updateAIConnectionStatus() {
+  const navDot = document.getElementById('ai-status-dot');
+  const diagDot = document.getElementById('ai-diag-dot');
+  const statusText = document.getElementById('ai-conn-status-text');
+  const modelName = document.getElementById('ai-model-name');
+  const userName = document.getElementById('ai-user-name');
+  try {
+    const res = await fetch('/api/ai/status');
+    if (!res.ok) throw new Error('Not connected');
+    const data = await res.json();
+    if (navDot) navDot.style.background = '#3fb950';
+    if (diagDot) { diagDot.classList.remove('disconnected', 'checking'); diagDot.classList.add('connected'); }
+    if (statusText) statusText.textContent = 'Connected';
+    if (modelName) modelName.textContent = data.model || 'Unknown';
+    if (userName) userName.textContent = data.user || 'anonymous';
+  } catch (e) {
+    if (navDot) navDot.style.background = '#f85149';
+    if (diagDot) { diagDot.classList.remove('connected', 'checking'); diagDot.classList.add('disconnected'); }
+    if (statusText) statusText.textContent = 'Not Connected';
+    if (modelName) modelName.textContent = 'N/A';
+    if (userName) userName.textContent = 'N/A';
+  }
+}
+
+// ===== Help Modal Logic =====
+function showHelpModal(section) {
+  const modal = document.getElementById('help-modal');
+  const content = document.getElementById('help-modal-content');
+  modal.style.display = 'flex';
+  content.innerHTML = getHelpContent(section);
+}
+
+function hideHelpModal() {
+  document.getElementById('help-modal').style.display = 'none';
+}
+
+function getHelpContent(section) {
+  // Simple static help for now; can be expanded
+  if (section === 'ai') {
+    return `<h2>AI Assistant Help</h2><p>Ask questions about your scrape, or use the AI to analyze new sites. Connection status and model info are shown above. Use the Test button to verify connectivity.</p>`;
+  }
+  return `<h2>Help & Documentation</h2><ul><li><b>AI Assistant:</b> Chat with the AI, see connection status, and model info.</li><li><b>Panels:</b> Use the sidebar to switch between Scraper, Browser, Results, and more.</li><li><b>Tooltips:</b> Hover over <span style='color:#58a6ff'>?</span> icons for more info.</li></ul>`;
+}
+
+document.getElementById('ai-help-btn')?.addEventListener('click', () => showHelpModal('ai'));
+document.getElementById('btn-help-modal-close')?.addEventListener('click', hideHelpModal);
+
+// ===== AI Test Button =====
+document.getElementById('btn-ai-test')?.addEventListener('click', async () => {
+  const log = document.getElementById('ai-chat-log');
+  const msg = document.createElement('div');
+  msg.className = 'ai-message ai-message-user';
+  msg.textContent = '[Test] Are you there?';
+  log.appendChild(msg);
+  try {
+    const res = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: 'Are you there?', source: 'url', url: 'https://example.com' })
+    });
+    const data = await res.json();
+    const reply = document.createElement('div');
+    reply.className = 'ai-message ai-message-assistant';
+    reply.textContent = data.answer || '[No response]';
+    log.appendChild(reply);
+  } catch (e) {
+    const err = document.createElement('div');
+    err.className = 'ai-message ai-message-assistant';
+    err.textContent = '[AI not connected]';
+    log.appendChild(err);
+  }
+});
+
+// Update status on load and every 10s
+updateAIConnectionStatus();
+setInterval(updateAIConnectionStatus, 10000);

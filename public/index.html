@@ -62,6 +62,7 @@
         <button class="nav-item" data-panel="ai" title="AI Assistant" aria-label="Open AI Assistant panel">
           <span class="nav-icon">&#129504;</span>
           <span class="nav-label">AI</span>
+          <span class="ai-status-dot" id="ai-status-dot" title="AI Connection Status" style="margin-left:6px;width:10px;height:10px;border-radius:50%;display:inline-block;background:#8b949e;"></span>
         </button>
         <button class="nav-item" data-panel="agent" title="Agent" aria-label="Open Agent panel">
           <span class="nav-icon">&#129351;</span>
@@ -1409,12 +1410,28 @@
       <section class="panel" id="panel-ai">
         <div class="panel-header">
           <div>
-            <h1>AI Assistant</h1>
+            <h1>AI Assistant <button id="ai-help-btn" class="help-btn" title="Help &amp; Documentation">&#10067;</button></h1>
             <p class="subtitle">Ask the local AI to analyze the current scrape or research a fresh URL for you.</p>
           </div>
           <div class="panel-actions">
             <button class="btn-secondary" id="btn-ai-use-current">&#128194; Use Current Run</button>
             <button class="btn-secondary" id="btn-ai-clear-chat">&#128465; Clear Chat</button>
+            <button class="btn-secondary" id="btn-ai-test" title="Test AI connection">&#9889; Test</button>
+          </div>
+        </div>
+        <div class="ai-diagnostics-bar" id="ai-diagnostics-bar">
+          <div class="ai-diag-item">
+            <span class="ai-diag-dot" id="ai-diag-dot"></span>
+            <span class="ai-diag-label">STATUS</span>
+            <span class="ai-diag-value" id="ai-conn-status-text">Checking…</span>
+          </div>
+          <div class="ai-diag-item">
+            <span class="ai-diag-label">MODEL</span>
+            <span class="ai-diag-value" id="ai-model-name">—</span>
+          </div>
+          <div class="ai-diag-item">
+            <span class="ai-diag-label">USER</span>
+            <span class="ai-diag-value" id="ai-user-name">—</span>
           </div>
         </div>
 
@@ -1604,6 +1621,19 @@
       </section>
 
     </main>
+  </div>
+
+  <!-- ===== HELP MODAL ===== -->
+  <div id="help-modal" class="modal-backdrop" style="display:none">
+    <div class="modal-box help-modal-box">
+      <div class="modal-header">
+        <span id="help-modal-title">Help &amp; Documentation</span>
+        <button class="modal-close" id="btn-help-modal-close">&#10005;</button>
+      </div>
+      <div class="modal-body help-modal-body help-content" id="help-modal-content">
+        <!-- Help content injected by JS -->
+      </div>
+    </div>
   </div>
 
   <script src="js/app.js"></script>

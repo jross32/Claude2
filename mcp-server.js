@@ -1,3 +1,15 @@
+// AI status endpoint for diagnostics
+app.get('/api/ai/status', async (req, res) => {
+  try {
+    // Simulate model/user info; replace with real backend call if needed
+    const model = 'GPT-4.1';
+    const user = req.headers['x-user'] || 'anonymous';
+    // Optionally, ping the AI backend here
+    res.json({ status: 'ok', model, user });
+  } catch (e) {
+    res.status(503).json({ status: 'error', error: e.message });
+  }
+});
 /**
  * mcp-server.js
  * MCP server that wraps the web scraper app's REST API and core modules.
