@@ -1,114 +1,118 @@
 {
-  "timestamp": "2026-05-05T22:48:07.059Z",
-  "git_commit": "8e7bcef",
+  "timestamp": "2026-05-05T22:48:22.937Z",
+  "git_commit": "ddec2ed",
   "suite": "smoke",
   "tests": [
     {
-      "name": "Chromium launches in headless mode",
+      "name": "Server starts without crashing",
       "status": "pass",
-      "duration_ms": 1474,
+      "duration_ms": 9250,
       "error": null,
       "input": {},
       "output": {
-        "launched": true
+        "pid": 15404,
+        "port": 3001
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "Browser can open a new page",
+      "name": "GET /api/saves → 200 + JSON array",
       "status": "pass",
-      "duration_ms": 273,
+      "duration_ms": 5423,
       "error": null,
       "input": {},
       "output": {
-        "pageOpened": true,
-        "initialUrl": "about:blank"
+        "status": 200,
+        "count": 166
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "Browser reports correct version string",
+      "name": "GET /api/schedules → 200 + JSON array",
       "status": "pass",
-      "duration_ms": 2,
+      "duration_ms": 7,
       "error": null,
       "input": {},
       "output": {
-        "version": "145.0.7632.6"
+        "status": 200
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "Multiple pages open and close independently",
+      "name": "GET /api/session/check → 200 + { exists: boolean }",
       "status": "pass",
-      "duration_ms": 293,
+      "duration_ms": 8,
       "error": null,
       "input": {},
       "output": {
-        "pagesOpened": 3,
-        "pagesClosed": 3
+        "status": 200,
+        "exists": false
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "Browser closes cleanly",
+      "name": "GET /api/site-credentials → 200 + { found: boolean }",
       "status": "pass",
-      "duration_ms": 268,
+      "duration_ms": 4,
       "error": null,
       "input": {},
       "output": {
-        "closed": true
+        "status": 200,
+        "found": false
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "[chaos] Navigation to invalid URL throws and browser stays alive",
+      "name": "GET / serves HTML frontend",
       "status": "pass",
-      "duration_ms": 4483,
+      "duration_ms": 6,
       "error": null,
       "input": {},
       "output": {
-        "errorCaught": true
+        "status": 200,
+        "hasHTML": true
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "[chaos] browser.close() in finally block prevents zombie (double-close safe)",
+      "name": "[chaos] POST /api/scrape with no URL → 400",
       "status": "pass",
-      "duration_ms": 1712,
+      "duration_ms": 33,
       "error": null,
       "input": {},
       "output": {
-        "doubleCloseSafe": true
+        "status": 400,
+        "error": "URL is required"
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "[chaos] Empty page has no JS errors on about:blank",
+      "name": "[chaos] GET unknown endpoint → 404",
       "status": "pass",
-      "duration_ms": 2248,
+      "duration_ms": 10,
       "error": null,
       "input": {},
       "output": {
-        "jsErrors": 0
+        "status": 404
       },
       "stack_trace": null,
       "screenshot": null
     },
     {
-      "name": "playwright-extra can launch with stealth plugin enabled",
+      "name": "[chaos] GET /api/saves/:id with fake ID → 404",
       "status": "pass",
-      "duration_ms": 2556,
+      "duration_ms": 6,
       "error": null,
       "input": {},
       "output": {
-        "stealthLaunch": true
+        "status": 404
       },
       "stack_trace": null,
       "screenshot": null
@@ -119,7 +123,7 @@
     "passed": 9,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 13320,
-    "avg_duration_ms": 1480
+    "duration_ms": 15369,
+    "avg_duration_ms": 1708
   }
 }
