@@ -101,7 +101,7 @@ APA-specific config lives in `.env` (gitignored) — not in `src/`.
 | `src/har-exporter.js` | HAR 1.2 format export | Stable |
 | `src/git-autosave.js` | Auto-commit & push on timer interval (starts with server, currently 6h) | Stable |
 | `src/oidc-tester.js` | OIDC/OAuth2 security test suite (8 test types) | Stable |
-| `mcp-server.js` | MCP server — 90 tools, 29 prompts, classification sets, handlers | Stable |
+| `mcp-server.js` | MCP server — 91 tools, 29 prompts, classification sets, handlers | Stable |
 | `MCP.md` | Living reference for all MCP tools — update when adding/changing tools | Stable |
 | `public/index.html` | Single-page frontend UI (large — edit carefully) | **Fragile** |
 | `public/js/app.js` | Frontend logic | **Fragile** |
