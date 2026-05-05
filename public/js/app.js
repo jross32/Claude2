@@ -6012,13 +6012,13 @@ async function updateAIConnectionStatus() {
     const res = await fetch('/api/ai/status');
     if (!res.ok) throw new Error('Not connected');
     const data = await res.json();
-    if (navDot) navDot.style.background = '#3fb950';
+    if (navDot) { navDot.classList.remove('disconnected', 'checking'); navDot.classList.add('connected'); }
     if (diagDot) { diagDot.classList.remove('disconnected', 'checking'); diagDot.classList.add('connected'); }
     if (statusText) statusText.textContent = 'Connected';
     if (modelName) modelName.textContent = data.model || 'Unknown';
     if (userName) userName.textContent = data.user || 'anonymous';
   } catch (e) {
-    if (navDot) navDot.style.background = '#f85149';
+    if (navDot) { navDot.classList.remove('connected', 'checking'); navDot.classList.add('disconnected'); }
     if (diagDot) { diagDot.classList.remove('connected', 'checking'); diagDot.classList.add('disconnected'); }
     if (statusText) statusText.textContent = 'Not Connected';
     if (modelName) modelName.textContent = 'N/A';

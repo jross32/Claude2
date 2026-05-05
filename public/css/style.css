@@ -2412,6 +2412,11 @@ body.sidebar-open .sidebar-overlay { display: block; }
   min-width: 90px;
   flex-shrink: 0;
 }
+@media (max-width: 767px) {
+  .capture-speed-row { flex-wrap: wrap; gap: 8px; }
+  .capture-speed-track { width: 100%; flex-shrink: 1; }
+  .capture-speed-slider { min-width: 80px; max-width: none; flex: 1; }
+}
 
 .session-body {
   display: block;
@@ -3406,13 +3411,13 @@ body.sidebar-open .sidebar-overlay { display: block; }
 .ai-diag-item { display: flex; align-items: center; gap: 5px; }
 .ai-diag-label { color: var(--text3); font-size: 11px; }
 .ai-diag-value { font-weight: 600; color: var(--text); }
-.ai-diag-dot {
+.ai-diag-dot, .ai-status-dot {
   width: 10px; height: 10px; border-radius: 50%; background: var(--text3);
   display: inline-block; transition: background 0.3s;
 }
-.ai-diag-dot.connected { background: var(--success); }
-.ai-diag-dot.disconnected { background: var(--danger); }
-.ai-diag-dot.checking { background: var(--warning); animation: ai-dot-pulse 1s infinite; }
+.ai-diag-dot.connected, .ai-status-dot.connected { background: var(--success); }
+.ai-diag-dot.disconnected, .ai-status-dot.disconnected { background: var(--danger); }
+.ai-diag-dot.checking, .ai-status-dot.checking { background: var(--warning); animation: ai-dot-pulse 1s infinite; }
 @keyframes ai-dot-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 /* ===== Help Modal ===== */

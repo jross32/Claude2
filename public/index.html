@@ -62,7 +62,7 @@
         <button class="nav-item" data-panel="ai" title="AI Assistant" aria-label="Open AI Assistant panel">
           <span class="nav-icon">&#129504;</span>
           <span class="nav-label">AI</span>
-          <span class="ai-status-dot" id="ai-status-dot" title="AI Connection Status" style="margin-left:6px;width:10px;height:10px;border-radius:50%;display:inline-block;background:#8b949e;"></span>
+          <span class="ai-status-dot checking" id="ai-status-dot" title="AI Connection Status" style="margin-left:6px;"></span>
         </button>
         <button class="nav-item" data-panel="agent" title="Agent" aria-label="Open Agent panel">
           <span class="nav-icon">&#129351;</span>
@@ -132,7 +132,7 @@
             <!-- Max pages — always visible -->
             <div class="field" id="max-pages-field">
               <label for="max-pages">Max Pages to Crawl
-                <span class="tooltip-icon" data-tip="Limits how many pages the scraper will visit.&#10;Set to 1 for single-page scrapes.&#10;Check 'Full site crawl' below to remove the limit.">?</span>
+                <span class="tooltip-icon" aria-hidden="true" data-tip="Limits how many pages the scraper will visit.&#10;Set to 1 for single-page scrapes.&#10;Check 'Full site crawl' below to remove the limit.">?</span>
                 <span class="hint">(limits how many pages the scraper visits — check &quot;Full site crawl&quot; below to remove the limit)</span>
               </label>
               <input type="number" id="max-pages" value="100" min="1" max="9999" style="width:120px" />
@@ -338,7 +338,7 @@
               <div class="avoid-links-panel" id="proxy-panel" style="display:none">
                 <div class="field-hint" style="margin-bottom:8px">Route all browser requests through a proxy server. Leave blank to use no proxy.</div>
                 <div class="field">
-                  <label for="proxy-server">Proxy URL <span class="tooltip-icon" data-tip="Format: http://host:port&#10;Supports HTTP, HTTPS, and SOCKS5 proxies.&#10;Leave blank to connect directly.">?</span></label>
+                  <label for="proxy-server">Proxy URL <span class="tooltip-icon" aria-hidden="true" data-tip="Format: http://host:port&#10;Supports HTTP, HTTPS, and SOCKS5 proxies.&#10;Leave blank to connect directly.">?</span></label>
                   <input type="text" id="proxy-server" placeholder="http://proxy.example.com:8080"
                     autocomplete="off" data-lpignore="true" style="width:100%;max-width:420px" />
                 </div>
@@ -1026,11 +1026,11 @@
                 <input type="number" id="batch-depth" value="1" min="1" max="5" />
               </div>
               <div class="field">
-                <label for="batch-max-pages">Max Pages / URL <span class="tooltip-icon" data-tip="Maximum pages to crawl per URL in the batch.&#10;0 = no limit (crawl all pages found).">?</span> <span class="hint">(0 = unlimited)</span></label>
+                <label for="batch-max-pages">Max Pages / URL <span class="tooltip-icon" aria-hidden="true" data-tip="Maximum pages to crawl per URL in the batch.&#10;0 = no limit (crawl all pages found).">?</span> <span class="hint">(0 = unlimited)</span></label>
                 <input type="number" id="batch-max-pages" value="10" min="0" max="500" />
               </div>
               <div class="field">
-                <label for="batch-workers">Workers <span class="tooltip-icon" data-tip="Concurrent browser tabs used for this batch.&#10;More workers = faster, but higher RAM usage.&#10;Recommended: 1–3 for most machines.">?</span></label>
+                <label for="batch-workers">Workers <span class="tooltip-icon" aria-hidden="true" data-tip="Concurrent browser tabs used for this batch.&#10;More workers = faster, but higher RAM usage.&#10;Recommended: 1–3 for most machines.">?</span></label>
                 <input type="number" id="batch-workers" value="2" min="1" max="10" title="Concurrent browser tabs per URL" />
               </div>
               <div class="field">
@@ -1186,7 +1186,7 @@
             </div>
             <div class="field">
               <label for="sched-cron">Cron Expression
-                <span class="tooltip-icon" data-tip="Standard 5-field cron format:&#10;minute hour day month weekday&#10;Example: 0 * * * * = every hour&#10;*/30 * * * * = every 30 min">?</span>
+                <span class="tooltip-icon" aria-hidden="true" data-tip="Standard 5-field cron format:&#10;minute hour day month weekday&#10;Example: 0 * * * * = every hour&#10;*/30 * * * * = every 30 min">?</span>
                 <span class="hint">e.g. &quot;*/30 * * * *&quot; = every 30 min</span>
               </label>
               <div class="cron-input-row">
