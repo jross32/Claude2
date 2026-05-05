@@ -3304,9 +3304,22 @@ body.sidebar-open .sidebar-overlay { display: block; }
   border-top: 1px solid var(--border);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 120px;
+  max-height: 200px;
   overflow-y: auto;
 }
+.agent-expand-btn {
+  display: block;
+  margin: 4px 14px 8px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.8;
+}
+.agent-expand-btn:hover { opacity: 1; }
 
 /* Done block */
 .agent-done-block {

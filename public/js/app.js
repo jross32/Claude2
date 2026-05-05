@@ -2476,7 +2476,7 @@ function setupBrowserWorkspace() {
       browserLastScrapeResult = await browserFetchJson(`/api/browser/sessions/${encodeURIComponent(session.browserSessionId)}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxPages: 2, captureGraphQL: true, captureREST: true }),
+        body: JSON.stringify({ captureGraphQL: true, captureREST: true, autoScroll: true }),
       });
       document.getElementById('browser-data-json').textContent = JSON.stringify(browserLastScrapeResult, null, 2);
       setBrowserTab('data');
@@ -5797,10 +5797,18 @@ function agentFillToolResult(msg) {
     statusEl.textContent = msg.ok !== false ? `✓${durationStr}` : `✗${durationStr}`;
   }
   if (resultEl) {
-    const out = typeof msg.output === 'string' ? msg.output : JSON.stringify(msg.output || '');
-    const preview = out.length > 400 ? out.slice(0, 400) + '…' : out;
+    const out = typeof msg.output === 'string' ? msg.output : JSON.stringify(msg.output || '', null, 2);
+    const PREVIEW_LIMIT = 2000;
+    const preview = out.length > PREVIEW_LIMIT ? out.slice(0, PREVIEW_LIMIT) + '…' : out;
     resultEl.textContent = preview;
     resultEl.style.display = '';
+    if (out.length > PREVIEW_LIMIT) {
+      const expandBtn = document.createElement('button');
+      expandBtn.className = 'agent-expand-btn';
+      expandBtn.textContent = 'Show full output';
+      expandBtn.onclick = () => { resultEl.textContent = out; expandBtn.remove(); };
+      resultEl.after(expandBtn);
+    }
   }
   const tl = agentGetTimeline();
   if (tl) tl.scrollTop = tl.scrollHeight;
@@ -5881,7 +5889,7 @@ function agentShowHandoff(reason, options) {
     if (tl) tl.innerHTML = '';
   }
 
-  function agentSubscribeSSE(agentId) {
+  function agentSubscribeSSE(agentId, retryCount = 0) {
     if (_agentSSE) { _agentSSE.close(); _agentSSE = null; }
     const sse = new EventSource(`/api/agent/${agentId}/stream`);
     _agentSSE = sse;
@@ -5894,7 +5902,13 @@ function agentShowHandoff(reason, options) {
     };
     sse.onerror = () => {
       sse.close();
-      if (_agentSSE === sse) _agentSSE = null;
+      if (_agentSSE !== sse) return;
+      _agentSSE = null;
+      if (_agentCurrentId === agentId && retryCount < 5) {
+        const delay = Math.min(500 * Math.pow(2, retryCount), 8000);
+        if (retryCount === 0) showToast('Connection dropped, reconnecting…');
+        setTimeout(() => { if (_agentCurrentId === agentId) agentSubscribeSSE(agentId, retryCount + 1); }, delay);
+      }
     };
   }
 

@@ -1,16 +1,16 @@
 {
-  "timestamp": "2026-05-05T05:16:21.864Z",
-  "git_commit": "3050a8a",
+  "timestamp": "2026-05-05T09:42:18.811Z",
+  "git_commit": "4ebb25e",
   "suite": "smoke",
   "tests": [
     {
       "name": "Server starts without crashing",
       "status": "pass",
-      "duration_ms": 10700,
+      "duration_ms": 7746,
       "error": null,
       "input": {},
       "output": {
-        "pid": 36132,
+        "pid": 73892,
         "port": 3001
       },
       "stack_trace": null,
@@ -19,7 +19,7 @@
     {
       "name": "GET /api/saves → 200 + JSON array",
       "status": "pass",
-      "duration_ms": 5831,
+      "duration_ms": 3671,
       "error": null,
       "input": {},
       "output": {
@@ -32,7 +32,7 @@
     {
       "name": "GET /api/schedules → 200 + JSON array",
       "status": "pass",
-      "duration_ms": 13,
+      "duration_ms": 15,
       "error": null,
       "input": {},
       "output": {
@@ -44,7 +44,7 @@
     {
       "name": "GET /api/session/check → 200 + { exists: boolean }",
       "status": "pass",
-      "duration_ms": 5,
+      "duration_ms": 10,
       "error": null,
       "input": {},
       "output": {
@@ -96,7 +96,7 @@
     {
       "name": "[chaos] GET unknown endpoint → 404",
       "status": "pass",
-      "duration_ms": 7,
+      "duration_ms": 5,
       "error": null,
       "input": {},
       "output": {
@@ -123,7 +123,7 @@
     "passed": 9,
     "failed": 0,
     "skipped": 0,
-    "duration_ms": 17219,
-    "avg_duration_ms": 1913
+    "duration_ms": 12108,
+    "avg_duration_ms": 1345
   }
 }

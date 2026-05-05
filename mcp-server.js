@@ -2020,14 +2020,9 @@ function extractSnippets(text, query, snippetChars = 160, maxSnippets = 3) {
   return snippets;
 }
 
-function searchSavedPages(pages, query, { limit = 20, snippetChars = 160 } = {}) {
+function searchSavedPages(pages, query, { limit = null, snippetChars = 160 } = {}) {
   const normalizedQuery = ensureNonEmptyString(query, 'query');
-  const safeLimit = normalizeInteger(limit, {
-    defaultValue: 20,
-    min: 1,
-    max: 100,
-    name: 'limit',
-  });
+  const safeLimit = limit != null ? normalizeInteger(limit, { min: 1, name: 'limit' }) : null;
   const safeSnippetChars = normalizeInteger(snippetChars, {
     defaultValue: 160,
     min: 40,
@@ -2064,16 +2059,11 @@ function searchSavedPages(pages, query, { limit = 20, snippetChars = 160 } = {})
 
   return results
     .sort((a, b) => b.matchCount - a.matchCount || a.pageIndex - b.pageIndex)
-    .slice(0, safeLimit);
+    .slice(0, safeLimit ?? Infinity);
 }
 
-function simplifyApiCalls(save, type = 'all', limit = 100) {
-  const safeLimit = normalizeInteger(limit, {
-    defaultValue: 100,
-    min: 1,
-    max: 250,
-    name: 'limit',
-  });
+function simplifyApiCalls(save, type = 'all', limit = null) {
+  const safeLimit = limit != null ? normalizeInteger(limit, { min: 1, name: 'limit' }) : null;
   const apiCalls = save.apiCalls || {};
   const result = { counts: {
     graphql: (apiCalls.graphql || []).length,
@@ -2081,7 +2071,7 @@ function simplifyApiCalls(save, type = 'all', limit = 100) {
   } };
 
   if (type === 'graphql' || type === 'all') {
-    result.graphql = (apiCalls.graphql || []).slice(0, safeLimit).map((call) => ({
+    result.graphql = (apiCalls.graphql || []).slice(0, safeLimit ?? Infinity).map((call) => ({
       url: call.url,
       method: call.method,
       body: truncateText(call.body, MAX_API_RESPONSE_CHARS),
@@ -2092,7 +2082,7 @@ function simplifyApiCalls(save, type = 'all', limit = 100) {
   }
 
   if (type === 'rest' || type === 'all') {
-    result.rest = (apiCalls.rest || []).slice(0, safeLimit).map((call) => ({
+    result.rest = (apiCalls.rest || []).slice(0, safeLimit ?? Infinity).map((call) => ({
       url: call.url,
       method: call.method,
       statusCode: call.statusCode,
@@ -2591,13 +2581,8 @@ function scoreDealCandidate(text) {
   return score;
 }
 
-function extractDealsFromSave(save, { pageIndex = null, limit = 25 } = {}) {
-  const safeLimit = normalizeInteger(limit, {
-    defaultValue: 25,
-    min: 1,
-    max: 100,
-    name: 'limit',
-  });
+function extractDealsFromSave(save, { pageIndex = null, limit = null } = {}) {
+  const safeLimit = limit != null ? normalizeInteger(limit, { min: 1, name: 'limit' }) : null;
   const requestedPageIndex = pageIndex === null || pageIndex === undefined
     ? null
     : normalizeInteger(pageIndex, {
@@ -2663,7 +2648,7 @@ function extractDealsFromSave(save, { pageIndex = null, limit = 25 } = {}) {
         confidence: candidate.score >= 8 ? 'high' : candidate.score >= 5 ? 'medium' : 'low',
       })),
     (candidate) => candidate.text.toLowerCase()
-  ).slice(0, safeLimit);
+  ).slice(0, safeLimit ?? Infinity);
 
   return {
     sessionId: save?.sessionId || '',
@@ -3305,8 +3290,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         url: { type: 'string', description: 'URL to scrape' },
-        maxPages: { type: 'number', description: 'Max pages to visit (default: 3)' },
-        scrapeDepth: { type: 'number', description: 'How many links deep to follow (default: 1)' },
+        maxPages: { type: 'number', description: 'Max pages to visit (omit or null for unlimited)' },
+        scrapeDepth: { type: 'number', description: 'How many links deep to follow (omit or null for unlimited)' },
         captureGraphQL: { type: 'boolean', description: 'Capture GraphQL API calls (default: true)' },
         captureREST: { type: 'boolean', description: 'Capture REST API calls (default: true)' },
         captureIframeAPIs: { type: 'boolean', description: 'Also capture XHR/fetch calls made from within iframes (e.g. embedded widgets, ad units). Requires captureREST: true. Adds a context-level route listener so cross-origin iframe API calls are included in restCalls with fromIframe: true (default: false)' },
@@ -3316,7 +3301,7 @@ const TOOLS = [
         captureServiceWorkers: { type: 'boolean', description: 'Detect registered service workers after page load. Results in serviceWorkers[] with scope, scriptURL, and state (default: false)' },
         bypassServiceWorkers: { type: 'boolean', description: 'Unregister all service workers and reload the page so API requests hit the network directly instead of being served from SW cache. Implies captureServiceWorkers. Use when a PWA is hiding its API calls (default: false)' },
         fullCrawl: { type: 'boolean', description: 'Crawl the entire site up to maxPages (default: false)' },
-        autoScroll: { type: 'boolean', description: 'Auto-scroll pages to trigger lazy loading (default: false)' },
+        autoScroll: { type: 'boolean', description: 'Auto-scroll pages to trigger lazy loading — greatly improves results on modern sites (default: true)' },
         username: { type: 'string', description: 'Username or email for login. Triggers automatic form-based login before scraping.' },
         password: { type: 'string', description: 'Password for login.' },
         totpSecret: { type: 'string', description: 'Base32 TOTP secret for TOTP-based 2FA (e.g. Google Authenticator). If provided, 2FA codes are generated automatically — no manual entry needed.' },
@@ -3567,7 +3552,7 @@ const TOOLS = [
         cronExpr:    { type: 'string', description: 'Cron expression (e.g. "0 9 * * 1-5" = 9am weekdays, "*/30 * * * *" = every 30 min)' },
         url:         { type: 'string', description: 'URL to scrape on the schedule' },
         label:       { type: 'string', description: 'Optional human-readable name for this schedule (e.g. "Morning prices" or "Daily news")' },
-        maxPages:    { type: 'number', description: 'Max pages to scrape each run (default: 1)' },
+        maxPages:    { type: 'number', description: 'Max pages to scrape each run (omit for unlimited)' },
         captureGraphQL: { type: 'boolean', description: 'Capture GraphQL calls (default: true)' },
         captureREST:    { type: 'boolean', description: 'Capture REST calls (default: true)' },
       },
@@ -3845,11 +3830,11 @@ const TOOLS = [
       properties: {
         url:         { type: 'string',  description: 'URL to scrape and analyze' },
         question:    { type: 'string',  description: 'What to find or answer, e.g. "what upcoming Pokemon TCG sets are announced?" or "what electronics deals are available today?"' },
-        maxPages:    { type: 'number',  description: 'Max pages to scrape before analyzing (default: 3)' },
-        scrapeDepth: { type: 'number',  description: 'Link depth to follow (default: 1)' },
-        autoScroll:  { type: 'boolean', description: 'Auto-scroll pages to trigger lazy loading (default: false)' },
+        maxPages:    { type: 'number',  description: 'Max pages to scrape before analyzing (omit for unlimited)' },
+        scrapeDepth: { type: 'number',  description: 'Link depth to follow (omit for unlimited)' },
+        autoScroll:  { type: 'boolean', description: 'Auto-scroll pages to trigger lazy loading (default: true)' },
         mode:        { type: 'string',  enum: ['auto', 'fast', 'deep'], description: 'Analysis mode. auto lets the AI choose the approach, fast is optimized for speed, deep is more thorough.' },
-        includeEvidence: { type: 'boolean', description: 'Include ranked evidence snippets and links in the response (default: false)' },
+        includeEvidence: { type: 'boolean', description: 'Include ranked evidence snippets and links in the response (default: true)' },
         username:    { type: 'string',  description: 'Optional username/email if the site requires login before analysis' },
         password:    { type: 'string',  description: 'Optional password for login' },
         totpSecret:  { type: 'string',  description: 'Optional base32 TOTP secret for 2FA login' },
@@ -3953,7 +3938,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         url:      { type: 'string',  description: 'URL to screenshot' },
-        fullPage: { type: 'boolean', description: 'Capture full scrollable page instead of just viewport (default false)', default: false },
+        fullPage: { type: 'boolean', description: 'Capture full scrollable page instead of just viewport (default true)' },
         waitMs:   { type: 'integer', description: 'Milliseconds to wait after page load before capture (default 1000)', default: 1000 },
       },
       required: ['url'],
@@ -4121,7 +4106,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         browserSessionId: { type: 'string', description: 'Live browser session ID' },
-        fullPage: { type: 'boolean', description: 'Capture the full scrollable page instead of only the viewport (default false)' },
+        fullPage: { type: 'boolean', description: 'Capture the full scrollable page instead of only the viewport (default true)' },
         waitMs: { type: 'integer', description: 'Optional wait before capture in milliseconds' },
       },
       required: ['browserSessionId'],
@@ -4169,12 +4154,12 @@ const TOOLS = [
       properties: {
         browserSessionId: { type: 'string', description: 'Live browser session ID' },
         url: { type: 'string', description: 'Optional URL override. Defaults to the current browser page.' },
-        maxPages: { type: 'integer', description: 'Max pages to capture in the scraper handoff (default: 3)' },
-        scrapeDepth: { type: 'integer', description: 'Depth to follow links during the scraper handoff (default: 1)' },
+        maxPages: { type: 'integer', description: 'Max pages to capture in the scraper handoff (omit for unlimited)' },
+        scrapeDepth: { type: 'integer', description: 'Depth to follow links during the scraper handoff (omit for unlimited)' },
         captureGraphQL: { type: 'boolean', description: 'Capture GraphQL during the scrape handoff (default: true)' },
         captureREST: { type: 'boolean', description: 'Capture REST during the scrape handoff (default: true)' },
         captureAssets: { type: 'boolean', description: 'Capture asset URLs during the scrape handoff (default: true)' },
-        autoScroll: { type: 'boolean', description: 'Auto-scroll pages during the scrape handoff (default: false)' },
+        autoScroll: { type: 'boolean', description: 'Auto-scroll pages during the scrape handoff (default: true)' },
         fullCrawl: { type: 'boolean', description: 'Use full site crawl mode during the scrape handoff (default: false)' },
       },
       required: ['browserSessionId'],
@@ -4440,13 +4425,14 @@ const TOOLS = [
   },
   {
     name: 'run_agent',
-    description: 'Run an autonomous multi-step agent loop powered by the connected AI via MCP sampling. The agent uses web scraping tools to accomplish a goal and broadcasts live progress to the web panel at localhost:12345/wsp (Agent tab). Supports pause, resume, and handoff.',
+    description: 'Run an autonomous multi-step agent loop powered by the connected AI via MCP sampling. The agent uses web scraping tools to accomplish a goal. By default, broadcasts live progress to the web panel (Agent tab). Use silent:true to skip broadcasting for faster headless execution.',
     inputSchema: {
       type: 'object',
       properties: {
         goal: { type: 'string', description: 'What the agent should accomplish — be specific' },
-        maxSteps: { type: 'number', description: 'Maximum steps before stopping (default 20)' },
+        maxSteps: { type: 'number', description: 'Maximum steps before stopping (default 30)' },
         agentId: { type: 'string', description: 'Optional: attach to an existing pending run from the web panel' },
+        silent: { type: 'boolean', description: 'Skip live broadcasting to the web panel. No SSE events emitted — ideal for programmatic use or faster headless runs where display is not needed.' },
       },
       required: ['goal'],
     },
@@ -4819,16 +4805,11 @@ async function handleTool(name, args, progressToken = null) {
     case 'list_internal_pages': {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
       const save = await loadSave(sessionId);
-      const limit = normalizeInteger(input.limit, {
-        defaultValue: 100,
-        min: 1,
-        max: 500,
-        name: 'limit',
-      });
+      const limit = input.limit != null ? normalizeInteger(input.limit, { min: 1, name: 'limit' }) : null;
       const normalizedSection = input.section == null ? null : cleanText(input.section).toLowerCase();
       const pages = collectPageDescriptors(save)
         .filter((entry) => !normalizedSection || entry.section.toLowerCase() === normalizedSection)
-        .slice(0, limit)
+        .slice(0, limit ?? Infinity)
         .map((entry) => ({
           pageIndex: entry.pageIndex,
           url: entry.url,
@@ -4879,12 +4860,7 @@ async function handleTool(name, args, progressToken = null) {
     case 'list_links': {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
       const save = await loadSave(sessionId);
-      const limit = normalizeInteger(input.limit, {
-        defaultValue: 100,
-        min: 1,
-        max: 500,
-        name: 'limit',
-      });
+      const limit = input.limit != null ? normalizeInteger(input.limit, { min: 1, name: 'limit' }) : null;
       const requestedPageIndex = input.pageIndex === undefined || input.pageIndex === null
         ? null
         : normalizeInteger(input.pageIndex, {
@@ -4908,7 +4884,7 @@ async function handleTool(name, args, progressToken = null) {
       )
         .filter((link) => link.href)
         .filter((link) => input.internalOnly ? link.isInternal : true)
-        .slice(0, limit);
+        .slice(0, limit ?? Infinity);
 
       return {
         sessionId,
@@ -4959,12 +4935,7 @@ async function handleTool(name, args, progressToken = null) {
     case 'list_images': {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
       const save = await loadSave(sessionId);
-      const limit = normalizeInteger(input.limit, {
-        defaultValue: 100,
-        min: 1,
-        max: 500,
-        name: 'limit',
-      });
+      const limit = input.limit != null ? normalizeInteger(input.limit, { min: 1, name: 'limit' }) : null;
       const requestedPageIndex = input.pageIndex === undefined || input.pageIndex === null
         ? null
         : normalizeInteger(input.pageIndex, {
@@ -5025,7 +4996,7 @@ async function handleTool(name, args, progressToken = null) {
       return {
         sessionId,
         pageIndex: requestedPageIndex,
-        count: Math.min(limit, dedupedImages.length),
+        count: limit != null ? Math.min(limit, dedupedImages.length) : dedupedImages.length,
         summary: {
           total: dedupedImages.length,
           missingAlt,
@@ -5036,7 +5007,7 @@ async function handleTool(name, args, progressToken = null) {
             ? Math.round((withAlt / dedupedImages.length) * 100)
             : 0,
         },
-        images: dedupedImages.slice(0, limit),
+        images: dedupedImages.slice(0, limit ?? Infinity),
       };
     }
 
@@ -5142,18 +5113,18 @@ async function handleTool(name, args, progressToken = null) {
       const startedAt = Date.now();
       const url = ensureNonEmptyString(input.url, 'url');
       const question = ensureNonEmptyString(input.question, 'question');
-      const maxPages = normalizeInteger(input.maxPages, { defaultValue: 3, min: 1, max: 50, name: 'maxPages' });
-      const scrapeDepth = normalizeInteger(input.scrapeDepth, { defaultValue: 1, min: 0, max: 5, name: 'scrapeDepth' });
-      const autoScroll = !!input.autoScroll;
+      const maxPages = input.maxPages != null ? normalizeInteger(input.maxPages, { min: 1, name: 'maxPages' }) : null;
+      const scrapeDepth = input.scrapeDepth != null ? normalizeInteger(input.scrapeDepth, { min: 0, name: 'scrapeDepth' }) : null;
+      const autoScroll = input.autoScroll !== false;
       const mode = normalizeResearchMode(input.mode || 'auto');
-      const includeEvidence = !!input.includeEvidence;
+      const includeEvidence = input.includeEvidence !== false;
 
       // 1. Scrape
       if (progressToken) await sendProgress(progressToken, 0, 3, 'Scraping page...');
       const scrapeStartedAt = Date.now();
       const { sessionId, result: scrapeResult } = await startScrapeAndWait({
         url, maxPages, scrapeDepth, autoScroll,
-        captureGraphQL: false, captureREST: false,
+        captureGraphQL: true, captureREST: true,
         ...(input.username  ? { hasAuth: true, username: input.username } : {}),
         ...(input.password  ? { password: input.password } : {}),
         ...(input.totpSecret  ? { totpSecret: input.totpSecret } : {}),
@@ -5320,18 +5291,8 @@ async function handleTool(name, args, progressToken = null) {
     // ── scrape_url ───────────────────────────────────────────────────────────
     case 'scrape_url': {
       const url = ensureNonEmptyString(input.url, 'url');
-      const maxPages = normalizeInteger(input.maxPages, {
-        defaultValue: 3,
-        min: 1,
-        max: 1000,
-        name: 'maxPages',
-      });
-      const scrapeDepth = normalizeInteger(input.scrapeDepth, {
-        defaultValue: 1,
-        min: 0,
-        max: 10,
-        name: 'scrapeDepth',
-      });
+      const maxPages = input.maxPages != null ? normalizeInteger(input.maxPages, { min: 1, name: 'maxPages' }) : null;
+      const scrapeDepth = input.scrapeDepth != null ? normalizeInteger(input.scrapeDepth, { min: 0, name: 'scrapeDepth' }) : null;
 
       const { sessionId, result } = await startScrapeAndWait({
         url, maxPages, scrapeDepth,
@@ -5346,7 +5307,7 @@ async function handleTool(name, args, progressToken = null) {
         captureAssets: false,
         captureImages: false,
         fullCrawl: !!input.fullCrawl,
-        autoScroll: !!input.autoScroll,
+        autoScroll: input.autoScroll !== false,
         showBrowser: false,
         liveView: false,
         ...(input.username ? { hasAuth: true, username: input.username } : {}),
@@ -5598,7 +5559,7 @@ async function handleTool(name, args, progressToken = null) {
     case 'get_api_calls': {
       const sessionId = ensureNonEmptyString(input.sessionId, 'sessionId');
       const type = input.type || 'all';
-      const limit = normalizeInteger(input.limit, { defaultValue: 50, min: 1, max: 250, name: 'limit' });
+      const limit = input.limit != null ? normalizeInteger(input.limit, { min: 1, name: 'limit' }) : null;
       if (!['graphql', 'rest', 'all'].includes(type)) {
         throw new Error('type must be one of graphql, rest, or all');
       }
@@ -5633,7 +5594,7 @@ async function handleTool(name, args, progressToken = null) {
 
       if (type === 'graphql' || type === 'all') {
         const filtered = applyFilters(apiCalls.graphql || []);
-        result.graphql = filtered.slice(0, limit).map(c => ({
+        result.graphql = filtered.slice(0, limit ?? Infinity).map(c => ({
           url: c.url,
           method: c.method,
           duration: c.duration,
@@ -5647,7 +5608,7 @@ async function handleTool(name, args, progressToken = null) {
 
       if (type === 'rest' || type === 'all') {
         const filtered = applyFilters(apiCalls.rest || []);
-        result.rest = filtered.slice(0, limit).map(c => ({
+        result.rest = filtered.slice(0, limit ?? Infinity).map(c => ({
           url: c.url,
           method: c.method,
           duration: c.duration,
@@ -5886,12 +5847,7 @@ async function handleTool(name, args, progressToken = null) {
     case 'schedule_scrape': {
       const cronExpr = ensureNonEmptyString(input.cronExpr, 'cronExpr');
       const url = ensureNonEmptyString(input.url, 'url');
-      const maxPages = normalizeInteger(input.maxPages, {
-        defaultValue: 1,
-        min: 1,
-        max: 1000,
-        name: 'maxPages',
-      });
+      const maxPages = input.maxPages != null ? normalizeInteger(input.maxPages, { min: 1, name: 'maxPages' }) : null;
       const label = input.label ? String(input.label).trim().slice(0, 120) : null;
       const body = await expectOk(
         await post('/api/schedules', {
@@ -6067,8 +6023,8 @@ async function handleTool(name, args, progressToken = null) {
     // ── crawl_sitemap ─────────────────────────────────────────────────────────
     case 'crawl_sitemap': {
       const rawUrl = ensureNonEmptyString(input.url, 'url');
-      const maxUrls = normalizeInteger(input.maxUrls, { defaultValue: 500, min: 1, max: 5000, name: 'maxUrls' });
-      const maxSitemaps = normalizeInteger(input.maxSitemaps, { defaultValue: 5, min: 1, max: 20, name: 'maxSitemaps' });
+      const maxUrls = input.maxUrls != null ? normalizeInteger(input.maxUrls, { min: 1, name: 'maxUrls' }) : null;
+      const maxSitemaps = input.maxSitemaps != null ? normalizeInteger(input.maxSitemaps, { min: 1, name: 'maxSitemaps' }) : null;
 
       async function fetchText(targetUrl) {
         return new Promise((resolve, reject) => {
@@ -6141,7 +6097,7 @@ async function handleTool(name, args, progressToken = null) {
       const childSitemaps = [];
 
       if (isSitemapIndex) {
-        const childUrls = firstUrls.slice(0, maxSitemaps);
+        const childUrls = firstUrls.slice(0, maxSitemaps ?? Infinity);
         for (let ci = 0; ci < childUrls.length; ci++) {
           const child = childUrls[ci];
           childSitemaps.push(child);
@@ -6150,13 +6106,13 @@ async function handleTool(name, args, progressToken = null) {
             allUrls.push(...urls);
           } catch {}
           if (progressToken) await sendProgress(progressToken, ci + 1, childUrls.length, `Fetched sitemap ${ci + 1}/${childUrls.length}`);
-          if (allUrls.length >= maxUrls) break;
+          if (maxUrls != null && allUrls.length >= maxUrls) break;
         }
       } else {
         allUrls = firstUrls;
       }
 
-      const truncated = allUrls.length > maxUrls;
+      const truncated = maxUrls != null && allUrls.length > maxUrls;
       return {
         sitemapUrl,
         discoverySource,
@@ -6164,7 +6120,7 @@ async function handleTool(name, args, progressToken = null) {
         isSitemapIndex,
         childSitemaps,
         totalUrls: allUrls.length,
-        urls: allUrls.slice(0, maxUrls),
+        urls: allUrls.slice(0, maxUrls ?? Infinity),
         truncated,
       };
     }
@@ -6172,7 +6128,7 @@ async function handleTool(name, args, progressToken = null) {
     // ── take_screenshot ───────────────────────────────────────────────────────
     case 'take_screenshot': {
       const url = ensureNonEmptyString(input.url, 'url');
-      const fullPage = !!input.fullPage;
+      const fullPage = input.fullPage !== false;
       const waitMs = normalizeInteger(input.waitMs, { defaultValue: 1000, min: 0, max: 10000, name: 'waitMs' });
       return expectOk(
         await post('/api/screenshot', { url, fullPage, waitMs }),
@@ -6331,7 +6287,7 @@ async function handleTool(name, args, progressToken = null) {
       const browserSessionId = ensureNonEmptyString(input.browserSessionId, 'browserSessionId');
       return expectOk(
         await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/screenshot`, {
-          fullPage: !!input.fullPage,
+          fullPage: input.fullPage !== false,
           waitMs: normalizeInteger(input.waitMs, { defaultValue: 0, min: 0, max: 15000, name: 'waitMs' }),
         }),
         'Browser session screenshot failed'
@@ -6366,12 +6322,12 @@ async function handleTool(name, args, progressToken = null) {
       return expectOk(
         await post(`/api/browser/sessions/${encodeURIComponent(browserSessionId)}/scrape`, {
           url: input.url || null,
-          maxPages: input.maxPages == null ? undefined : normalizeInteger(input.maxPages, { defaultValue: 3, min: 1, max: 50, name: 'maxPages' }),
-          scrapeDepth: input.scrapeDepth == null ? undefined : normalizeInteger(input.scrapeDepth, { defaultValue: 1, min: 0, max: 5, name: 'scrapeDepth' }),
+          maxPages: input.maxPages != null ? normalizeInteger(input.maxPages, { min: 1, name: 'maxPages' }) : null,
+          scrapeDepth: input.scrapeDepth != null ? normalizeInteger(input.scrapeDepth, { min: 0, name: 'scrapeDepth' }) : null,
           captureGraphQL: input.captureGraphQL !== false,
           captureREST: input.captureREST !== false,
           captureAssets: input.captureAssets !== false,
-          autoScroll: !!input.autoScroll,
+          autoScroll: input.autoScroll !== false,
           fullCrawl: !!input.fullCrawl,
         }),
         'Browser session scrape handoff failed'
@@ -6397,7 +6353,7 @@ async function handleTool(name, args, progressToken = null) {
     // ── monitor_page ──────────────────────────────────────────────────────────
     case 'monitor_page': {
       const url = ensureNonEmptyString(input.url, 'url');
-      const maxPages = normalizeInteger(input.maxPages, { defaultValue: 1, min: 1, max: 10, name: 'maxPages' });
+      const maxPages = input.maxPages != null ? normalizeInteger(input.maxPages, { min: 1, name: 'maxPages' }) : null;
       const monitors = loadMonitors();
 
       let monitorId = input.monitorId ? String(input.monitorId).trim() : null;
@@ -6940,13 +6896,14 @@ async function handleTool(name, args, progressToken = null) {
 
     // ── run_agent ─────────────────────────────────────────────────────────────
     case 'run_agent': {
-      const { goal, maxSteps, agentId: requestedId } = input;
+      const { goal, maxSteps, agentId: requestedId, silent } = input;
       if (!goal || !goal.trim()) throw new Error('goal is required');
 
       const { createAgentRun, runAgent } = require('./src/agent');
       const scraper_url = process.env.SCRAPER_URL || 'http://localhost:12345';
 
       async function pushEvent(agentId, event) {
+        if (silent) return;
         try {
           await fetch(`${scraper_url}/api/agent/event`, {
             method: 'POST',
@@ -6958,7 +6915,7 @@ async function handleTool(name, args, progressToken = null) {
 
       const run = createAgentRun(
         goal.trim(),
-        { maxSteps: maxSteps || 20, agentId: requestedId },
+        { maxSteps: maxSteps || 30, agentId: requestedId },
         {
           broadcast: pushEvent,
           callTool: (name, args) => handleTool(name, args),
