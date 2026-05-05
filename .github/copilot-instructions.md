@@ -112,7 +112,7 @@ APA-specific config lives in `.env` (gitignored) — not in `src/`.
 | `src/git-autosave.js` | Auto-commit & push on 10-min interval (starts with server) | Stable |
 | `src/oidc-tester.js` | OIDC/OAuth2 security test suite (8 test types) | Stable |
 | `src/tool-logger.js` | Per-call request logs + live usage counters in `logs/` | Stable |
-| `mcp-server.js` | MCP server — 90 tools, 29 prompts, classification sets, handlers | Stable |
+| `mcp-server.js` | MCP server — 91 tools, 29 prompts, classification sets, handlers | Stable |
 | `MCP.md` | Living reference for all MCP tools — update when adding/changing tools | Stable |
 | `public/index.html` | Single-page frontend UI (large — edit carefully) | **Fragile** |
 | `public/js/app.js` | Frontend logic | **Fragile** |

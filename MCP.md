@@ -50,7 +50,7 @@ Two patterns for tool implementation:
 
 ## Tool Count & Classification
 
-**Total: 90 tools · 29 prompts** (as of last update 2026-05-02)
+**Total: 91 tools · 29 prompts** (as of last update 2026-05-05)
 
 | Classification | Count |
 |----------------|-------|
@@ -64,7 +64,7 @@ Classification sets defined in mcp-server.js (search for `READ_ONLY_TOOL_NAMES`)
 
 ---
 
-## All 90 Tools — Quick Reference
+## All 91 Tools — Quick Reference
 
 ### Category 1: Core Scraping
 
