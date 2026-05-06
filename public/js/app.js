@@ -32,10 +32,44 @@ let selectedBrowserSessionId = null;
 let browserSelectedTab = 'state';
 let browserLastScrapeResult = null;
 
+// ---- Topbar status helpers ----
+function setTopbarConn(state) {
+  // state: 'connecting' | 'connected' | 'error'
+  const dot   = document.getElementById('ws-conn-dot');
+  const label = document.getElementById('ws-conn-label');
+  const foot  = document.getElementById('foot-ws-dot');
+  if (!dot) return;
+  dot.className = 'conn-dot' + (state === 'connected' ? ' on' : state === 'error' ? ' err' : '');
+  if (label) label.textContent = state === 'connected' ? 'Connected' : state === 'error' ? 'Error' : 'Connecting…';
+  if (foot) foot.className = 'foot-dot' + (state === 'connected' ? ' on' : '');
+}
+
+function refreshTopbarStats() {
+  // Active scrapes
+  const active = activeSessions.size;
+  const el = document.getElementById('stat-active-scrapes');
+  if (el) el.textContent = active;
+  // Saves & schedules loaded lazily from API
+  fetch('/api/saves').then(r => r.json()).then(d => {
+    const s = document.getElementById('stat-saves-count');
+    if (s) s.textContent = Array.isArray(d) ? d.length : 0;
+  }).catch(() => {});
+  fetch('/api/schedules').then(r => r.json()).then(d => {
+    const s = document.getElementById('stat-sched-count');
+    if (s) s.textContent = Array.isArray(d) ? d.length : 0;
+  }).catch(() => {});
+}
+
 // ---- WebSocket ----
 function connectWS() {
+  setTopbarConn('connecting');
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}`);
+
+  ws.onopen = () => {
+    setTopbarConn('connected');
+    refreshTopbarStats();
+  };
 
   ws.onmessage = (e) => {
     try {
@@ -53,8 +87,8 @@ function connectWS() {
     } catch {}
   };
 
-  ws.onclose = () => setTimeout(connectWS, 2000);
-  ws.onerror = () => ws.close();
+  ws.onclose = () => { setTopbarConn('connecting'); setTimeout(connectWS, 2000); };
+  ws.onerror = () => { setTopbarConn('error'); ws.close(); };
 }
 
 function handleSessionMessage(sessionId, msg) {
@@ -189,7 +223,7 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
       return;
     }
     const stored = localStorage.getItem('wsp_sidebar_collapsed');
-    const collapsed = stored !== 'false'; // default: collapsed
+    const collapsed = stored === 'true'; // default: expanded
     document.body.classList.toggle('sidebar-collapsed', collapsed);
     updateBtn(collapsed);
   }
